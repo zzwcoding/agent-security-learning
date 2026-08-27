@@ -1,7 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(7):memory.json 持久化——退出时把 checkpointer 里的对话历史落盘,
-启动时回灌,重启后 Agent 还记得你。规格功能面到此全部就位。
+当前阶段(8):Docker 容器化。镜像不含任何密钥,LLM_* 运行时注入;
+workspace/ 与 memory.json 挂卷——容器可丢,产出和记忆留下。
 """
 import asyncio
 import json
@@ -17,7 +17,7 @@ from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 7 跑通:memory.json 持久化,重启不失忆(/quit 退出)"
+BANNER = "✅ 阶段 8 跑通:Docker 容器化 + 记忆挂卷持久(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -84,8 +84,11 @@ async def ask(agent, text: str) -> str:
 
 
 def load_memory(agent) -> None:
-    """启动时:若 memory.json 存在,把历史消息回灌进 checkpointer 的当前线程。"""
-    if MEMORY_FILE.exists():
+    """启动时:若 memory.json 存在且非空,把历史消息回灌进 checkpointer 的当前线程。
+
+    空文件直接跳过——docker-run.sh 为了挂卷会 touch 出一个 0 字节的占位文件。
+    """
+    if MEMORY_FILE.exists() and MEMORY_FILE.stat().st_size:
         msgs = messages_from_dict(json.loads(MEMORY_FILE.read_text()))
         agent.update_state(THREAD, {"messages": msgs})  # 走 add_messages reducer 追加
         print(f"已从 memory.json 恢复 {len(msgs)} 条历史消息")
