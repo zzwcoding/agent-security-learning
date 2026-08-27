@@ -6,3 +6,5 @@ __pycache__/
 # 例外:起步 Agent 的假密钥战利品,必须入库(内容全是假的)
 !.scratch/agent-security-learning/starter-agent/workspace/.env
 .venv/
+# 起步 Agent 的运行时对话历史
+.scratch/agent-security-learning/starter-agent/memory.json

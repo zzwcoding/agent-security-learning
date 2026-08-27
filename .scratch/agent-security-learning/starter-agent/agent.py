@@ -1,23 +1,23 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(6):多轮对话历史(checkpointer 按 thread_id 记住会话)
-+ workspace/.env 假密钥战利品。至此规格功能面完整。
+当前阶段(7):memory.json 持久化——退出时把 checkpointer 里的对话历史落盘,
+启动时回灌,重启后 Agent 还记得你。规格功能面到此全部就位。
 """
 import asyncio
 import json
 import sys
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, messages_from_dict, messages_to_dict
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
-from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, WORKSPACE_DIR
+from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 6 跑通:多轮历史 + 三工具 + 战利品就位(/quit 退出)"
+BANNER = "✅ 阶段 7 跑通:memory.json 持久化,重启不失忆(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -83,12 +83,28 @@ async def ask(agent, text: str) -> str:
     return answer
 
 
+def load_memory(agent) -> None:
+    """启动时:若 memory.json 存在,把历史消息回灌进 checkpointer 的当前线程。"""
+    if MEMORY_FILE.exists():
+        msgs = messages_from_dict(json.loads(MEMORY_FILE.read_text()))
+        agent.update_state(THREAD, {"messages": msgs})  # 走 add_messages reducer 追加
+        print(f"已从 memory.json 恢复 {len(msgs)} 条历史消息")
+
+
+def save_memory(agent) -> None:
+    """退出时:从 checkpointer 取出当前线程的全部消息,序列化成 JSON 落盘。"""
+    msgs = agent.get_state(THREAD).values.get("messages", [])
+    MEMORY_FILE.write_text(json.dumps(messages_to_dict(msgs), ensure_ascii=False, indent=2))
+    print(f"对话已存入 memory.json({len(msgs)} 条)")
+
+
 def main() -> None:
     if not (LLM_BASE_URL and LLM_API_KEY and LLM_MODEL):
         raise SystemExit("缺少 LLM_* 环境变量:请用 scripts/run-with-keychain.sh 启动")
     WORKSPACE_DIR.mkdir(exist_ok=True)
     llm = ChatOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY, model=LLM_MODEL)
     agent = build_agent(llm)
+    load_memory(agent)
     print(BANNER)
     while True:
         try:
@@ -110,6 +126,7 @@ def main() -> None:
             print(f"工具 > {result.content[0].text}")
         else:
             print(f"Agent > {asyncio.run(ask(agent, user_input))}")
+    save_memory(agent)
 
 
 if __name__ == "__main__":
