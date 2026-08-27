@@ -16,6 +16,7 @@
 
 <!-- 已解决票的索引：一行一票，gist + 链接 -->
 
+- [起步 Agent 搭建](issues/01-starter-agent.md): 已建成于 `starter-agent/`（LangGraph ReAct + 手写 filesystem/shell/fetch 三个 MCP server，核心 246 行，MiniMax-M2 经 Keychain 注入）；三项验收（读→总结→写、三工具真实调用、docker build）全过，记忆跨容器持久已修复；分阶段教学见 `issues/01-starter-agent/lessons/0001–0008`
 - [Mac 上的 microVM 选型](issues/04-microvm-on-mac.md): 主线 microsandbox（libkrun 原生支持 Apple Silicon，一行安装）+ E2B 云 SDK 作对照 + 加固 Docker 作基线；Daytona 排除（开源停更）；Firecracker/gVisor 文档精读不受平台影响。
 - [红队工具链选型](issues/06-redteam-toolchain.md): garak + PyRIT 全量用（前者宽谱扫描，后者编排攻击并进 CI 回归），A.I.G 只取 mcp-scan CLI 扫工具层，AgentDojo 仅作注入语料与评估方法论参考
 - [MCP 网关选型](issues/05-mcp-gateway-choice.md): 选 IBM mcp-context-forge——全功能开源（JWT/RBAC/插件链/SSRF 防护齐全）、单一 Python 代码库最适合精读；lunar-dev/mcp-x 实为 TheLunarCompany/lunar 的 mcpx 子目录，核心治理能力在 enterprise 档读不到源码
