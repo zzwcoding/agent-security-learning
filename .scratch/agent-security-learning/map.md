@@ -20,10 +20,11 @@
 - [Mac 上的 microVM 选型](issues/04-microvm-on-mac.md): 主线 microsandbox（libkrun 原生支持 Apple Silicon，一行安装）+ E2B 云 SDK 作对照 + 加固 Docker 作基线；Daytona 排除（开源停更）；Firecracker/gVisor 文档精读不受平台影响。
 - [红队工具链选型](issues/06-redteam-toolchain.md): garak + PyRIT 全量用（前者宽谱扫描，后者编排攻击并进 CI 回归），A.I.G 只取 mcp-scan CLI 扫工具层，AgentDojo 仅作注入语料与评估方法论参考
 - [MCP 网关选型](issues/05-mcp-gateway-choice.md): 选 IBM mcp-context-forge——全功能开源（JWT/RBAC/插件链/SSRF 防护齐全）、单一 Python 代码库最适合精读；lunar-dev/mcp-x 实为 TheLunarCompany/lunar 的 mcpx 子目录，核心治理能力在 enterprise 档读不到源码
+- [路线 1 守门员落地化方案](issues/02-route1-plan.md): 三类攻击全做（直接/间接/记忆投毒）；llm-guard 两路扫输入+工具返回、Secrets 扫输出；容器网络保留其余收紧，egress 记已知缺口；约 2 周节奏；验收 = 复盘文档 + 防御回归 + 缺口清单三件
 
 ## Not yet specified
 
-- 路线 2–4 在起步 Agent 上的落地化方案（随路线推进逐关具体化，第一张已由「路线 1 守门员落地化方案」开出）
+- 路线 3–4 在起步 Agent 上的落地化方案（路线 1/2 已开票：02、08）
 - "熟悉即可"档的检验形式（讲给谁、什么载体）
 - 面试材料的最终形态（各关复盘文档如何组织成可讲的整体）
 - 练兵场 23 个强安全实验的精读排期（穿插进哪几周）
