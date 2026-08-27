@@ -1,8 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(4):LangGraph ReAct 接管工具调用。自然语言不再直接问模型,
-而是进入 ReAct 循环:模型自己决定调不调工具、调哪个、调几次。
-阶段 3 的 /tools、/call 保留——可以对照:模型走的就是你手动走过的那条路。
+当前阶段(5):MCP 工具集齐 —— filesystem(读写列,限 workspace)、
+shell(任意命令,故意裸奔)、fetch(任意 URL,故意裸奔)三个 server 聚合成一张工具表。
 """
 import asyncio
 import json
@@ -17,7 +16,7 @@ from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 4 跑通:LangGraph ReAct 接管(自然语言直接使唤工具,/quit 退出)"
+BANNER = "✅ 阶段 5 跑通:三工具集齐 filesystem+shell+fetch(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -26,12 +25,10 @@ SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主�
 FILESYSTEM_SERVER = StdioServerParameters(
     command=sys.executable, args=["mcp_servers/filesystem_server.py"]
 )
+# 三个 MCP server 聚合进一张工具表;shell 与 fetch 故意裸奔(攻击面教具)
 MCP_SERVERS = {
-    "filesystem": {
-        "command": sys.executable,
-        "args": ["mcp_servers/filesystem_server.py"],
-        "transport": "stdio",
-    }
+    name: {"command": sys.executable, "args": [f"mcp_servers/{name}_server.py"], "transport": "stdio"}
+    for name in ("filesystem", "shell", "fetch")
 }
 
 
