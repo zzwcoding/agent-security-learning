@@ -5,4 +5,5 @@ langchain-mcp-adapters==0.3.2
 mcp==1.29.1  # 锁 1.x:2.0 起 in-SDK FastMCP 改了 API(见 RESOURCES.md)
 httpx==0.28.1  # fetch_server 直接依赖
 langgraph-checkpoint==4.2.0  # InMemorySaver 直接依赖(对话历史)
+llm-guard==0.3.16  # 护栏扫描器(拉入 torch/transformers,镜像显著变大,阶段 15 处理)
 

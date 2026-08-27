@@ -1,7 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(8):Docker 容器化。镜像不含任何密钥,LLM_* 运行时注入;
-workspace/ 与 memory.json 挂卷——容器可丢,产出和记忆留下。
+当前阶段(12):输入护栏——llm-guard PromptInjection 扫描器挂在用户输入进图之前,
+带注入特征的文本直接拦下:不送进 ReAct 循环,也进不了记忆。
 """
 import asyncio
 import json
@@ -12,12 +12,13 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage, messag
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
+from llm_guard.input_scanners import PromptInjection  # 输入护栏:注入分类模型
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 8 跑通:Docker 容器化 + 记忆挂卷持久(/quit 退出)"
+BANNER = "✅ 阶段 12 跑通:输入护栏 llm-guard PromptInjection 上线(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -106,6 +107,10 @@ def main() -> None:
         raise SystemExit("缺少 LLM_* 环境变量:请用 scripts/run-with-keychain.sh 启动")
     WORKSPACE_DIR.mkdir(exist_ok=True)
     llm = ChatOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY, model=LLM_MODEL)
+    # 护栏模型与 LLM 相互独立:首次运行从 HuggingFace 下载 deberta 分类模型,
+    # 加载一次全程复用;它在本机跑(Apple Silicon 上走 MPS),不消耗 LLM 额度
+    print("正在加载输入护栏模型……")
+    input_scanner = PromptInjection()
     agent = build_agent(llm)
     load_memory(agent)
     print(BANNER)
@@ -128,6 +133,12 @@ def main() -> None:
             result = asyncio.run(with_mcp(lambda s: s.call_tool(name, json.loads(raw or "{}"))))
             print(f"工具 > {result.content[0].text}")
         else:
+            # 输入护栏:扫描器打回 (清洗后文本, 是否安全, 注入分数);不安全则拒答且
+            # continue——这条输入不会进 ReAct 图,也不会被 checkpointer 写进记忆
+            _, safe, score = input_scanner.scan(user_input)
+            if not safe:
+                print(f"🛡️ 输入护栏拦截:检测到提示注入(分数 {score})")
+                continue
             print(f"Agent > {asyncio.run(ask(agent, user_input))}")
     save_memory(agent)
 
