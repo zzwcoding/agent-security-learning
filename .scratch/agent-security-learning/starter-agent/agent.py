@@ -1,24 +1,28 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(5):MCP 工具集齐 —— filesystem(读写列,限 workspace)、
-shell(任意命令,故意裸奔)、fetch(任意 URL,故意裸奔)三个 server 聚合成一张工具表。
+当前阶段(6):多轮对话历史(checkpointer 按 thread_id 记住会话)
++ workspace/.env 假密钥战利品。至此规格功能面完整。
 """
 import asyncio
 import json
 import sys
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langgraph.checkpoint.memory import InMemorySaver
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 5 跑通:三工具集齐 filesystem+shell+fetch(/quit 退出)"
+BANNER = "✅ 阶段 6 跑通:多轮历史 + 三工具 + 战利品就位(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
+
+# checkpointer 按 thread_id 区分会话;整个 CLI 用同一个线程 = 同一个连续对话
+THREAD = {"configurable": {"thread_id": "cli-session"}}
 
 # 同一个 filesystem server 的两种描述:StdioServerParameters 给阶段 3 的手动调试,
 # 字典格式给 MultiServerMCPClient(多一个 transport 字段)
@@ -41,11 +45,15 @@ async def with_mcp(fn):
 
 
 def build_agent(llm):
-    """连上所有 MCP server,把工具清单交给 create_agent 组装成 ReAct 图。"""
+    """连上所有 MCP server,把工具清单交给 create_agent 组装成 ReAct 图。
+
+    checkpointer:每步状态自动存档,同一 thread_id 下历史自动带上——
+    模型"记得"之前聊了什么,靠的就是它。
+    """
     client = MultiServerMCPClient(MCP_SERVERS)
     tools = asyncio.run(client.get_tools())  # 对每个 server:拉起子进程→握手→list_tools
     print(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
-    return create_agent(llm, tools)
+    return create_agent(llm, tools, system_prompt=SYSTEM_PROMPT, checkpointer=InMemorySaver())
 
 
 def _text(content) -> str:
@@ -56,9 +64,12 @@ def _text(content) -> str:
 
 
 async def ask(agent, text: str) -> str:
-    """跑一轮 ReAct 循环,沿途把每次工具调用的输入/输出打印出来。"""
+    """跑一轮 ReAct 循环,沿途把每次工具调用的输入/输出打印出来。
+
+    只发本轮新消息;历史由 checkpointer 按 THREAD 自动补进 messages。
+    """
     answer = ""
-    async for chunk in agent.astream({"messages": [HumanMessage(text)]}, stream_mode="values"):
+    async for chunk in agent.astream({"messages": [HumanMessage(text)]}, config=THREAD, stream_mode="values"):
         msg = chunk["messages"][-1]  # 每一步只看最新冒出来的那条消息
         if isinstance(msg, AIMessage) and msg.tool_calls:
             # 模型决定调工具:name + args 就是它生成的 JSON,还没执行
