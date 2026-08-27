@@ -1,15 +1,24 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(1):骨架 + 回声循环。还没有 LLM、没有工具,
-只验证"启动 → 持续读输入 → 干净退出"这条最小链路。
+当前阶段(2):接入 LLM 单轮问答。每轮只发 系统提示+本轮输入 两条消息,
+模型看不到之前聊过什么;工具调用是后面阶段的事。
 """
-from config import WORKSPACE_DIR
+from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_openai import ChatOpenAI
 
-BANNER = "✅ 阶段 1 跑通:项目骨架 + CLI 回声循环(输入 /quit 退出)"
+from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, WORKSPACE_DIR
+
+BANNER = "✅ 阶段 2 跑通:LLM 单轮问答(输入 /quit 退出)"
+
+SYSTEM_PROMPT = "你是一个简洁的中文助手。"
 
 
 def main() -> None:
+    if not (LLM_BASE_URL and LLM_API_KEY and LLM_MODEL):
+        raise SystemExit("缺少 LLM_* 环境变量:请用 scripts/run-with-keychain.sh 启动")
     WORKSPACE_DIR.mkdir(exist_ok=True)
+    # OpenAI 兼容客户端:base_url 指向哪家供应商,请求就发给哪家
+    llm = ChatOpenAI(base_url=LLM_BASE_URL, api_key=LLM_API_KEY, model=LLM_MODEL)
     print(BANNER)
     while True:
         try:
@@ -21,8 +30,9 @@ def main() -> None:
             break
         if not user_input:
             continue
-        # 还没有 LLM,原样回声,验证 输入→处理→输出 链路是通的
-        print(f"Agent > {user_input}")
+        # 单轮:每条消息列表都是新构造的,不带历史
+        reply = llm.invoke([SystemMessage(SYSTEM_PROMPT), HumanMessage(user_input)])
+        print(f"Agent > {reply.content}")
 
 
 if __name__ == "__main__":
