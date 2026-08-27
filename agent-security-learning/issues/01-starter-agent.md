@@ -1,7 +1,7 @@
 # 起步 Agent 搭建
 
 Type: task
-Status: done
+Status: resolved
 Blocked by:
 
 ## Answer(2026-08-27)
