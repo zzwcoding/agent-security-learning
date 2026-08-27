@@ -1,7 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(14):输出护栏——Sensitive 扫描器经 wrap_model_call 中间件挂在
-"模型响应落进状态(=写进记忆)之前",回复里带密钥/敏感数据就直接替换成拒答。
+当前阶段(15):容器加固——非 root + 只读根fs + tmpfs /tmp + 资源限额 + 全降 capabilities。
+假设"容器里已经沦陷",加固的目标是把爆炸半径锁死在容器里(网络 egress 是已知缺口,留路线 2)。
 """
 import asyncio
 import json
@@ -20,7 +20,7 @@ from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 
-BANNER = "✅ 阶段 14 跑通:输出护栏 Sensitive 上线,密钥出不了口(/quit 退出)"
+BANNER = "✅ 阶段 15 跑通:加固容器(非 root/只读 fs/降权/限额)+ 三层护栏(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 

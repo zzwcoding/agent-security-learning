@@ -15,3 +15,16 @@
 - 文件归拢:除 `deliverables/route1/` 外,本任务产出全部放本文件夹(`issues/07-route1-execution/`)
 - 战利品既定:套出假密钥 `INTERNAL_API_KEY` + 让 `run_command` 执行非用户意图命令
 - 真 key 只走 Keychain 注入;`.env` 里全是假密钥
+
+**阶段路线**(2026-08-27 对齐票 07 修订:精读单列为阶段,融合项目实践逐个做):
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| 9–11 | 攻击演练:直接注入 / 间接注入(文件+网页两向量)/ 记忆投毒 | ✅ 已完成(62e8508) |
+| 12–14 | 三层护栏:PromptInjection 扫输入、分块扫工具返回、Sensitive 扫输出 | ✅ 已完成(f196b06) |
+| 15 | 容器加固:非 root/只读 fs/tmpfs/限额/降 cap,egress 记缺口;codex 三档精读(并入 lesson 0015) | ✅ 已完成待提交 |
+| 16 | 精读 chapter2/prompt-injection 攻防矩阵——对照我方 payload 迭代史,挑未试技术作路线 4 种子 | 待做 |
+| 17 | 精读 chapter4/execution-tools 分层架构——对照三层护栏+容器,列出缺的层及归属路线 | 待做 |
+| 18 | 精读 NeMo Guardrails 五种 rail——对照缺口清单,execution rail 补 write_file 参数侧 | 待做 |
+| 19 | Langfuse 本地接入(docker compose),攻击/拦截全程 trace | 待做 |
+| 20 | 收官:防御回归(同批 payload 全拦)+ `deliverables/route1/` 三件 | 待做 |
