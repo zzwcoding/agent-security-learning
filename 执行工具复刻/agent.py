@@ -1,11 +1,12 @@
 """执行工具安全闸复刻 —— Agent CLI 入口。
 
-初始基线:本文件原样来自 starter-agent @ f1c47d2(起步 Agent 项目的最终形态),
-作为本次复刻的"宿主":干活的 LLM + ReAct 循环 + MCP 工具加载都已就绪,
-后续阶段往 mcp_servers/ 里换入带审批闸的执行工具。
+当前阶段(11):带闸执行工具接管。MCP_SERVERS 里裸奔的 filesystem/shell 已退役
+(文件保留作教具对照),execution server 把同一批带闸工具暴露给 agent——
+安全闸在工具肚子里,本文件只是换了个挂载。
 """
 import asyncio
 import json
+import os
 import sys
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
@@ -18,7 +19,7 @@ from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 
-BANNER = "✅ 基线跑通:starter-agent 落位(裸奔工具版,/quit 退出)"
+BANNER = "✅ 阶段 11 跑通:带闸执行工具接管(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -30,10 +31,14 @@ THREAD = {"configurable": {"thread_id": "cli-session"}}
 FILESYSTEM_SERVER = StdioServerParameters(
     command=sys.executable, args=["mcp_servers/filesystem_server.py"]
 )
-# 三个 MCP server 聚合进一张工具表;shell 与 fetch 故意裸奔(攻击面教具)
+# 两个 MCP server 聚合进一张工具表:execution = 带闸工具(本项目复刻成果),
+# fetch 维持裸奔(攻击面教具);裸奔的 filesystem/shell 文件保留,不再挂载
+# env:MCP 子进程默认只拿最小环境变量白名单(MCP SDK 的设计),LLM_* 不会自动流过去——
+# 法官在子进程里办公,钥匙必须显式递给它
 MCP_SERVERS = {
-    name: {"command": sys.executable, "args": [f"mcp_servers/{name}_server.py"], "transport": "stdio"}
-    for name in ("filesystem", "shell", "fetch")
+    "execution": {"command": sys.executable, "args": ["mcp_servers/execution_server.py"],
+                  "transport": "stdio", "env": dict(os.environ)},
+    "fetch": {"command": sys.executable, "args": ["mcp_servers/fetch_server.py"], "transport": "stdio"},
 }
 
 

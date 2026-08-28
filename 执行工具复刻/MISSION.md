@@ -11,7 +11,8 @@
 
 ## 验收标准
 
-1. `python cli.py demo` 离线端到端跑通:合法写/跑成功、语法错误被拦、危险命令被 fail-closed 拒绝、长输出截断落盘
+1. ~~`python cli.py demo` 离线端到端跑通~~(用户决定跳过阶段 10;改为:每道闸经 cli 子命令
+   单独实跑验证,证据见 learning-records/0002-0009)
 2. 同一攻击提示:裸奔 starter-agent 上执行成功 → 换入带闸工具后被二级 LLM 拦下(前后对比截图/日志)
 3. 产出对照分析文档:模型式闸 vs 规则式闸(vs D4)的取舍;挂回 starter-agent 能补上路线 1 的哪些缺口
 

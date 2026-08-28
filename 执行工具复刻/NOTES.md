@@ -7,6 +7,8 @@
   @ f1c47d2 当**初始项目**,安全闸工具长大后替换其裸奔 MCP server
 - 2026-08-28 裁掉 starter-agent 的 Docker 三件套(Dockerfile/.dockerignore/docker-run.sh)
   和 `workspace/.env`(密钥文件,不落盘);保留 requirements-lock.txt 保证可复现安装
+- 2026-08-29 用户决定**跳过阶段 10**(cli demo 串烧):各闸已在阶段 2-9 单独实跑过,
+  串烧是重放;MISSION 验收标准 1 相应改为"逐闸实跑验证"
 
 ## 随口偏好(当场记,反复出现才升级进 skill)
 
