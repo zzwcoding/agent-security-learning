@@ -1,15 +1,17 @@
 """最小聊天壳:没有工具、没有 LangGraph,只为了观察 rail 的行为。
 
-数据流(现在入口、出口各有一道闸机):
-  用户键盘输入 → [input 闸机] → LLM 生成回复 → [output 闸机:被拦 → 换成固定拒答] → 打印
-两道闸机的判定逻辑全在 config/(config.yml 挂闸、prompts.yml 放清单),本文件只管收发。
+数据流(双闸机 + 账单模式):
+  用户输入 → [input 闸] → LLM 生成 → [output 闸] → 打印回复 + 本轮 LLM 调用明细
+本阶段新增:explain() 监控回放正式上岗——每轮打印"哪几次 LLM 调用、各花多久/多少 token"。
 """
+import time
+
 from nemoguardrails import LLMRails, RailsConfig
 
 config = RailsConfig.from_path("config")
 rails = LLMRails(config)
 
-print("✅ 阶段 3 跑通:input + output 双 rail 已挂上(Ctrl-C 退出)")
+print("✅ 阶段 5 跑通:账单模式,每轮显示 LLM 调用明细(Ctrl-C 退出)")
 while True:
     try:
         user_input = input("\n你> ")
@@ -17,6 +19,12 @@ while True:
         break
     if not user_input.strip():
         continue
-    # 被任一闸机拦下时,返回的都是固定拒答话术 "I'm sorry, I can't respond to that."
+    t0 = time.perf_counter()
     response = rails.generate(messages=[{"role": "user", "content": user_input}])
+    wall = time.perf_counter() - t0
     print(f"bot> {response['content']}")
+    # explain() 列出本轮实际发生的 LLM 调用:task 是任务名(哪道闸/主生成)
+    calls = rails.explain().llm_calls
+    for c in calls:
+        print(f"  [调用] {c.task}: {c.duration:.1f}s, {c.total_tokens} tokens")
+    print(f"  [合计] {len(calls)} 次调用,墙钟 {wall:.1f}s")
