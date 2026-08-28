@@ -1,4 +1,4 @@
-# NeMo Guardrails 配置:本阶段挂上第一道闸机 —— input rail(入口安检)
+# NeMo Guardrails 配置:本阶段再加一道闸机 —— output rail(出口安检)
 models:
   - type: main           # 主 LLM,一个配置里必须有一个 type: main
     engine: openai       # 走 OpenAI 兼容协议
@@ -9,5 +9,8 @@ models:
 rails:
   input:
     flows:
-      - self check input   # 入口闸:用户消息先过这道安检,被拦就直接拒答,后面的主回复流程根本不启动
+      - self check input   # 入口闸:用户消息先安检,被拦直接拒答,主回复流程不启动
+  output:
+    flows:
+      - self check output  # 出口闸:LLM 写好的回复在交给用户前再检一次,被拦则换成固定拒答
 # api key 由 scripts/run-with-keychain.sh 注入 OPENAI_API_KEY
