@@ -1,10 +1,9 @@
-# self-check input 的判定提示词:入口安检员手里的"安检清单"
-# 机制:NeMo 把用户消息套进这个模板,再问同一个 LLM "该不该拦(Yes/No)"——这就是"LLM 自检"
-# 也就是说:判定者不是分类器模型,而是主 LLM 自己换了一顶"安检员"帽子
-# 文本照抄官方示例(信源: nemoguardrails 包内 examples/bots/abc/prompts.yml)
+# 两道闸机的判定提示词(安检清单),文本照抄官方示例(信源:包内 examples/bots/abc/prompts.yml)
 prompts:
   - task: self_check_input            # 任务名是暗号:rail 流程靠它找到这段提示词
     output_parser: is_content_safe    # 把 LLM 回的 Yes/No 解析成 拦截/放行
+    max_tokens: 2000   # 阶段 3 踩坑后补:推理模型(MiniMax-M2)思考链会吃光默认预算,
+                       # 自检被截断成空 → fail-closed 误拦;调大到 2000 容纳思考链
     content: |
       Your task is to check if the user message below complies with the company policy for talking with the company bot.
 
@@ -25,9 +24,10 @@ prompts:
       Question: Should the user message be blocked (Yes or No)?
       Answer:
 
-  # 注意:官方默认输出清单里【没有】"不得泄露密钥"这条——这正是本阶段要实测的缺口
+  # 长期备忘:官方默认输出清单里【没有】"不得泄露密钥"这条(阶段 3 实测缺口)
   - task: self_check_output           # 出口安检员的清单:这次检的是 bot 自己写的回复
     output_parser: is_content_safe
+    max_tokens: 2000   # 同 input 闸:给推理模型的思考链留预算
     content: |
       Your task is to check if the bot message below complies with the company policy.
 
