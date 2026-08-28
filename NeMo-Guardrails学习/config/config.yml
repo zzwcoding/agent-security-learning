@@ -1,0 +1,13 @@
+# NeMo Guardrails 配置:本阶段故意【不挂任何 rail】,先裸跑基线
+# 注意:零 rail ≠ 纯透传——NeMo 默认仍会跑"意图识别 + 生成回复"两次 LLM 调用
+# 并自带 system prompt,只是没有任何安全检查环节
+models:
+  - type: main           # 主 LLM,一个配置里必须有一个 type: main
+    engine: openai       # 走 OpenAI 兼容协议;MiniMax 的 /v1 端点兼容此协议
+    model: MiniMax-M2
+    parameters:
+      base_url: https://api.minimaxi.com/v1
+      # 教学点:NeMo 0.23 起默认用自己的 HTTP client,不再走 langchain,
+      # 所以不认 OPENAI_BASE_URL 环境变量,base_url 必须写进 parameters(报错信息原文即此提示)
+# api key 不在此处,由 scripts/run-with-keychain.sh 注入环境变量:
+#   OPENAI_API_KEY  (agent-key minimax 从 Keychain 取;openai engine 默认读它)
