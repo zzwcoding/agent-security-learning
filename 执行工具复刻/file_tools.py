@@ -1,7 +1,7 @@
-"""文件工具:写/改文件,所有路径先过 _resolve 钉死在 workspace 里。
+"""文件工具:读/写/改文件,所有路径先过 _resolve 钉死在 workspace 里。
 
-当前阶段(9)注释:审批闸从"执行"扩展到"写"——
-write_file 覆盖已存在的文件要送 LLM 法官;新增 edit_file(搜索-替换精确编辑)。
+当前阶段(11)注释:补齐 read_file / list_dir——带闸工具要整体接管
+裸奔的 filesystem server,读和列也得在这边有(走同一个 _resolve)。
 """
 from config import WORKSPACE_DIR
 from llm_helper import request_approval, verify_code_syntax
@@ -49,6 +49,27 @@ def write_file(path: str, content: str) -> dict:
     checked = target.suffix == ".py"
     return {"success": True, "path": str(target), "chars": len(content),
             "verification": "passed" if checked else "skipped", "approval": approval}
+
+
+def read_file(path: str) -> dict:
+    """读取 workspace 中文件的文本内容。"""
+    try:
+        return {"success": True, "content": _resolve(path).read_text()}
+    except ValueError:
+        return {"success": False, "error": f"路径越界: {path}(只允许读 workspace/ 内)"}
+    except FileNotFoundError:
+        return {"success": False, "error": f"文件不存在: {path}"}
+
+
+def list_dir(path: str = ".") -> dict:
+    """列出 workspace 中指定目录的条目名。"""
+    try:
+        entries = sorted(p.name for p in _resolve(path).iterdir())
+        return {"success": True, "entries": entries}
+    except ValueError:
+        return {"success": False, "error": f"路径越界: {path}"}
+    except (FileNotFoundError, NotADirectoryError):
+        return {"success": False, "error": f"目录不存在: {path}"}
 
 
 def edit_file(path: str, old_text: str, new_text: str) -> dict:
