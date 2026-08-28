@@ -20,8 +20,8 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 0 | 开工:目录 + 状态文件 | ✅ 已完成 |
-| 1 | 裸跑基线:venv + nemoguardrails + 无 rail 最小 config + chat.py | ✅ 已完成待提交 |
-| 2 | self-check input rail(纯 YAML),语料 01 两条 payload 实测 | 待做 |
+| 1 | 裸跑基线:venv + nemoguardrails + 无 rail 最小 config + chat.py | ✅ 已完成(a0e5b8d) |
+| 2 | self-check input rail(纯 YAML),语料 01 两条 payload 实测 | ✅ 已完成待提交(两条全拦,对照无误伤) |
 | 3 | self-check output rail,构造"输入合法输出泄密钥"场景 | 待做 |
 | 4 | 精读 dialog/retrieval/execution 三 rail + 五 rail 时序图;Colang 轮廓 | 待做 |
 | 5 | 账单与对照:延迟/token 代价实测,payload × rail 结果表 | 待做 |
