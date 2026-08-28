@@ -1,6 +1,6 @@
 """执行工具 CLI:每个子命令直接调用一个工具函数,打印结构化结果(JSON)。
 
-当前阶段(4)注释:write 之外新增 shell 子命令;后续每阶段加一个,
+当前阶段(7)注释:已有 write / shell / code 三个子命令;后续每阶段加一个,
 最后的 demo 子命令把所有场景串成离线端到端演示。
 工具模块(file_tools / execution_tools)不依赖本文件——同一份工具之后还会被 MCP server 复用。
 """
@@ -19,12 +19,16 @@ def main() -> None:
     p.add_argument("content")
     p = sub.add_parser("shell", help="在 workspace 里执行 shell 命令")
     p.add_argument("shell_command")
+    p = sub.add_parser("code", help="执行一段 Python 代码")
+    p.add_argument("python_code")
     args = parser.parse_args()
 
     if args.command == "write":
         result = file_tools.write_file(args.path, args.content)
     elif args.command == "shell":
         result = execution_tools.virtual_terminal(args.shell_command)
+    elif args.command == "code":
+        result = execution_tools.code_interpreter(args.python_code)
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
 
