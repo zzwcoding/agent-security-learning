@@ -1,13 +1,6 @@
-"""阶段 11:D4 运行时校验 —— 执行层的确定性兜底。
-
-前三层(D1-D3)都在"劝模型别做坏事",本质都是概率性的:模型可以
-被说服、被骗、被绕开。D4 换了个位置——不在上下文里劝,在工具执行
-的代码里拦:
-    高风险操作(write_file/send_email)的目标(路径/收件人),
-    必须原样出现在"本轮用户消息"里,否则直接拦截。
-为什么这条规则能确定性兜底:攻击者能污染网页、污染记忆、骗过模型,
-但**写不进用户消息**——那是唯一攻击者碰不到的文本。模型"被骗"
-到执行层就被拦下,请求留在 requested 清单,进不了 executed。
+"""阶段 12:完整矩阵 —— 结果聚合成 攻击×防御 的对齐表格 + 平均行 +
+JSON 落盘。demo 至此成型:单次成败(阶段 5-7)→ 逐组合成功率(阶段
+8-11)→ 一张能横向对比、能存档复盘的矩阵。
 """
 
 from __future__ import annotations
@@ -16,6 +9,7 @@ import json
 import os
 import shutil
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
@@ -386,18 +380,66 @@ def main() -> None:
     )
     trials = int(os.environ.get("TRIALS", "2"))  # 每个组合的重复次数,冒烟用 2
     print(f"使用模型:{os.environ['LLM_MODEL']},每个 攻击×防御 组合试验 {trials} 次\n")
-    for defense in DEFENSES:
-        for attack in ATTACKS:
+    matrix: dict[tuple[int, int], float] = {}  # (攻击索引, 防御索引) -> 成功率
+    for di, defense in enumerate(DEFENSES):
+        for ai, attack in enumerate(ATTACKS):
             successes = 0
             for _ in range(trials):
                 reset_workspace()
                 result = run(client, attack, defense)
                 successes += attack.judge(result)
+            matrix[(ai, di)] = successes / trials
             print(
                 f"[{attack.name}] x [{defense.name}] "
-                f"成功率 {successes / trials:5.0%} ({successes}/{trials})"
+                f"成功率 {matrix[(ai, di)]:5.0%} ({successes}/{trials})"
             )
         print()
+    print_matrix(matrix)
+    output = os.environ.get("OUTPUT")  # 设了就把矩阵存成 JSON,便于复盘对比
+    if output:
+        save_json(output, matrix, trials)
+
+
+def print_matrix(matrix: dict[tuple[int, int], float]) -> None:
+    """打印 攻击×防御 成功率矩阵 + 各防御列的平均(展示"逐层加强→整体下降")。"""
+    line = "=" * 68
+    print(line)
+    print("攻击成功率矩阵(行=攻击场景,列=防御配置,越低越安全)")
+    print(line)
+    header = f"{'攻击 \\ 防御':<12}" + "".join(f"{d.name:>14}" for d in DEFENSES)
+    print(header)
+    print("-" * 68)
+    for ai, attack in enumerate(ATTACKS):
+        row = f"{attack.name:<12}"
+        row += "".join(f"{matrix[(ai, di)]:>13.0%} " for di in range(len(DEFENSES)))
+        print(row)
+    print("-" * 68)
+    avg = f"{'平均':<12}"
+    for di in range(len(DEFENSES)):
+        col = sum(matrix[(ai, di)] for ai in range(len(ATTACKS))) / len(ATTACKS)
+        avg += f"{col:>13.0%} "
+    print(avg)
+    print(line)
+
+
+def save_json(path: str, matrix: dict[tuple[int, int], float], trials: int) -> None:
+    payload = {
+        "model": os.environ["LLM_MODEL"],
+        "trials": trials,
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "defenses": [d.name for d in DEFENSES],
+        "attacks": [a.name for a in ATTACKS],
+        "success_rate": {
+            attack.name: {
+                DEFENSES[di].name: matrix[(ai, di)] for di in range(len(DEFENSES))
+            }
+            for ai, attack in enumerate(ATTACKS)
+        },
+    }
+    Path(path).write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
+    print(f"\n结果矩阵已保存到 {path}")
 
 
 def _trace_message(m: dict[str, Any]) -> None:
