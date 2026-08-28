@@ -1,0 +1,13 @@
+# NOTES — 用户教学偏好与决策记录
+
+## 本项目的关键决策
+
+- 2026-08-28 复刻目录定为 `执行工具复刻/`(与 `攻防矩阵复刻/` 平行)
+- 2026-08-28 "干活的 LLM"代码来源选了方案 B:不自写最小循环,直接用 starter-agent
+  @ f1c47d2 当**初始项目**,安全闸工具长大后替换其裸奔 MCP server
+- 2026-08-28 裁掉 starter-agent 的 Docker 三件套(Dockerfile/.dockerignore/docker-run.sh)
+  和 `workspace/.env`(密钥文件,不落盘);保留 requirements-lock.txt 保证可复现安装
+
+## 随口偏好(当场记,反复出现才升级进 skill)
+
+(暂无)
