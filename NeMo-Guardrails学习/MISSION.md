@@ -25,4 +25,4 @@
 | 3 | self-check output rail,构造"输入合法输出泄密钥"场景 | ✅ 已完成待提交(默认清单漏密钥;补条款即拦;推理模型 max_tokens 误拦已记) |
 | 4 | 精读 dialog/retrieval/execution 三 rail + 五 rail 时序图;Colang 轮廓 | ✅ 已完成待提交(0.23 双引擎发现:tool rails 只查结构不查语义) |
 | 5 | 账单与对照:延迟/token 代价实测,payload × rail 结果表 | ✅ 已完成待提交(双闸≈×3 账单;max_tokens 坑已修) |
-| 6 | 收官:五种 rail vs 三层护栏 × 三缺口对照结论文档 | 待做 |
+| 6 | 收官:五种 rail vs 三层护栏 × 三缺口对照结论文档 | ✅ 已完成待提交(对照结论.md;缺口①补打实弹:LLM 自检拦下格式伪装毒) |
