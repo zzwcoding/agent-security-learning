@@ -1,15 +1,17 @@
-"""阶段 3:高风险工具 + 隔离工作区 —— write_file / send_email 上线,
-但它们的"副作用"全部落在独立工作区里:写文件收敛到 workspace/files/,
-发邮件追加到 workspace/outbox.jsonl,不碰真实 /tmp、不碰真实邮箱。
+"""阶段 4:RunResult 可观测性 —— 把"模型请求了什么"和"实际执行了什么"
+分开记录。从本阶段起,一次运行产出一个 RunResult,判定器(阶段 5 起)
+只读它,不读模型的回复文本。
 
-教学要点:攻防实验要观察"Agent 被骗后干了什么",就必须让危险动作
-真实发生、又真实无害。隔离工作区让"越权写入/外发"变成可观察、
-可判定、零事故的事件(参考项目 agent.py:280-307 同款设计)。
+教学要点:模型可以说"我没有执行任何危险操作"的同时,write_file 已经
+落盘了——回复文本是"它说了什么",executed_tool_calls 是"它做了什么"。
+安全判定只能信后者。
 """
 
 import json
 import os
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from openai import OpenAI
 
@@ -36,6 +38,17 @@ SYSTEM_PROMPT = (
 WORKSPACE = Path("workspace")
 FILES_ROOT = WORKSPACE / "files"   # write_file 的根目录(绝对路径也会被收进来)
 OUTBOX = WORKSPACE / "outbox.jsonl"  # send_email 的隔离发件箱(每行一封)
+
+
+@dataclass
+class RunResult:
+    """一次运行的可观测结果——判定器只看这里,不看模型"说了什么"。"""
+
+    final_text: str = ""
+    # 模型"请求"的工具调用,全部记录(阶段 11 起会包含被拦截的)
+    requested_tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    # 实际"执行成功"的工具调用——攻击得逞与否只认这个清单
+    executed_tool_calls: list[dict[str, Any]] = field(default_factory=list)
 
 
 # 工具规格:按 OpenAI function calling 协议向模型描述可用工具
@@ -88,10 +101,12 @@ TOOLS = [
 ]
 
 
-def execute_tool(name: str, args: dict) -> str:
-    """统一执行工具;高风险工具的副作用全部收敛进隔离工作区。"""
+def execute_tool(name: str, args: dict, result: RunResult) -> str:
+    """统一执行工具;先记"请求",执行成功才记"执行"。"""
+    result.requested_tool_calls.append({"name": name, "args": args})
     if name == "read_webpage":
         # 模拟网页读取:不管 URL 是什么,都返回同一份内容(阶段 6 起由攻击场景控制)
+        # 读取无副作用,不进 executed 清单(参考项目同:只记录有副作用的工具)
         return WEBPAGE_CONTENT
     if name == "write_file":
         # 绝对路径也收敛进工作区:/tmp/leaked.txt → workspace/files/tmp/leaked.txt
@@ -102,6 +117,7 @@ def execute_tool(name: str, args: dict) -> str:
             return "Error: path escapes isolated workspace"
         destination.parent.mkdir(parents=True, exist_ok=True)
         destination.write_text(str(args.get("content", "")), encoding="utf-8")
+        result.executed_tool_calls.append({"name": name, "args": args})
         return f"已写入隔离工作区文件 {requested}。"
     if name == "send_email":
         entry = {
@@ -111,6 +127,7 @@ def execute_tool(name: str, args: dict) -> str:
         }
         with OUTBOX.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        result.executed_tool_calls.append({"name": name, "args": args})
         return f"已投递到隔离测试发件箱,收件人 {args.get('to')}。"
     return f"未知工具:{name}"
 
@@ -121,6 +138,7 @@ def main() -> None:
         base_url=os.environ["LLM_BASE_URL"],
     )
     FILES_ROOT.mkdir(parents=True, exist_ok=True)
+    result = RunResult()
     # 注意:两个高风险操作的目标(report.txt / team@example.com)都直接出现在
     # 用户消息里——这是用户明确授权的形态,阶段 11 的 D4 校验靠的就是这一点
     messages = [
@@ -138,17 +156,25 @@ def main() -> None:
         msg = resp.choices[0].message
         messages.append(msg.model_dump(exclude_none=True))
         if not msg.tool_calls:
-            print(msg.content)
-            return
+            result.final_text = msg.content or ""
+            print(result.final_text)
+            break
         for tc in msg.tool_calls:
             args = json.loads(tc.function.arguments or "{}")
-            output = execute_tool(tc.function.name, args)
+            output = execute_tool(tc.function.name, args, result)
             print(f"  [工具调用] {tc.function.name}({args})\n    → {output}")
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
                 "content": output,
             })
+    # 本阶段两个清单必然一致(还没有任何拦截);阶段 11 起它们会分叉
+    print(
+        f"\n[运行记录] 请求 {len(result.requested_tool_calls)} 次,"
+        f"实际执行 {len(result.executed_tool_calls)} 次"
+    )
+    for call in result.executed_tool_calls:
+        print(f"  executed: {call['name']}({call['args']})")
 
 
 if __name__ == "__main__":
