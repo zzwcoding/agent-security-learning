@@ -21,6 +21,7 @@
 - [红队工具链选型](issues/06-redteam-toolchain.md): garak + PyRIT 全量用（前者宽谱扫描，后者编排攻击并进 CI 回归），A.I.G 只取 mcp-scan CLI 扫工具层，AgentDojo 仅作注入语料与评估方法论参考
 - [MCP 网关选型](issues/05-mcp-gateway-choice.md): 选 IBM mcp-context-forge——全功能开源（JWT/RBAC/插件链/SSRF 防护齐全）、单一 Python 代码库最适合精读；lunar-dev/mcp-x 实为 TheLunarCompany/lunar 的 mcpx 子目录，核心治理能力在 enterprise 档读不到源码
 - [路线 1 守门员落地化方案](issues/02-route1-plan.md): 三类攻击全做（直接/间接/记忆投毒）；llm-guard 两路扫输入+工具返回、Secrets 扫输出；容器网络保留其余收紧，egress 记已知缺口；约 2 周节奏；验收 = 复盘文档 + 防御回归 + 缺口清单三件
+- [路线 1 守门员执行](issues/07-route1-execution.md): ✅ 已完成（2026-08-29）。三类攻击无防御全中招 → 三层护栏（llm-guard 输入/工具返回分块/输出 Sensitive）→ 容器六项加固 → Langfuse trace+掩码；精读升级为平行窗口复刻/实践（`攻防矩阵复刻/`、`执行工具复刻/`、`NeMo-Guardrails学习/`）；交付物在 `deliverables/route1/`；7 条缺口归属：egress→路线 2，记忆/执行闸/参数侧→路线 3，格式毒漏判等→路线 4 种子
 
 ## Not yet specified
 
