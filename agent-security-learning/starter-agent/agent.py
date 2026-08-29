@@ -1,10 +1,11 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(19):Langfuse 本地接入——CallbackHandler 旁路观测,只看不动手。
-防御逻辑零改动;摄像头挂在 LangGraph 的 run 配置上,模型/工具每步自动上报。
+当前阶段(19):Langfuse 本地接入——旁路观测 + 出库前掩码。
+防御逻辑零改动;观测数据本身敏感,发往 Langfuse 前先把疑似密钥打码。
 """
 import asyncio
 import json
+import re
 import sys
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
@@ -19,10 +20,25 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
-from langfuse import get_client  # 摄像头的手动模式:图外事件(护栏拦截)由它补录
+from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 19 跑通:Langfuse 本地接入(全程 trace 可见)+ 三层护栏(/quit 退出)"
+BANNER = "✅ 阶段 19 跑通:Langfuse 本地接入(全程 trace + 密钥掩码)+ 三层护栏(/quit 退出)"
+
+# 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
+# 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
+_SECRET_RE = re.compile(r"(?i)(\b\w*(?:key|secret|token|password)\w*\b\s*[=:]\s*[\"']?)[^\s\"']+")
+
+
+def mask_secrets(*, data, **_):
+    """Langfuse mask 回调:递归遍历字符串/字典/列表,KEY=value 形态的值换成 ***。"""
+    if isinstance(data, str):
+        return _SECRET_RE.sub(r"\1***", data)
+    if isinstance(data, dict):
+        return {k: mask_secrets(data=v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [mask_secrets(data=v) for v in data]
+    return data
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -180,10 +196,11 @@ def main() -> None:
     # 实体白名单只留高信号类型——默认配置把 IP/日期也当敏感,中文技术文本误报实测爆表
     output_scanner = Sensitive(entity_types=["CREDIT_CARD", "CRYPTO", "US_SSN", "US_BANK_NUMBER", "IBAN_CODE"])
     agent = build_agent(llm, injection_scanner, output_scanner)
-    # 摄像头实例化即生效:从 LANGFUSE_* 环境变量拿 key 和地址(由启动脚本注入),
-    # 之后每轮问答把它挂进 run config,ReAct 每一步自动上报,不碰任何防御逻辑
+    # 摄像头实例化即生效:从 LANGFUSE_* 环境变量拿 key 和地址(由启动脚本注入)。
+    # 顺序有讲究:先建带 mask 的客户端注册进 SDK 的实例表,CallbackHandler 内部
+    # get_client() 再据此重建——掩码设置随之继承,自动/手动两条上报路共用一道闸。
+    langfuse_client = Langfuse(mask=mask_secrets)
     langfuse_handler = CallbackHandler()
-    langfuse_client = get_client()  # 与 CallbackHandler 共用一个上报通道(同一个单例)
     # load_memory(agent)
     print(BANNER)
     while True:
