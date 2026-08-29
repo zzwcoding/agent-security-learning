@@ -10,3 +10,6 @@ __pycache__/
 .scratch/agent-security-learning/starter-agent/memory.json
 # 起步 Agent 的运行时产物(验收流每次重生成)
 .scratch/agent-security-learning/starter-agent/workspace/summary.md
+
+
+.scratch/agent-security-learning/知识卡片-碎片
