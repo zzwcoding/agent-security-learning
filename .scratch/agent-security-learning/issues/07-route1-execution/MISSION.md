@@ -26,5 +26,5 @@
 | 16 | 精读 chapter2/prompt-injection 攻防矩阵——对照我方 payload 迭代史,挑未试技术作路线 4 种子 | ✅ 已完成(c324b00;复刻在平行窗口完成,见 `攻防矩阵复刻/`) |
 | 17 | 精读 chapter4/execution-tools 分层架构——对照三层护栏+容器,列出缺的层及归属路线 | ✅ 已完成(平行窗口复刻,2026-08-29;全部成果在 `执行工具复刻/`,收官文档为其 `对照分析.md`) |
 | 18 | 精读 NeMo Guardrails 五种 rail + 最小实践(quickstart + 语料 01 打 self-check rail,对照 llm-guard)——对照缺口清单 | ✅ 已完成(平行窗口,2026-08-29;全部成果在 `NeMo-Guardrails学习/`,收官文档为其 `对照结论.md`:缺口①实测能补、②不能补、③补一半) |
-| 19 | Langfuse 本地接入(docker compose),攻击/拦截全程 trace | 待做 |
+| 19 | Langfuse 本地接入(docker compose),攻击/拦截全程 trace | 平行窗口进行中(交接说明 `handoff-stage19-langfuse.md`) |
 | 20 | 收官:防御回归(同批 payload 全拦)+ `deliverables/route1/` 三件 | 待做 |
