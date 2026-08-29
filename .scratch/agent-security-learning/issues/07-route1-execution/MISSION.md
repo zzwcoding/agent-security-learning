@@ -27,4 +27,4 @@
 | 17 | 精读 chapter4/execution-tools 分层架构——对照三层护栏+容器,列出缺的层及归属路线 | ✅ 已完成(平行窗口复刻,2026-08-29;全部成果在 `执行工具复刻/`,收官文档为其 `对照分析.md`) |
 | 18 | 精读 NeMo Guardrails 五种 rail + 最小实践(quickstart + 语料 01 打 self-check rail,对照 llm-guard)——对照缺口清单 | ✅ 已完成(平行窗口,2026-08-29;全部成果在 `NeMo-Guardrails学习/`,收官文档为其 `对照结论.md`:缺口①实测能补、②不能补、③补一半) |
 | 19 | Langfuse 本地接入(docker compose),攻击/拦截全程 trace | ✅ 已完成(2026-08-29;ffc8315/30a7313/7a24368;lesson 0017,record 0020;验收三条全过:正常 trace、拦截笔录、密钥掩码) |
-| 20 | 收官:防御回归(同批 payload 全拦)+ `deliverables/route1/` 三件 | 待做 |
+| 20 | 收官:`deliverables/route1/` 三件(复盘主文档 + 回归矩阵 + 缺口清单);回归按用户决策不重跑,矩阵挂各阶段证据指针;票 07 关闭 | ✅ 已完成(2026-08-29) |
