@@ -19,7 +19,8 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
-from langfuse.langchain import CallbackHandler  # 观测摄像头:实现 LangChain 回调接口,把每个 run 上报给 Langfuse
+from langfuse import get_client  # 摄像头的手动模式:图外事件(护栏拦截)由它补录
+from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
 BANNER = "✅ 阶段 19 跑通:Langfuse 本地接入(全程 trace 可见)+ 三层护栏(/quit 退出)"
 
@@ -182,6 +183,7 @@ def main() -> None:
     # 摄像头实例化即生效:从 LANGFUSE_* 环境变量拿 key 和地址(由启动脚本注入),
     # 之后每轮问答把它挂进 run config,ReAct 每一步自动上报,不碰任何防御逻辑
     langfuse_handler = CallbackHandler()
+    langfuse_client = get_client()  # 与 CallbackHandler 共用一个上报通道(同一个单例)
     # load_memory(agent)
     print(BANNER)
     while True:
@@ -208,6 +210,15 @@ def main() -> None:
             _, safe, score = injection_scanner.scan(user_input)
             if not safe:
                 print(f"🛡️ 输入护栏拦截:检测到提示注入(分数 {score})")
+                # 拦截发生在图外,自动摄像头看不见——手动补一条 guardrail 类型的观测,
+                # 否则监控系统对"有人来过但被拦了"完全失忆(安全审计不可接受)
+                with langfuse_client.start_as_current_observation(
+                    as_type="guardrail", name="input-guard-block",
+                    input=user_input, output="拦截:未进入 ReAct 图",
+                    level="WARNING", metadata={"injection_score": score},
+                ):
+                    pass
+                langfuse_client.flush()  # 立即上报不攒批:攻击现场要马上可见
                 continue
             print(f"Agent > {asyncio.run(ask(agent, user_input, langfuse_handler))}")
     save_memory(agent)
