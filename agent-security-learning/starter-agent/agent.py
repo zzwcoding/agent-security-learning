@@ -1,7 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(15):容器加固——非 root + 只读根fs + tmpfs /tmp + 资源限额 + 全降 capabilities。
-假设"容器里已经沦陷",加固的目标是把爆炸半径锁死在容器里(网络 egress 是已知缺口,留路线 2)。
+当前阶段(19):Langfuse 本地接入——CallbackHandler 旁路观测,只看不动手。
+防御逻辑零改动;摄像头挂在 LangGraph 的 run 配置上,模型/工具每步自动上报。
 """
 import asyncio
 import json
@@ -19,8 +19,9 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
+from langfuse.langchain import CallbackHandler  # 观测摄像头:实现 LangChain 回调接口,把每个 run 上报给 Langfuse
 
-BANNER = "✅ 阶段 15 跑通:加固容器(非 root/只读 fs/降权/限额)+ 三层护栏(/quit 退出)"
+BANNER = "✅ 阶段 19 跑通:Langfuse 本地接入(全程 trace 可见)+ 三层护栏(/quit 退出)"
 
 SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主动使用工具。"
 
@@ -124,13 +125,16 @@ def _text(content) -> str:
     return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
-async def ask(agent, text: str) -> str:
+async def ask(agent, text: str, langfuse_handler: CallbackHandler) -> str:
     """跑一轮 ReAct 循环,沿途把每次工具调用的输入/输出打印出来。
 
     只发本轮新消息;历史由 checkpointer 按 THREAD 自动补进 messages。
+    callbacks 挂在 run 配置上:LangGraph 每跑一步(模型/工具)都会回调摄像头,
+    它把看到的输入输出打包上报——业务代码完全无感,这就是"旁路观测"。
     """
     answer = ""
-    async for chunk in agent.astream({"messages": [HumanMessage(text)]}, config=THREAD, stream_mode="values"):
+    config = {**THREAD, "callbacks": [langfuse_handler]}
+    async for chunk in agent.astream({"messages": [HumanMessage(text)]}, config=config, stream_mode="values"):
         msg = chunk["messages"][-1]  # 每一步只看最新冒出来的那条消息
         if isinstance(msg, AIMessage) and msg.tool_calls:
             # 模型决定调工具:name + args 就是它生成的 JSON,还没执行
@@ -175,7 +179,10 @@ def main() -> None:
     # 实体白名单只留高信号类型——默认配置把 IP/日期也当敏感,中文技术文本误报实测爆表
     output_scanner = Sensitive(entity_types=["CREDIT_CARD", "CRYPTO", "US_SSN", "US_BANK_NUMBER", "IBAN_CODE"])
     agent = build_agent(llm, injection_scanner, output_scanner)
-    load_memory(agent)
+    # 摄像头实例化即生效:从 LANGFUSE_* 环境变量拿 key 和地址(由启动脚本注入),
+    # 之后每轮问答把它挂进 run config,ReAct 每一步自动上报,不碰任何防御逻辑
+    langfuse_handler = CallbackHandler()
+    # load_memory(agent)
     print(BANNER)
     while True:
         try:
@@ -202,7 +209,7 @@ def main() -> None:
             if not safe:
                 print(f"🛡️ 输入护栏拦截:检测到提示注入(分数 {score})")
                 continue
-            print(f"Agent > {asyncio.run(ask(agent, user_input))}")
+            print(f"Agent > {asyncio.run(ask(agent, user_input, langfuse_handler))}")
     save_memory(agent)
 
 

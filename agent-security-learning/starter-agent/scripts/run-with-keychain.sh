@@ -18,4 +18,9 @@ case "$PROVIDER" in
 esac
 export LLM_API_KEY="$(agent-key "$PROVIDER")"
 
+# 阶段 19:Langfuse 观测。SDK 自动读这三个环境变量;base url 是本地自托管实例
+export LANGFUSE_PUBLIC_KEY="$(agent-key langfuse-public)"
+export LANGFUSE_SECRET_KEY="$(agent-key langfuse-secret)"
+export LANGFUSE_BASE_URL="http://localhost:3000"
+
 exec .venv/bin/python agent.py
