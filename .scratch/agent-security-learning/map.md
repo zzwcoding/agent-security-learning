@@ -23,6 +23,7 @@
 - [路线 1 守门员落地化方案](issues/02-route1-plan.md): 三类攻击全做（直接/间接/记忆投毒）；llm-guard 两路扫输入+工具返回、Secrets 扫输出；容器网络保留其余收紧，egress 记已知缺口；约 2 周节奏；验收 = 复盘文档 + 防御回归 + 缺口清单三件
 - [路线 1 守门员执行](issues/07-route1-execution.md): ✅ 已完成（2026-08-29）。三类攻击无防御全中招 → 三层护栏（llm-guard 输入/工具返回分块/输出 Sensitive）→ 容器六项加固 → Langfuse trace+掩码；精读升级为平行窗口复刻/实践（`攻防矩阵复刻/`、`执行工具复刻/`、`NeMo-Guardrails学习/`）；交付物在 `deliverables/route1/`；7 条缺口归属：egress→路线 2，记忆/执行闸/参数侧→路线 3，格式毒漏判等→路线 4 种子
 - [总体排期与里程碑](issues/03-schedule.md): 滚动式排期——无死线，只细化当前关，收官时按缺口清单排下一关；主干顺序 路线2→3→4红队→熟悉档+面试材料+架构蓝图；实验角色升级为复刻+精读；路线 3 验收含缺口 2/3/7 核销，Presidio 压至 1 天
+- [路线 2 堡垒落地化方案](issues/08-route2-plan.md): Agent 回宿主机直跑，shell+fetch 执行面进 microsandbox（egress 白名单核销缺口 1），加固 Docker 降为对照基线；自写 ~100 行凭证代理全管 LLM+fetch 密钥；Presidio 接 memory.json 落库前；三实验复刻穿插；验收 = 四次主动攻击（逃逸/egress/密钥不可见/审计复盘）
 
 ## Not yet specified
 
