@@ -1,0 +1,196 @@
+/* print.css - 白纸黑字、目录式缩进的打印样式 */
+
+@page {
+  size: A4;
+  margin: 0.7cm 1.2cm 0.7cm 1.2cm; /* 上下极小，左右稍大 */
+}
+
+body {
+  font-family: "PingFang SC", "Noto Serif CJK SC", "Songti SC", "STSong", serif;
+  font-size: 10.5pt;
+  line-height: 1.5;
+  color: #000;
+  max-width: 100%;
+}
+
+/* === 层级缩进：1.5em 一级，越深越往右 === */
+
+h1 {
+  font-size: 22pt;
+  font-weight: bold;
+  padding-left: 0;
+  margin: 0 0 0.4em 0;
+  text-align: left;
+  page-break-after: avoid;
+  page-break-before: avoid;
+}
+
+h2 {
+  font-size: 16pt;
+  font-weight: bold;
+  padding-left: 0;
+  margin: 0 0 0.6em 0;
+  page-break-before: avoid; /* 关键：第一个 h2 紧接 h1，不分页 */
+  page-break-after: avoid;
+}
+
+/* 第一个 h2 之后的 h2 才强制分页（下一章节才需要） */
+h2 + hr + h2, h2:has(+ * + h2) {
+  page-break-before: always;
+}
+
+/* ### 章节定位 / 核心问题 / 章节结构与关键概念 / 核心论点摘要 */
+h3 {
+  font-size: 13pt;
+  font-weight: bold;
+  padding-left: 0;
+  margin: 1.2em 0 0.5em 0;
+  page-break-after: avoid;
+}
+
+/* #### 1.1 / 1.1.1 等子节标题 —— 第一级缩进 */
+h4 {
+  font-size: 12pt;
+  font-weight: bold;
+  padding-left: 1.5em;
+  margin: 1em 0 0.4em 0;
+  page-break-after: avoid;
+}
+
+/* ##### 概念名（English）—— 第二级缩进，更深 */
+h5 {
+  font-size: 11pt;
+  font-weight: bold;
+  padding-left: 3em;
+  margin: 0.6em 0 0.15em 0; /* 上边距缩短 1/4，下边距缩短 1/2，让概念+解释视觉成组 */
+  page-break-after: avoid;
+}
+
+/* 概念标题前面加圆点（小），强化"这是一组内容"的视觉 */
+h5::before {
+  content: "• ";
+  font-size: 0.7em;
+  font-weight: normal;
+  margin-right: 0.3em;
+}
+
+/* === 正文段落 === */
+
+p {
+  margin: 0.3em 0 0.5em 0;
+  text-align: justify;
+  text-indent: 2em; /* 所有段落首行缩进 2 字符（中文段落标准）—— 包括连续段落中的第二段 */
+}
+
+/* 标题后第一段也缩进（与全局规则一致，但显式声明便于维护） */
+h3 + p, h4 + p, h5 + p {
+  text-indent: 2em;
+}
+
+/* 但 h4/h5 下的正文要跟标题一起右移 */
+h4 + p, h5 + p {
+  padding-left: 1.5em; /* 与标题左边对齐 */
+}
+
+/* h5 下的正文再深一层，且上边距小（紧贴概念标题） */
+h5 + p {
+  padding-left: 3em;
+  margin-top: 0.15em;
+}
+
+/* 标题与正文之间不留空段 */
+h3, h4, h5 {
+  margin-bottom: 0.4em;
+}
+
+/* 列表：保持缩进层次，但避免列表整体缩进过深 */
+ul, ol {
+  margin: 0.4em 0 0.8em 0;
+  padding-left: 1.5em; /* 圆点占据一些宽度 */
+}
+
+/* 列表项：首行缩进 2em，多行时第一行也缩进 */
+li {
+  margin: 0.2em 0;
+  text-indent: 2em; /* 关键：li 内文本首行缩进（包括多行情况） */
+}
+
+/* 让列表标记用小圆点，位置准确 */
+ul li, ol li {
+  list-style: none;
+  position: relative;
+}
+
+ul li::before {
+  content: "•";
+  position: absolute;
+  left: -1.2em;
+  top: 0;
+  font-size: 0.85em;
+  color: #000;
+}
+
+/* ol 也用小圆点，不再用 1./2./3. */
+ol li::before {
+  content: "•";
+  position: absolute;
+  left: -1.2em;
+  top: 0;
+  font-size: 0.85em;
+  color: #000;
+}
+
+/* === 分隔线 === */
+
+hr {
+  display: block;
+  visibility: hidden;
+  height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  page-break-after: avoid;
+  page-break-before: avoid;
+}
+
+/* === 代码块（章节里若出现） === */
+
+code {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 9.5pt;
+  background: #f4f4f4;
+  padding: 0.1em 0.3em;
+  border-radius: 2px;
+}
+
+pre {
+  background: #f4f4f4;
+  padding: 0.8em;
+  margin: 0.6em 0 1em 0;
+  border-left: 3px solid #888;
+  overflow-x: auto;
+  font-size: 9.5pt;
+  line-height: 1.5;
+}
+
+/* === 打印优化 === */
+
+@media print {
+  body {
+    font-size: 10pt;
+  }
+  /* 关闭所有强制分页，让内容自然流动 */
+  h1, h2, h3, h4, h5, h6 {
+    page-break-before: auto !important;
+    page-break-after: avoid;
+  }
+  /* 避免孤行/寡行 */
+  p, li {
+    orphans: 3;
+    widows: 3;
+  }
+  /* 不显示页眉页脚 */
+  @page {
+    margin: 0.7cm 1.2cm 0.7cm 1.2cm;
+  }
+}
