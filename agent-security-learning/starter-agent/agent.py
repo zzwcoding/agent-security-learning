@@ -1,8 +1,8 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(27):凭证代理 fetch 路——fetch 请求里的 {{SECRET:NAME}} 占位符
-由 fetch_server 按"域名→密钥名"策略表从 Keychain 现取替换,Agent 和模型
-全程只见占位符。LLM 路的真 key 已在阶段 26 撤到 proxy.py。护栏与观测不变。
+当前阶段(28):记忆落库脱敏——memory.json 写入前过 Presidio Analyzer→
+Anonymizer,PII 在落盘前替换为占位符(中文手机号/身份证用自定义识别器)。
+凭证(26/27)与执行面(21-23)防线不变。
 """
 import asyncio
 import json
@@ -21,10 +21,11 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
+from memory_guard import sanitize_messages
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 27 跑通:fetch 凭证占位符按域名策略从 Keychain 分发(Agent/模型全程只见占位符)(/quit 退出)"
+BANNER = "✅ 阶段 28 跑通:memory.json 落库前 Presidio 脱敏(凭证代理 + microVM + 三层护栏不变)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -190,10 +191,15 @@ def load_memory(agent) -> None:
 
 
 def save_memory(agent) -> None:
-    """退出时:从 checkpointer 取出当前线程的全部消息,序列化成 JSON 落盘。"""
+    """退出时:从 checkpointer 取出当前线程的全部消息,消毒后序列化落盘。
+
+    落库前过 Presidio(阶段 28):PII 替换成 <EMAIL_ADDRESS> 这类占位符——
+    memory.json 是唯一真实持久化资产,脏数据落了盘就会跨会话长期存活。
+    """
     msgs = agent.get_state(THREAD).values.get("messages", [])
-    MEMORY_FILE.write_text(json.dumps(messages_to_dict(msgs), ensure_ascii=False, indent=2))
-    print(f"对话已存入 memory.json({len(msgs)} 条)")
+    clean, redactions = sanitize_messages(messages_to_dict(msgs))
+    MEMORY_FILE.write_text(json.dumps(clean, ensure_ascii=False, indent=2))
+    print(f"对话已存入 memory.json({len(msgs)} 条,落库前消毒替换 {redactions} 处)")
 
 
 def main() -> None:
