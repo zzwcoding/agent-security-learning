@@ -23,7 +23,7 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 21 | microsandbox 安装 + SDK 最小闭环(brew 安装、`msb run python`、`Sandbox.create()` 跑通;beta 探坑 ≤30 分钟) | ✅ 已完成(2026-08-29;lesson 0018,record 0022;CLI/SDK 均 0.6.16,闭环 15 秒) |
-| 22 | shell 工具进 microVM:`run_command` 改经 SDK 在一次性 microVM 执行;可观察变化:Agent 里 `ls /` 看到的是 microVM 文件系统 | ⬜ |
+| 22 | shell 工具进 microVM:`run_command` 改经 SDK 在一次性 microVM 执行;可观察变化:Agent 里 `ls /` 看到的是 microVM 文件系统 | ✅ 已完成(2026-08-30;lesson 0019,record 0023;MCP 协议实证一次性:首调写 /tmp/pwned,次调不可见;两次调用 1.2s) |
 | 23 | fetch 工具进 microVM + egress 白名单(`allowed_hosts` 初值 `httpbin.org`)——**缺口 1 核销点** | ⬜ |
 | 24 | 边界对比:同一段逃逸代码(读宿主路径/扫内网/提权)在加固 Docker 与 microVM 各跑一遍,留证据 | ⬜ |
 | 25 | chapter9/self-modifying-agent 对照复刻(平行窗口,产物放本文件夹 `self-modifying-agent复刻/`) | ⬜ |
