@@ -27,7 +27,7 @@
 | 23 | fetch 工具进 microVM + egress 白名单(初值 `httpbin.org`)——**缺口 1 核销点** | ✅ 已完成(2026-08-31;lesson 0020,record 0024;工具层白名单 fail closed:httpbin 200,example.com/内网 IP/file 协议拒且不拉 VM;网络层 PUBLIC profile 兜底:VM 内裸跑也够不着私网/元数据,全 exit 7;SDK 0.6.16 domain 白名单规则失效的 beta 坑已记,六轮探针定型两层防御;顺手修 /tools /call 只连 filesystem 的旧账) |
 | 24 | 边界对比:同一段逃逸代码(读宿主路径/扫内网/提权)在加固 Docker 与 microVM 各跑一遍,留证据 | ✅ 已完成(2026-08-31;lesson 0021,record 0025;探针在 `escape-probe/`,三份原始证据在 `escape-probe/evidence/`;Docker:挂载卷直通+内网/元数据全可达但权限捆死;microVM:root 不设防但宿主零可见+私网全拒+用完即焚;修正阶段 21 结论——microsandbox 网关默认就拒私网) |
 | 25 | chapter9/self-modifying-agent 对照复刻(平行窗口,产物放本文件夹 `self-modifying-agent复刻/`) | ⬜ |
-| 26 | 凭证代理 LLM 路:~100 行本地代理,Agent `base_url` 指向代理,代理从 Keychain 注入真 key 转发;Agent 环境只剩 `PLACEHOLDER` | ⬜ |
+| 26 | 凭证代理 LLM 路:~100 行本地代理,Agent `base_url` 指向代理,代理从 Keychain 注入真 key 转发;Agent 环境只剩 `PLACEHOLDER` | ✅ 已完成(2026-08-31;lesson 0022,record 0026;proxy.py:占位符直连 401 vs 经代理 200,SSE 流式透传,Agent 零 LLM 环境变量裸启动真跑通,代理日志不落 body,无 key 拒启;启动脚本拆为 run-proxy.sh+run-agent.sh) |
 | 27 | 凭证代理 fetch 路:`{{SECRET:name}}` 占位符按目标域名匹配替换,域名不在策略表 → fail closed;策略表与 egress 白名单同处 | ⬜ |
 | 28 | Presidio 脱敏:`memory.json` 落库前 Analyzer→Anonymizer;encrypt 可逆模式只画数据流图;手画 pipeline 数据流图 | ⬜ |
 | 29 | OTel GenAI 审计字段(谁/何时/以何理由/调什么工具带什么参数/碰什么数据分级)落到 Langfuse trace metadata | ⬜ |

@@ -7,4 +7,5 @@ httpx==0.28.1  # fetch_server 直接依赖
 langgraph-checkpoint==4.2.0  # InMemorySaver 直接依赖(对话历史)
 llm-guard==0.3.16  # 护栏扫描器(拉入 torch/transformers,镜像显著变大,阶段 15 处理)
 langfuse==4.15.1  # 阶段 19:观测摄像头 SDK;CallbackHandler 自动读 LANGFUSE_* 环境变量
+fastapi==0.141.1  # 阶段 26:凭证代理(LLM 路注入真 key;原生 asyncio + 流式响应,与 openai 客户端的 SSE 对上)
 
