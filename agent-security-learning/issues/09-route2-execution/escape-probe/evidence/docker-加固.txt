@@ -1,0 +1,40 @@
+===== 0. 身份与环境
+--- id: uid=1000(agent) gid=1000(agent) groups=1000(agent)
+--- 内核: Linux 6.12.76-linuxkit aarch64
+--- 主机名: d10d500dd8b0
+--- 有效 capabilities: CapEff:	0000000000000000
+===== 1. 读宿主路径
+--- 根目录: app bin boot dev etc home lib media mnt opt probe proc root run sbin srv sys tmp usr var 
+--- /Users(macOS 宿主家目录):
+ls: cannot access '/Users': No such file or directory
+--- /etc/passwd 头两行:
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+--- PID 1 环境(找密钥):
+PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+HOSTNAME=d10d500dd8b0
+LANG=C.UTF-8
+--- 挂载表(宿主卷泄漏点):
+tmpfs /dev tmpfs rw,nosuid,size=65536k,mode=755 0 0
+mqueue /dev/mqueue mqueue rw,nosuid,nodev,noexec,relatime 0 0
+shm /dev/shm tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k 0 0
+tmpfs /tmp tmpfs rw,nosuid,nodev,noexec,relatime,size=65536k 0 0
+/run/host_mark/Users /probe fakeowner ro,nosuid,nodev,relatime,fakeowner 0 0
+/run/host_mark/Users /app/workspace fakeowner rw,nosuid,nodev,relatime,fakeowner 0 0
+--- /app/workspace(宿主挂载卷):
+meeting-notes.txt
+notes.txt
+summary.md
+===== 2. 扫内网
+  宿主 LAN IP 192.168.0.23:3000(Langfuse,必区分): ✗ 可达
+  宿主 LAN IP 192.168.0.23:7000(AirPlay): ✗ 可达
+  LAN 网关 192.168.0.1:80: ✗ 可达
+  云元数据 169.254.169.254:80: ✗ 可达
+  docker 网关 172.17.0.1:80: △ 拒绝(路径通但端口没开/被主动拒)
+  本机 loopback 127.0.0.1:3000: △ 拒绝(路径通但端口没开/被主动拒)
+===== 3. 提权尝试
+  写 /etc: ✓ 被拒
+  写 根目录: ✓ 被拒
+  sudo: ✓ 不存在
+  写 /tmp: 允许(预期内)
+===== 探针完毕

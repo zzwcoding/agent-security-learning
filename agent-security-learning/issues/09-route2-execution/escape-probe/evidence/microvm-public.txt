@@ -1,0 +1,38 @@
+
+########## microVM(PUBLIC profile) ##########
+===== 0. 身份与环境
+--- id: uid=0(root) gid=0(root) groups=0(root)
+--- 内核: Linux 6.12.99 aarch64
+--- 主机名: escape-e8ffc2
+--- 有效 capabilities: CapEff:	000001ffffffffff
+===== 1. 读宿主路径
+--- 根目录: bin boot dev etc home lib media mnt opt proc root run sbin srv sys tmp usr var 
+--- /Users(macOS 宿主家目录):
+ls: cannot access '/Users': No such file or directory
+--- /etc/passwd 头两行:
+root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+--- PID 1 环境(找密钥):
+HOME=/
+TERM=linux
+transparent_hugepage=madvise
+--- 挂载表(宿主卷泄漏点):
+msb_runtime /.msb virtiofs rw,relatime 0 0
+devtmpfs /dev devtmpfs rw,relatime,size=211788k,nr_inodes=52947,mode=755 0 0
+tmpfs /dev/shm tmpfs rw,nosuid,noexec,relatime 0 0
+tmpfs /tmp tmpfs rw,relatime,size=131072k 0 0
+--- /app/workspace(宿主挂载卷):
+ls: cannot access '/app/workspace': No such file or directory
+===== 2. 扫内网
+  宿主 LAN IP 192.168.0.23:3000(Langfuse,必区分): △ 拒绝(路径通但端口没开/被主动拒)
+  宿主 LAN IP 192.168.0.23:7000(AirPlay): △ 拒绝(路径通但端口没开/被主动拒)
+  LAN 网关 192.168.0.1:80: △ 拒绝(路径通但端口没开/被主动拒)
+  云元数据 169.254.169.254:80: △ 拒绝(路径通但端口没开/被主动拒)
+  docker 网关 172.17.0.1:80: △ 拒绝(路径通但端口没开/被主动拒)
+  本机 loopback 127.0.0.1:3000: △ 拒绝(路径通但端口没开/被主动拒)
+===== 3. 提权尝试
+  写 /etc: ✗ 成功
+  写 根目录: ✗ 成功
+  sudo: ✓ 不存在
+  写 /tmp: 允许(预期内)
+===== 探针完毕

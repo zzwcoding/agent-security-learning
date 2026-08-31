@@ -25,7 +25,7 @@
 | 21 | microsandbox 安装 + SDK 最小闭环(brew 安装、`msb run python`、`Sandbox.create()` 跑通;beta 探坑 ≤30 分钟) | ✅ 已完成(2026-08-29;lesson 0018,record 0022;CLI/SDK 均 0.6.16,闭环 15 秒) |
 | 22 | shell 工具进 microVM:`run_command` 改经 SDK 在一次性 microVM 执行;可观察变化:Agent 里 `ls /` 看到的是 microVM 文件系统 | ✅ 已完成(2026-08-30;lesson 0019,record 0023;MCP 协议实证一次性:首调写 /tmp/pwned,次调不可见;两次调用 1.2s) |
 | 23 | fetch 工具进 microVM + egress 白名单(初值 `httpbin.org`)——**缺口 1 核销点** | ✅ 已完成(2026-08-31;lesson 0020,record 0024;工具层白名单 fail closed:httpbin 200,example.com/内网 IP/file 协议拒且不拉 VM;网络层 PUBLIC profile 兜底:VM 内裸跑也够不着私网/元数据,全 exit 7;SDK 0.6.16 domain 白名单规则失效的 beta 坑已记,六轮探针定型两层防御;顺手修 /tools /call 只连 filesystem 的旧账) |
-| 24 | 边界对比:同一段逃逸代码(读宿主路径/扫内网/提权)在加固 Docker 与 microVM 各跑一遍,留证据 | ⬜ |
+| 24 | 边界对比:同一段逃逸代码(读宿主路径/扫内网/提权)在加固 Docker 与 microVM 各跑一遍,留证据 | ✅ 已完成(2026-08-31;lesson 0021,record 0025;探针在 `escape-probe/`,三份原始证据在 `escape-probe/evidence/`;Docker:挂载卷直通+内网/元数据全可达但权限捆死;microVM:root 不设防但宿主零可见+私网全拒+用完即焚;修正阶段 21 结论——microsandbox 网关默认就拒私网) |
 | 25 | chapter9/self-modifying-agent 对照复刻(平行窗口,产物放本文件夹 `self-modifying-agent复刻/`) | ⬜ |
 | 26 | 凭证代理 LLM 路:~100 行本地代理,Agent `base_url` 指向代理,代理从 Keychain 注入真 key 转发;Agent 环境只剩 `PLACEHOLDER` | ⬜ |
 | 27 | 凭证代理 fetch 路:`{{SECRET:name}}` 占位符按目标域名匹配替换,域名不在策略表 → fail closed;策略表与 egress 白名单同处 | ⬜ |
