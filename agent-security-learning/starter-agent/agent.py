@@ -1,7 +1,8 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(22):shell 工具的执行面搬进一次性 microVM——run_command 不再
-在宿主机裸跑,每次调用拉起一台用完即焚的小虚拟机。护栏与观测逻辑不变。
+当前阶段(23):fetch 也搬进一次性 microVM 并配出网白名单(deny-by-default,
+初值只放 httpbin.org)——shell/fetch 两个执行面全部进 VM,路线 1 缺口 1
+(SSRF)就此核销。护栏与观测逻辑不变。
 """
 import asyncio
 import json
@@ -23,7 +24,7 @@ from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 22 跑通:shell 工具已进一次性 microVM(宿主直跑 + 三层护栏 + Langfuse)(/quit 退出)"
+BANNER = "✅ 阶段 23 跑通:fetch 进一次性 microVM + 出网白名单(执行面全部进 VM + 三层护栏 + Langfuse)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -45,25 +46,36 @@ SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主�
 # checkpointer 按 thread_id 区分会话;整个 CLI 用同一个线程 = 同一个连续对话
 THREAD = {"configurable": {"thread_id": "cli-session"}}
 
-# 同一个 filesystem server 的两种描述:StdioServerParameters 给阶段 3 的手动调试,
-# 字典格式给 MultiServerMCPClient(多一个 transport 字段)
-FILESYSTEM_SERVER = StdioServerParameters(
-    command=sys.executable, args=["mcp_servers/filesystem_server.py"]
-)
-# 三个 MCP server 聚合进一张工具表;shell 已搬进 microVM(阶段 22),
-# fetch 仍故意裸奔(攻击面教具,阶段 23 处理)
+# 调试命令(/tools /call)和主工具表共用同一份 server 名单:
+# StdioServerParameters 给手动 stdio 连接,字典格式给 MultiServerMCPClient(多 transport 字段)
+ALL_SERVERS = {
+    name: StdioServerParameters(command=sys.executable, args=[f"mcp_servers/{name}_server.py"])
+    for name in ("filesystem", "shell", "fetch")
+}
+# shell(阶段 22)与 fetch(阶段 23)两个执行面都已搬进一次性 microVM
 MCP_SERVERS = {
     name: {"command": sys.executable, "args": [f"mcp_servers/{name}_server.py"], "transport": "stdio"}
-    for name in ("filesystem", "shell", "fetch")
+    for name in ALL_SERVERS
 }
 
 
-async def with_mcp(fn):
-    """连上 filesystem server,把握过手的 session 交给 fn 用,用完关掉连接。"""
-    async with stdio_client(FILESYSTEM_SERVER) as (read, write):
+async def with_mcp(fn, server="filesystem"):
+    """连上指定 MCP server,把握过手的 session 交给 fn 用,用完关掉连接。"""
+    async with stdio_client(ALL_SERVERS[server]) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             return await fn(session)
+
+
+async def call_tool_any(tool: str, args: dict):
+    """调试命令用:问遍名单里的 server,谁认识这个工具谁来执行(工具名跨 server 不重名)。"""
+    for server in ALL_SERVERS:
+        async with stdio_client(ALL_SERVERS[server]) as (read, write):
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                if tool in {t.name for t in (await session.list_tools()).tools}:
+                    return await session.call_tool(tool, args)
+    raise SystemExit(f"三个 server 都没有工具 {tool}")
 
 
 def _chunks(text: str, size: int = 400):
@@ -215,12 +227,13 @@ def main() -> None:
         if not user_input:
             continue
         if user_input == "/tools":
-            tools = asyncio.run(with_mcp(lambda s: s.list_tools()))
-            for t in tools.tools:
-                print(f"  {t.name}{t.inputSchema.get('required', '')} — {t.description}")
+            for server in ALL_SERVERS:
+                tools = asyncio.run(with_mcp(lambda s: s.list_tools(), server))
+                for t in tools.tools:
+                    print(f"  [{server}] {t.name} — {t.description}")
         elif user_input.startswith("/call "):
             name, _, raw = user_input[6:].partition(" ")
-            result = asyncio.run(with_mcp(lambda s: s.call_tool(name, json.loads(raw or "{}"))))
+            result = asyncio.run(call_tool_any(name, json.loads(raw or "{}")))
             print(f"工具 > {result.content[0].text}")
         else:
             # 输入护栏:扫描器打回 (清洗后文本, 是否安全, 注入分数);不安全则拒答且
