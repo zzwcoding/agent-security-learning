@@ -83,6 +83,7 @@ def release_manifest(
     return {
         "artifact_type": "agent_control_code_patch",
         "failure_cluster": diagnosis.get("patterns", []),
+        "source_trajectories": diagnosis.get("source_trajectories", []),
         "source_case_ids": diagnosis.get("source_case_ids", []),
         "inferred_root_cause": diagnosis.get("reason"),
         "target_component": diagnosis.get("target_component"),
@@ -138,11 +139,20 @@ def diagnose(trajectories: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         return {"change_required": False, "target": None, "source_case_ids": [],
                 "reason": "没有足够支持的重复失败模式。"}
     source_ids = sorted({cid for p in patterns for cid in p["source_case_ids"]})
+    sources = [
+        {
+            "id": item["id"],
+            "trajectory_sha256": sha256_text(repr(sorted(item.items()))),
+            "evidence": item.get("evidence"),
+        }
+        for item in trajectories if item.get("id") in source_ids
+    ]
     return {
         "change_required": True,
         "target": "stable/retry_policy.py",
         "target_component": "retry_and_circuit_breaker_control",
         "source_case_ids": source_ids,
+        "source_trajectories": sources,
         "patterns": patterns,
         "reason": "重试/熔断控制无视 retryable=false,根因在控制代码,不在 prompt。",
         "change_contract": {

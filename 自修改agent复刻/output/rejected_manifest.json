@@ -13,6 +13,18 @@
       "total_redundant_calls": 5
     }
   ],
+  "source_trajectories": [
+    {
+      "id": "run-payment-001",
+      "trajectory_sha256": "4a0b38498b006bf988279b0ff7984f04245db21ee0668986a49f3ca3f4969008",
+      "evidence": "The same declined payment was submitted four times."
+    },
+    {
+      "id": "run-payment-002",
+      "trajectory_sha256": "6407eb8005fb39702005d553963405329607b34e67acbb18901c79060dbe1e59",
+      "evidence": "A second task repeated the identical non-retryable call three times."
+    }
+  ],
   "source_case_ids": [
     "run-payment-001",
     "run-payment-002"

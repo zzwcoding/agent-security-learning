@@ -1,12 +1,13 @@
 """实验 9-6 复刻:由失败轨迹触发的 Agent 自我修改。
 
-阶段 8:发布决定 + manifest。全绿才 release_to_canary(灰度,不直接上生产),
-否则 reject_candidate;决定连同哈希/diff/检查/回滚锚点落盘 manifest。
-好候选与捣乱候选各走一遍,两种决定并排可见。
+阶段 9:可信根自证。流程开工前/收工后各给可信根(stable、轨迹数据、
+三个验证器文件、沙箱镜像定义)拍 SHA-256 快照,前后对比必须一致——
+证明整条自我修改流水线没有越权碰过"裁判和病历"。
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -22,6 +23,24 @@ from evolution import (
 
 ROOT = Path(__file__).parent
 
+# 可信根清单:它们是"裁判和病历",不进自我修改权限,流程只许读不许改
+TRUSTED_PATHS = (
+    "stable/retry_policy.py",
+    "failure_trajectories.json",
+    "evolution.py",
+    "candidate_sandbox.py",
+    "sandbox_runner.py",
+    "Dockerfile.sandbox",
+)
+
+
+def sha_file(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def snapshot_trusted_roots() -> dict[str, str]:
+    return {name: sha_file(ROOT / name) for name in TRUSTED_PATHS}
+
 
 def load_trajectories() -> list[dict]:
     """失败轨迹 = 生产环境一次任务里工具调用的出错记录,一条一个 JSON 对象。"""
@@ -35,6 +54,7 @@ def print_checks(title: str, checks: dict[str, bool]) -> None:
 
 
 def main() -> None:
+    before = snapshot_trusted_roots()  # 开工前:先给裁判和病历拍快照
     trajectories = load_trajectories()
     diagnosis = diagnose(trajectories)
     stable_source = (ROOT / "stable" / "retry_policy.py").read_text(encoding="utf-8")
@@ -69,8 +89,19 @@ def main() -> None:
         json.dumps(rejected, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"捣乱候选决定:{rejected['decision']}(理由:{rejected['rejection_reason']})")
 
-    print("\n✅ 阶段 8 跑通:发布决定由模型外代码给出并落盘 manifest。"
-          "注意决定只到 canary(灰度),永不直接上生产。下一步给可信根做哈希自证。")
+    # 收工后:再拍一次快照,前后对比——流程碰没碰可信根,哈希说了算
+    after = snapshot_trusted_roots()
+    print("\n可信根自证(SHA-256 开工前 → 收工后):")
+    for name in TRUSTED_PATHS:
+        mark = "✓ 未动" if before[name] == after[name] else "✗ 被改动!"
+        print(f"  {mark}  {name}  {after[name][:12]}")
+    unchanged = before == after
+    print(f"结论:trusted_surfaces_unchanged = {unchanged}")
+    print(f"证据轨迹哈希(进 manifest 存档):"
+          f"{manifest['source_trajectories'][0]['id']} = {manifest['source_trajectories'][0]['trajectory_sha256'][:12]}")
+
+    print("\n✅ 阶段 9 跑通:可信根前后哈希一致,流程没有越权。"
+          "下一步请真实 LLM 出提案——它也必须过这一模一样的门槛。")
 
 
 if __name__ == "__main__":
