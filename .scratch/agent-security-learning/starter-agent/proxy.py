@@ -50,12 +50,14 @@ async def forward(request: Request, path: str):
     )
     upstream_resp = await _client.send(upstream_req, stream=True)
 
-    # 流式(SSE)与非流式统一用 aiter_raw 透传:字节原样过,不解析不缓存,
-    # so agent.astream 的 token 级流式体验不变;退出时必须关上游连接
+    # 流式(SSE)与非流式统一用 aiter_bytes 透传:字节过代理前先解压(阶段 31 攻击
+    # 会话实测抓出——aiter_raw 会把上游 gzip 原样转发,而 Content-Encoding 头没跟着
+    # 透传,客户端拿着压缩字节当 JSON 解,非流式补全当场 UnicodeDecodeError)。
+    # 不解析不缓存,token 级流式体验不变;退出时必须关上游连接
     async def relay():
         size = 0
         try:
-            async for chunk in upstream_resp.aiter_raw():
+            async for chunk in upstream_resp.aiter_bytes():
                 size += len(chunk)
                 yield chunk
         finally:
