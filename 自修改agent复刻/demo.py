@@ -1,7 +1,7 @@
 """实验 9-6 复刻:由失败轨迹触发的 Agent 自我修改。
 
-阶段 6:容器内语义检查(上)。候选源码在加固容器里被真正 exec,跑
-签名兼容/失败重放/永久错误熔断三项行为检查;宿主只收回一份布尔表。
+阶段 7:容器内语义检查(下)。候选和稳定版都在加固容器里被 exec,
+跑临时恢复/旧任务回归/灰度就绪/回滚就绪四项行为检查,十格灯表全亮。
 """
 
 from __future__ import annotations
@@ -50,8 +50,8 @@ def main() -> None:
     tampered = candidate["source"] + "\nimport os\nos.system('echo pwned')\n"
     print_checks("\n捣乱测试(候选尾部偷运 import os):", validate_candidate(tampered, trajectories))
 
-    print("\n✅ 阶段 6 跑通:语义检查上三灯(签名兼容/失败重放/永久错误熔断)。"
-          "候选代码已在容器里真正被执行过——这就是它必须待在容器里的原因。")
+    print("\n✅ 阶段 7 跑通:七项行为检查全绿。候选和稳定版都在容器里被 exec 过——"
+          "连'回滚路是否通畅'都是用行为验证的。下一步由模型外代码做发布决定。")
 
 
 if __name__ == "__main__":
