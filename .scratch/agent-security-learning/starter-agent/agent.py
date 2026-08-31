@@ -1,8 +1,8 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(26):凭证代理 LLM 路——真 key 撤出本进程,base_url 指向本地
-凭证代理(proxy.py,127.0.0.1:5055),由它注入真 key 转发 MiniMax;
-本进程环境里只有 PLACEHOLDER 占位符。护栏与观测逻辑不变。
+当前阶段(27):凭证代理 fetch 路——fetch 请求里的 {{SECRET:NAME}} 占位符
+由 fetch_server 按"域名→密钥名"策略表从 Keychain 现取替换,Agent 和模型
+全程只见占位符。LLM 路的真 key 已在阶段 26 撤到 proxy.py。护栏与观测不变。
 """
 import asyncio
 import json
@@ -24,7 +24,7 @@ from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 26 跑通:真 key 已撤出 Agent 进程(LLM 流量经本地凭证代理 + 三层护栏 + Langfuse)(/quit 退出)"
+BANNER = "✅ 阶段 27 跑通:fetch 凭证占位符按域名策略从 Keychain 分发(Agent/模型全程只见占位符)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
