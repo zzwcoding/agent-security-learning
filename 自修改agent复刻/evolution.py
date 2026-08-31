@@ -175,8 +175,14 @@ def validate_candidate(
         return checks
 
     try:
-        run_in_sandbox("validate", candidate_source, trajectories, stable_source=stable_source)
+        result = run_in_sandbox("validate", candidate_source, trajectories, stable_source=stable_source)
     except SandboxError:
         return checks
+    sandbox_checks = result.get("checks")
+    if not isinstance(sandbox_checks, dict):
+        return checks
     checks["sandbox_execution"] = True
+    for name in CHECK_NAMES:
+        if name not in {"static_compile", "security_scan", "sandbox_execution"}:
+            checks[name] = sandbox_checks.get(name) is True
     return checks
