@@ -1,14 +1,16 @@
 """实验 9-6 复刻:由失败轨迹触发的 Agent 自我修改。
 
-阶段 9:可信根自证。流程开工前/收工后各给可信根(stable、轨迹数据、
-三个验证器文件、沙箱镜像定义)拍 SHA-256 快照,前后对比必须一致——
-证明整条自我修改流水线没有越权碰过"裁判和病历"。
+阶段 10:真实 LLM 提案。--generator llm 时请 MiniMax-M2 出完整候选源码,
+只写 validation/<run>/candidates/ 隔离区 + evidence 回执;它必须过与确定性
+提案一模一样的门槛(静态闸→沙箱→manifest),真 key 只从 Keychain 注入。
 """
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
+import time
 from pathlib import Path
 
 from candidate_sandbox import run_in_sandbox
@@ -54,6 +56,10 @@ def print_checks(title: str, checks: dict[str, bool]) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="self-modification pipeline (replica)")
+    parser.add_argument("--generator", choices=("deterministic", "llm"), default="deterministic")
+    args = parser.parse_args()
+
     before = snapshot_trusted_roots()  # 开工前:先给裁判和病历拍快照
     trajectories = load_trajectories()
     diagnosis = diagnose(trajectories)
@@ -62,10 +68,24 @@ def main() -> None:
     if not diagnosis["change_required"]:
         print("没有足够支持的失败模式,不改代码。")
         return
-    candidate = generate_candidate(stable_source, diagnosis)
-    out_path = write_candidate(candidate["source"], ROOT / "output" / "candidate" / "retry_policy.py")
-    print(f"候选已写入 {out_path.relative_to(ROOT)},stable 未被改动:"
-          f"{(ROOT / 'stable' / 'retry_policy.py').read_text(encoding='utf-8') == stable_source}\n")
+
+    if args.generator == "llm":
+        from llm_generator import generate_with_openai
+        candidate = generate_with_openai(stable_source, diagnosis)
+        run_dir = ROOT / "validation" / time.strftime("minimax_%Y%m%dT%H%M%SZ", time.gmtime())
+        out_path = write_candidate(candidate["source"], run_dir / "candidates" / "retry_policy.py")
+        (run_dir / "evidence.json").write_text(
+            json.dumps(candidate["generator_metadata"]["receipt"], ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        print(f"LLM 提案只写隔离区:{out_path.relative_to(ROOT)}(evidence 同目录)\n")
+        print(f"真实 LLM diff({candidate['generator_metadata']['model']},"
+              f"{candidate['generator_metadata']['receipt']['usage']['total_tokens']} tokens):")
+        print(candidate["diff"], "\n")
+    else:
+        candidate = generate_candidate(stable_source, diagnosis)
+        out_path = write_candidate(candidate["source"], ROOT / "output" / "candidate" / "retry_policy.py")
+        print(f"候选已写入 {out_path.relative_to(ROOT)},stable 未被改动:"
+              f"{(ROOT / 'stable' / 'retry_policy.py').read_text(encoding='utf-8') == stable_source}\n")
 
     echo = run_in_sandbox("validate", candidate["source"], trajectories, stable_source=stable_source)
     print("容器内语义检查原始回传:", json.dumps(echo["checks"], ensure_ascii=False), "\n")
@@ -100,8 +120,9 @@ def main() -> None:
     print(f"证据轨迹哈希(进 manifest 存档):"
           f"{manifest['source_trajectories'][0]['id']} = {manifest['source_trajectories'][0]['trajectory_sha256'][:12]}")
 
-    print("\n✅ 阶段 9 跑通:可信根前后哈希一致,流程没有越权。"
-          "下一步请真实 LLM 出提案——它也必须过这一模一样的门槛。")
+    print("\n✅ 阶段 10 跑通:真实 LLM 提案过了同一组门槛,决定仍是模型外代码给的。"
+          "对比 provenance 字段:deterministic vs real_llm_coding_agent。"
+          "下一步把三方(负对照/确定性/真 LLM)放进取收入口同台对比。")
 
 
 if __name__ == "__main__":

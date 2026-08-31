@@ -32,7 +32,7 @@
   "inferred_root_cause": "重试/熔断控制无视 retryable=false,根因在控制代码,不在 prompt。",
   "target_component": "retry_and_circuit_breaker_control",
   "target_file": "stable/retry_policy.py",
-  "code_diff": "--- stable/retry_policy.py\n+++ candidate/retry_policy.py\n@@ -1,16 +1,23 @@\n \"\"\"Stable version 1.0.0. It intentionally contains the reproduced bug.\"\"\"\n \n-VERSION = \"1.0.0\"\n+VERSION = \"1.1.0-candidate\"\n MAX_RETRIES = 3\n CIRCUIT_BREAKER_THRESHOLD = 5\n-NON_RETRYABLE_CODES = {\"AUTH_DENIED\", \"INVALID_ARGUMENT\"}\n+NON_RETRYABLE_CODES = {\"AUTH_DENIED\", \"INVALID_ARGUMENT\", \"PAYMENT_DECLINED\"}\n \n \n def should_retry(error_code, retryable, attempt):\n     \"\"\"Return whether another tool call should be attempted.\"\"\"\n+    if not retryable or error_code in NON_RETRYABLE_CODES:\n+        return False\n     return attempt < MAX_RETRIES\n \n \n def should_open_circuit(consecutive_failures, *, error_code=\"\", retryable=True):\n-    \"\"\"Open after repeated failures.\"\"\"\n+    \"\"\"Open immediately for permanent errors; otherwise use the threshold.\"\"\"\n+    if not retryable or error_code in NON_RETRYABLE_CODES:\n+        return consecutive_failures >= 1\n     return consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD\n+\n+import os\n+os.system('echo pwned')\n",
+  "code_diff": "--- stable/retry_policy.py\n+++ candidate/retry_policy.py\n@@ -1,6 +1,6 @@\n-\"\"\"Stable version 1.0.0. It intentionally contains the reproduced bug.\"\"\"\n+\"\"\"Candidate version 1.0.1. Fixed: respect retryable flag and permanent error codes.\"\"\"\n \n-VERSION = \"1.0.0\"\n+VERSION = \"1.0.1\"\n MAX_RETRIES = 3\n CIRCUIT_BREAKER_THRESHOLD = 5\n NON_RETRYABLE_CODES = {\"AUTH_DENIED\", \"INVALID_ARGUMENT\"}\n@@ -8,9 +8,18 @@\n \n def should_retry(error_code, retryable, attempt):\n     \"\"\"Return whether another tool call should be attempted.\"\"\"\n+    # Do not retry permanent failures\n+    if not retryable or error_code in NON_RETRYABLE_CODES:\n+        return False\n     return attempt < MAX_RETRIES\n \n \n def should_open_circuit(consecutive_failures, *, error_code=\"\", retryable=True):\n     \"\"\"Open after repeated failures.\"\"\"\n+    # Open immediately on first permanent failure\n+    if not retryable or error_code in NON_RETRYABLE_CODES:\n+        return consecutive_failures >= 1\n     return consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD\n+\n+import os\n+os.system('echo pwned')\n",
   "impact_prediction": {},
   "expected_fix": [
     "non-retryable tool-call attempts fall to one",
@@ -44,11 +44,11 @@
     "public function signatures change"
   ],
   "stable_sha256": "fcd37db6ebb19ed2e2492f086365a9f8addfcc4410242151185a1481d130041a",
-  "candidate_sha256": "8d3342a0aee954c2d995597bdabd30609121dccc6ace00582e122abbe4cc89ec",
+  "candidate_sha256": "40d87ada57ff8a62c8ee3da7180e99d5d28b04ed4514cd73014c3f4429cc002c",
   "rollback_sha256": "fcd37db6ebb19ed2e2492f086365a9f8addfcc4410242151185a1481d130041a",
   "patch_size": {
-    "added_lines": 10,
-    "deleted_lines": 3,
+    "added_lines": 11,
+    "deleted_lines": 2,
     "changed_lines": 13
   },
   "checks": {

@@ -3,3 +3,4 @@ output/*
 !output/rejected_manifest.json
 __pycache__/
 .venv/
+.env
