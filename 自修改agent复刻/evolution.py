@@ -65,6 +65,56 @@ def sha256_text(source: str) -> str:
     return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
+def _short_sha(source: str) -> str:
+    return sha256_text(source)[:12]
+
+
+def release_manifest(
+    stable_source: str,
+    candidate: Dict[str, Any],
+    diagnosis: Dict[str, Any],
+    checks: Dict[str, bool],
+) -> Dict[str, Any]:
+    """发布决定在模型外:全绿才 release_to_canary,否则 reject_candidate;
+    决定连同证据(哈希/diff/检查结果/回滚锚点)整体落盘 manifest,可审计。"""
+    accepted = candidate.get("changed", False) and bool(checks) and all(checks.values())
+    failed = [name for name, passed in checks.items() if not passed]
+    contract = diagnosis.get("change_contract", {})
+    return {
+        "artifact_type": "agent_control_code_patch",
+        "failure_cluster": diagnosis.get("patterns", []),
+        "source_case_ids": diagnosis.get("source_case_ids", []),
+        "inferred_root_cause": diagnosis.get("reason"),
+        "target_component": diagnosis.get("target_component"),
+        "target_file": diagnosis.get("target"),
+        "code_diff": candidate.get("diff", ""),
+        "impact_prediction": candidate.get("impact_prediction", {}),
+        "expected_fix": contract.get("expected_fix", []),
+        "potential_regressions": contract.get("potential_regressions", []),
+        "stable_sha256": sha256_text(stable_source),
+        "candidate_sha256": sha256_text(candidate.get("source", stable_source)),
+        "rollback_sha256": sha256_text(stable_source),
+        "patch_size": candidate.get("patch_size", {}),
+        "checks": checks,
+        "failed_checks": failed,
+        "canary_gate": {
+            "eligible": accepted,
+            "scope": "shadow traffic only; stable remains unchanged",
+            "rollback_trigger": "any non-retryable repeat or temporary-recovery regression",
+        },
+        "rollback_gate": {
+            "artifact_hash_matches_stable": checks.get("rollback_ready", False),
+            "rollback_sha256": sha256_text(stable_source),
+        },
+        "provenance": candidate.get("generator_metadata", {}),
+        "decision": "release_to_canary" if accepted else "reject_candidate",
+        "rejection_reason": None if accepted else (
+            "candidate did not change stable source" if not candidate.get("changed")
+            else "failed gates: " + ", ".join(failed)
+        ),
+    }
+
+
 def diagnose(trajectories: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
     """只聚合"失败的、不许重试的、却重试了"的轨迹;≥2 条同模式支持才成案。"""
     trajectories = list(trajectories)
@@ -95,6 +145,17 @@ def diagnose(trajectories: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
         "source_case_ids": source_ids,
         "patterns": patterns,
         "reason": "重试/熔断控制无视 retryable=false,根因在控制代码,不在 prompt。",
+        "change_contract": {
+            "expected_fix": [
+                "non-retryable tool-call attempts fall to one",
+                "the circuit opens on the first permanent failure",
+            ],
+            "potential_regressions": [
+                "temporary timeouts stop retrying",
+                "the five-failure circuit threshold changes for retryable errors",
+                "public function signatures change",
+            ],
+        },
     }
 
 
@@ -105,20 +166,30 @@ def _replace_once(source: str, old: str, new: str) -> str:
     return source.replace(old, new, 1)
 
 
-def candidate_from_source(stable_source: str, candidate_source: str) -> Dict[str, Any]:
-    """把候选源码打包成可审查对象:源码 + 相对稳定版的统一 diff。
-    (patch_size/impact_prediction 等打包元数据到阶段 8 manifest 再补)"""
+def candidate_from_source(
+    stable_source: str,
+    candidate_source: str,
+    *,
+    impact_prediction: Dict[str, Any] | None = None,
+    generator_metadata: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """把候选源码打包成可审查对象:源码 + 统一 diff + 补丁尺寸 + 出处元数据。"""
     diff = "".join(difflib.unified_diff(
         stable_source.splitlines(keepends=True),
         candidate_source.splitlines(keepends=True),
         fromfile="stable/retry_policy.py",
         tofile="candidate/retry_policy.py",
     ))
+    added = sum(line.startswith("+") and not line.startswith("+++") for line in diff.splitlines())
+    deleted = sum(line.startswith("-") and not line.startswith("---") for line in diff.splitlines())
     return {
         "source": candidate_source,
         "diff": diff,
         "changed": candidate_source != stable_source,
+        "impact_prediction": impact_prediction or {},
+        "generator_metadata": generator_metadata or {},
         "source_sha256": sha256_text(candidate_source),
+        "patch_size": {"added_lines": added, "deleted_lines": deleted, "changed_lines": added + deleted},
     }
 
 
@@ -130,7 +201,15 @@ def generate_candidate(stable_source: str, diagnosis: Dict[str, Any]) -> Dict[st
     candidate = _replace_once(candidate, OLD_RETRY, NEW_RETRY)
     candidate = _replace_once(candidate, OLD_BREAKER, NEW_BREAKER)
     candidate = candidate.replace('VERSION = "1.0.0"', 'VERSION = "1.1.0-candidate"', 1)
-    return candidate_from_source(stable_source, candidate)
+    return candidate_from_source(
+        stable_source,
+        candidate,
+        impact_prediction={
+            "non_retryable_calls": {"before": "up to 4", "after": 1},
+            "temporary_timeout_recovery_rate": {"before": 1.0, "after": 1.0},
+        },
+        generator_metadata={"generator": "deterministic", "model": None, "api_calls": 0},
+    )
 
 
 def write_candidate(candidate_source: str, path: Path) -> Path:
