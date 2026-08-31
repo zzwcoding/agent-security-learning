@@ -1,7 +1,7 @@
 """实验 9-6 复刻:由失败轨迹触发的 Agent 自我修改。
 
-阶段 5:候选进沙箱。宿主只经 stdin/stdout JSON 协议与加固一次性容器对话,
-容器回传的原始 JSON 直接打印;沙箱执行灯亮起,后七格仍灭(语义检查在后面)。
+阶段 6:容器内语义检查(上)。候选源码在加固容器里被真正 exec,跑
+签名兼容/失败重放/永久错误熔断三项行为检查;宿主只收回一份布尔表。
 """
 
 from __future__ import annotations
@@ -39,8 +39,8 @@ def main() -> None:
     print(f"候选已写入 {out_path.relative_to(ROOT)},stable 未被改动:"
           f"{(ROOT / 'stable' / 'retry_policy.py').read_text(encoding='utf-8') == stable_source}\n")
 
-    echo = run_in_sandbox("ping", candidate["source"], trajectories, stable_source=stable_source)
-    print("容器回传 JSON(候选没出过容器,宿主只拿到这句话):", json.dumps(echo, ensure_ascii=False), "\n")
+    echo = run_in_sandbox("validate", candidate["source"], trajectories, stable_source=stable_source)
+    print("容器内语义检查原始回传:", json.dumps(echo["checks"], ensure_ascii=False), "\n")
 
     checks = validate_candidate(candidate["source"], trajectories, stable_source=stable_source)
     print_checks("发布门槛灯表(候选补丁):", checks)
@@ -50,8 +50,8 @@ def main() -> None:
     tampered = candidate["source"] + "\nimport os\nos.system('echo pwned')\n"
     print_checks("\n捣乱测试(候选尾部偷运 import os):", validate_candidate(tampered, trajectories))
 
-    print("\n✅ 阶段 5 跑通:候选在加固容器里跑了个来回,sandbox_execution 亮灯。"
-          "但容器只回了个'看见了',还没验证任何行为——下一步在容器里点亮语义检查。")
+    print("\n✅ 阶段 6 跑通:语义检查上三灯(签名兼容/失败重放/永久错误熔断)。"
+          "候选代码已在容器里真正被执行过——这就是它必须待在容器里的原因。")
 
 
 if __name__ == "__main__":
