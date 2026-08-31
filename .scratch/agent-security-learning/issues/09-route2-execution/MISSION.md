@@ -29,7 +29,7 @@
 | 25 | chapter9/self-modifying-agent 对照复刻(平行窗口,产物放本文件夹 `self-modifying-agent复刻/`) | ⬜ |
 | 26 | 凭证代理 LLM 路:~100 行本地代理,Agent `base_url` 指向代理,代理从 Keychain 注入真 key 转发;Agent 环境只剩 `PLACEHOLDER` | ✅ 已完成(2026-08-31;lesson 0022,record 0026;proxy.py:占位符直连 401 vs 经代理 200,SSE 流式透传,Agent 零 LLM 环境变量裸启动真跑通,代理日志不落 body,无 key 拒启;启动脚本拆为 run-proxy.sh+run-agent.sh) |
 | 27 | 凭证代理 fetch 路:`{{SECRET:name}}` 占位符按目标域名匹配替换,域名不在策略表 → fail closed;策略表与 egress 白名单同处 | ✅ 已完成(2026-08-31;lesson 0023,record 0027;fetch_server 策略表+Keychain 现取:httpbin 回显真值/CLI /call 通过,未授权名与不存在的名均 fail closed(策略检查先于取值,不泄露 Keychain 存量);注入点因 VM 出网限制定在 fetch_server 而非 proxy.py,LLM 路不变;microsandbox per-domain secret 三行对照笔记已记) |
-| 28 | Presidio 脱敏:`memory.json` 落库前 Analyzer→Anonymizer;encrypt 可逆模式只画数据流图;手画 pipeline 数据流图 | ⬜ |
+| 28 | Presidio 脱敏:`memory.json` 落库前 Analyzer→Anonymizer;encrypt 可逆模式只画数据流图;手画 pipeline 数据流图 | ✅ 已完成(2026-08-31;lesson 0024,record 0028;memory_guard.py:NER 复用 en_core_web_sm+自定义 CN_PHONE/CN_ID 识别器;端到端铁证——落盘 6 处 `<CN_PHONE>`、原文 0 残留;encrypt 可逆模式与 pipeline 两张数据流图已画;记录 L4 对 PII 类话术连续 4 次误报) |
 | 29 | OTel GenAI 审计字段(谁/何时/以何理由/调什么工具带什么参数/碰什么数据分级)落到 Langfuse trace metadata | ⬜ |
 | 30 | chapter3/log-sanitization 复刻(平行窗口;顺手起 Ollama 为路线 4 热身) | ⬜ |
 | 31 | 四次主动攻击验收:逃逸 / egress / 密钥不可见 / 审计复盘,全程留证据 | ⬜ |
