@@ -1,9 +1,9 @@
 """容器入口(宿主进程禁止 import 本文件):从 stdin 读 JSON 请求,往 stdout 回 JSON。
 
-阶段 6:语义检查上三灯——public_api_compatible(签名兼容)/
-failure_replay(失败重放一次都不许再试)/ nonretryable_circuit(永久错误 1 次熔断)。
-这里 exec 候选源码,是全流程第一次真正执行不可信代码:它只发生在加固一次性
-容器里,且 stdout/stderr 被重定向进黑洞——候选的任何打印都污染不了协议通道。
+阶段 7:语义检查下四灯——temporary_recovery(临时错误照常重试)/
+old_task_regression(旧场景行为不许变)/ canary_ready(灰度前自检)/
+rollback_ready(稳定版 exec 一遍仍健康,回滚路是通的)。
+候选和稳定版都在容器里 exec,七项检查全是对"行为"的提问。
 """
 
 from __future__ import annotations
@@ -43,6 +43,14 @@ def _namespace(source: str) -> dict[str, Any]:
     return namespace
 
 
+def _temporary_recovery(namespace: dict[str, Any]) -> bool:
+    """临时错误必须仍然可重试:序号 0、1 都答"再试"(成功恢复的正样本)。"""
+    return bool(
+        namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 0)
+        and namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 1)
+    )
+
+
 def _validate(payload: dict[str, Any]) -> dict[str, bool]:
     checks = {name: False for name in SANDBOX_CHECKS}
     try:
@@ -79,8 +87,43 @@ def _validate(payload: dict[str, Any]) -> dict[str, bool]:
             )
             for item in failures
         )
+        checks["temporary_recovery"] = _temporary_recovery(namespace)
+        # 旧任务回归:新补丁不许破坏旧行为——临时错误照旧"3 次封顶、5 次熔断"
+        checks["old_task_regression"] = all((
+            namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 0),
+            namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 2),
+            not namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 3),
+            not namespace["should_open_circuit"](
+                4, error_code="TEMPORARY_TIMEOUT", retryable=True
+            ),
+            namespace["should_open_circuit"](
+                5, error_code="TEMPORARY_TIMEOUT", retryable=True
+            ),
+        ))
+        # 灰度就绪:AUTH_DENIED 这种"表里有的永久错误"即便被标 retryable 也要拒重试+即熔断
+        checks["canary_ready"] = all((
+            not namespace["should_retry"]("AUTH_DENIED", True, 0),
+            namespace["should_open_circuit"](
+                1, error_code="AUTH_DENIED", retryable=True
+            ),
+            _temporary_recovery(namespace),
+        ))
     except Exception:
         return checks
+
+    stable_source = payload.get("stable_source")
+    if stable_source is None:
+        checks["rollback_ready"] = True
+    else:
+        try:
+            rollback = _namespace(stable_source)
+            checks["rollback_ready"] = bool(
+                rollback.get("VERSION") == "1.0.0"
+                and rollback["should_retry"]("TEMPORARY_TIMEOUT", True, 0)
+                and not rollback["should_retry"]("TEMPORARY_TIMEOUT", True, 3)
+            )
+        except Exception:
+            checks["rollback_ready"] = False
     return checks
 
 
