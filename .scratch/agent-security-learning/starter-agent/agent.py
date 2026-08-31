@@ -1,7 +1,7 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(19):Langfuse 本地接入——旁路观测 + 出库前掩码。
-防御逻辑零改动;观测数据本身敏感,发往 Langfuse 前先把疑似密钥打码。
+当前阶段(22):shell 工具的执行面搬进一次性 microVM——run_command 不再
+在宿主机裸跑,每次调用拉起一台用完即焚的小虚拟机。护栏与观测逻辑不变。
 """
 import asyncio
 import json
@@ -23,7 +23,7 @@ from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 19 跑通:Langfuse 本地接入(全程 trace + 密钥掩码)+ 三层护栏(/quit 退出)"
+BANNER = "✅ 阶段 22 跑通:shell 工具已进一次性 microVM(宿主直跑 + 三层护栏 + Langfuse)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -50,7 +50,8 @@ THREAD = {"configurable": {"thread_id": "cli-session"}}
 FILESYSTEM_SERVER = StdioServerParameters(
     command=sys.executable, args=["mcp_servers/filesystem_server.py"]
 )
-# 三个 MCP server 聚合进一张工具表;shell 与 fetch 故意裸奔(攻击面教具)
+# 三个 MCP server 聚合进一张工具表;shell 已搬进 microVM(阶段 22),
+# fetch 仍故意裸奔(攻击面教具,阶段 23 处理)
 MCP_SERVERS = {
     name: {"command": sys.executable, "args": [f"mcp_servers/{name}_server.py"], "transport": "stdio"}
     for name in ("filesystem", "shell", "fetch")
