@@ -1,0 +1,67 @@
+{
+  "backend": {
+    "provider": "minimax",
+    "endpoint": "https://api.minimaxi.com/v1/chat/completions",
+    "credential_env": "MINIMAX_API_KEY",
+    "model": "MiniMax-M2",
+    "credential_value_recorded": false
+  },
+  "request": {
+    "model": "MiniMax-M2",
+    "messages": [
+      {
+        "role": "user",
+        "content": "You are the Coding Agent in a controlled self-modification pipeline.\n\nModify only the supplied retry-policy module. Preserve both public function\nsignatures and retry behavior for temporary failures. Permanent failures\n(retryable=false or a listed permanent code) must not be retried and must open\nthe circuit on the first occurrence. Update VERSION to a candidate version.\nDo not import modules, access files, or alter validation/release logic.\n\nBefore the source, predict the intended impact. Return JSON only:\n{\"impact_prediction\": {\"non_retryable_calls\": {\"before\": \"up to 4\", \"after\": 1},\n\"temporary_timeout_recovery_rate\": {\"before\": 1.0, \"after\": 1.0}},\n\"source\": \"the complete Python module\"}\n\nFailure diagnosis:\n{\n  \"change_required\": true,\n  \"target\": \"stable/retry_policy.py\",\n  \"target_component\": \"retry_and_circuit_breaker_control\",\n  \"source_case_ids\": [\n    \"run-payment-001\",\n    \"run-payment-002\"\n  ],\n  \"source_trajectories\": [\n    {\n      \"id\": \"run-payment-001\",\n      \"trajectory_sha256\": \"4a0b38498b006bf988279b0ff7984f04245db21ee0668986a49f3ca3f4969008\",\n      \"evidence\": \"The same declined payment was submitted four times.\"\n    },\n    {\n      \"id\": \"run-payment-002\",\n      \"trajectory_sha256\": \"6407eb8005fb39702005d553963405329607b34e67acbb18901c79060dbe1e59\",\n      \"evidence\": \"A second task repeated the identical non-retryable call three times.\"\n    }\n  ],\n  \"patterns\": [\n    {\n      \"cluster_id\": \"charge_card:PAYMENT_DECLINED\",\n      \"tool\": \"charge_card\",\n      \"error_code\": \"PAYMENT_DECLINED\",\n      \"source_case_ids\": [\n        \"run-payment-001\",\n        \"run-payment-002\"\n      ],\n      \"cross_trajectory_support\": 2,\n      \"total_redundant_calls\": 5\n    }\n  ],\n  \"reason\": \"重试/熔断控制无视 retryable=false,根因在控制代码,不在 prompt。\",\n  \"change_contract\": {\n    \"expected_fix\": [\n      \"non-retryable tool-call attempts fall to one\",\n      \"the circuit opens on the first permanent failure\"\n    ],\n    \"potential_regressions\": [\n      \"temporary timeouts stop retrying\",\n      \"the five-failure circuit threshold changes for retryable errors\",\n      \"public function signatures change\"\n    ]\n  }\n}\n\nPreviously rejected candidates (do not repeat their failure):\n[]\n\nStable module:\n\"\"\"Stable version 1.0.0. It intentionally contains the reproduced bug.\"\"\"\n\nVERSION = \"1.0.0\"\nMAX_RETRIES = 3\nCIRCUIT_BREAKER_THRESHOLD = 5\nNON_RETRYABLE_CODES = {\"AUTH_DENIED\", \"INVALID_ARGUMENT\"}\n\n\ndef should_retry(error_code, retryable, attempt):\n    \"\"\"Return whether another tool call should be attempted.\"\"\"\n    return attempt < MAX_RETRIES\n\n\ndef should_open_circuit(consecutive_failures, *, error_code=\"\", retryable=True):\n    \"\"\"Open after repeated failures.\"\"\"\n    return consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD\n\n"
+      }
+    ],
+    "temperature": 0,
+    "seed": 8501,
+    "max_tokens": 4096,
+    "response_format": {
+      "type": "json_object"
+    }
+  },
+  "response": {
+    "id": "06e4b64821bd010c95a7368e54e68b41",
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "message": {
+          "content": "<think>\nLet me analyze the task:\n\n1. I need to modify the retry-policy module (stable/retry_policy.py)\n2. Preserve public function signatures and retry behavior for temporary failures\n3. Permanent failures (retryable=false or a listed permanent code) must not be retried and must open the circuit on the first occurrence\n4. Update VERSION to a candidate version\n5. Do not import modules, access files, or alter validation/release logic\n\nThe bug is:\n- Non-retryable calls (like PAYMENT_DECLINED) are being retried multiple times (up to 4 times based on the prediction)\n- The circuit should open on the first permanent failure\n\nCurrent code:\n- `should_retry` ignores `error_code` and `retryable` - it just checks `attempt < MAX_RETRIES`\n- `should_open_circuit` doesn't consider `retryable` or `error_code` for opening early\n\nExpected fix:\n- non-retryable tool-call attempts fall to one (from up to 4)\n- the circuit opens on the first permanent failure\n\nLet me write the corrected code:\n\n1. `should_retry` should return False for non-retryable errors (where retryable=False or error_code is in NON_RETRYABLE_CODES)\n2. `should_open_circuit` should open immediately for permanent failures\n\nLet me check what codes are in NON_RETRYABLE_CODES: {\"AUTH_DENIED\", \"INVALID_ARGUMENT\"}\n\nBut the issue mentions PAYMENT_DECLINED which is NOT in the list. So I need to either:\n- Add PAYMENT_DECLINED to NON_RETRYABLE_CODES, OR\n- Make sure the code respects the `retryable` parameter\n\nLooking at the change contract:\n- \"non-retryable tool-call attempts fall to one\" - this means should_retry should return False on first attempt for non-retryable\n- \"the circuit opens on the first permanent failure\" - should_open_circuit should return True on first failure for permanent errors\n\nThe code already has NON_RETRYABLE_CODES but it doesn't use them. Also, the `retryable` parameter is passed but ignored.\n\n\nI'll implement a solution that addresses both the retry logic and circuit breaker behavior. The key is to check both the `retryable` flag and the `error_code` against the predefined non-retryable codes. This ensures that permanent failures are immediately stopped and the circuit opens on the first such occurrence.\n\nThe implementation will modify two core functions to respect the non-retryable conditions while maintaining the existing retry mechanism for temporary failures. I'll ensure the code handles edge cases like empty error codes and maintains the current retry attempts limit.\n</think>\n\n{\"impact_prediction\": {\"non_retryable_calls\": {\"before\": \"up to 4\", \"after\": 1}, \"temporary_timeout_recovery_rate\": {\"before\": 1.0, \"after\": 1.0}}, \"source\": \"\\\"\\\"\\\"Candidate version 1.0.1. Fixed: respect retryable flag and permanent error codes.\\\"\\\"\\\"\\n\\nVERSION = \\\"1.0.1\\\"\\nMAX_RETRIES = 3\\nCIRCUIT_BREAKER_THRESHOLD = 5\\nNON_RETRYABLE_CODES = {\\\"AUTH_DENIED\\\", \\\"INVALID_ARGUMENT\\\"}\\n\\n\\ndef should_retry(error_code, retryable, attempt):\\n    \\\"\\\"\\\"Return whether another tool call should be attempted.\\\"\\\"\\\"\\n    # Do not retry permanent failures\\n    if not retryable or error_code in NON_RETRYABLE_CODES:\\n        return False\\n    return attempt < MAX_RETRIES\\n\\n\\ndef should_open_circuit(consecutive_failures, *, error_code=\\\"\\\", retryable=True):\\n    \\\"\\\"\\\"Open after repeated failures.\\\"\\\"\\\"\\n    # Open immediately on first permanent failure\\n    if not retryable or error_code in NON_RETRYABLE_CODES:\\n        return consecutive_failures >= 1\\n    return consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD\\n\"}",
+          "role": "assistant",
+          "name": "MiniMax AI",
+          "audio_content": ""
+        }
+      }
+    ],
+    "created": 1788183368,
+    "model": "MiniMax-M2",
+    "object": "chat.completion",
+    "usage": {
+      "completion_tokens": 838,
+      "prompt_tokens": 754,
+      "total_tokens": 1592,
+      "total_characters": 0
+    },
+    "input_sensitive": false,
+    "output_sensitive": false,
+    "input_sensitive_type": 0,
+    "output_sensitive_type": 0,
+    "output_sensitive_int": 0,
+    "base_resp": {
+      "status_code": 0,
+      "status_msg": ""
+    }
+  },
+  "request_sha256": "375821ed89b45c39067a3c7ec38e7f9ad4f4c9b207e178c17c60c6a1322f2c34",
+  "response_sha256": "20e460ffe9b610b03717f247f4202dfa3959edd0ec1ed379d67cf0c1af20a7f5",
+  "elapsed_seconds": 9.272717,
+  "usage": {
+    "prompt_tokens": 754,
+    "completion_tokens": 838,
+    "total_tokens": 1592,
+    "provider_reported_cost_usd": null,
+    "cost_qualification": "provider did not expose monetary cost; no price was guessed"
+  }
+}
