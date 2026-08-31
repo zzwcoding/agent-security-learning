@@ -69,6 +69,38 @@ def _short_sha(source: str) -> str:
     return sha256_text(source)[:12]
 
 
+def behavior_metrics(candidate_source: str, trajectories: Iterable[Dict[str, Any]]) -> Dict[str, Any]:
+    """在同一个沙箱里量候选的行为指标;量不出来就 fail closed(evaluation_failed)。"""
+    fail = {"mean_nonretryable_calls": None, "temporary_error_recovery_rate": None,
+            "old_task_regressions": None, "evaluation_failed": True}
+    try:
+        result = run_in_sandbox("metrics", candidate_source, trajectories)
+    except SandboxError:
+        return fail
+    metrics = result.get("metrics")
+    return metrics if isinstance(metrics, dict) else fail
+
+
+def generate_rejected_control(stable_source: str, diagnosis: Dict[str, Any]) -> Dict[str, Any]:
+    """负对照:一剂"看起来也治了病"的坏药——把所有重试全禁掉。
+    它必须被门槛拒绝;它的死法还会作为历史喂给真实 LLM(别学我)。"""
+    candidate = _replace_once(stable_source, OLD_RETRY, '''def should_retry(error_code, retryable, attempt):
+    """Incorrect over-broad fix retained as a rejected candidate."""
+    return False
+''')
+    candidate = _replace_once(candidate, OLD_BREAKER, NEW_BREAKER)
+    candidate = candidate.replace('VERSION = "1.0.0"', 'VERSION = "1.0.1-rejected"', 1)
+    return candidate_from_source(
+        stable_source,
+        candidate,
+        impact_prediction={
+            "non_retryable_calls": {"after": 1},
+            "temporary_timeout_recovery_rate": {"after": 0.0},
+        },
+        generator_metadata={"generator": "negative_control", "api_calls": 0},
+    )
+
+
 def release_manifest(
     stable_source: str,
     candidate: Dict[str, Any],
@@ -95,6 +127,8 @@ def release_manifest(
         "stable_sha256": sha256_text(stable_source),
         "candidate_sha256": sha256_text(candidate.get("source", stable_source)),
         "rollback_sha256": sha256_text(stable_source),
+        "candidate_version": _short_sha(candidate.get("source", stable_source)),
+        "rollback_version": _short_sha(stable_source),
         "patch_size": candidate.get("patch_size", {}),
         "checks": checks,
         "failed_checks": failed,

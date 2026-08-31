@@ -127,6 +127,28 @@ def _validate(payload: dict[str, Any]) -> dict[str, bool]:
     return checks
 
 
+def _metrics(payload: dict[str, Any]) -> dict[str, Any]:
+    """行为指标:在新策略下重演失败轨迹,量化"修好了多少"。"""
+    namespace = _namespace(payload["source"])
+    failures = [item for item in payload["trajectories"] if item.get("outcome") == "failure"]
+    calls = []
+    for item in failures:
+        made = 1
+        while made < item["attempts"] and namespace["should_retry"](
+            item["error_code"], item["retryable"], made - 1
+        ):
+            made += 1
+        calls.append(made)
+    return {
+        "mean_nonretryable_calls": sum(calls) / len(calls) if calls else 0.0,
+        "temporary_error_recovery_rate": float(_temporary_recovery(namespace)),
+        "old_task_regressions": 0 if all((
+            namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 0),
+            not namespace["should_retry"]("TEMPORARY_TIMEOUT", True, 3),
+        )) else 1,
+    }
+
+
 def main() -> int:
     raw = sys.stdin.buffer.read(MAX_REQUEST_BYTES + 1)
     if len(raw) > MAX_REQUEST_BYTES:
@@ -137,6 +159,8 @@ def main() -> int:
         with redirect_stdout(_NullWriter()), redirect_stderr(_NullWriter()):
             if action == "validate":
                 result = {"checks": _validate(payload)}
+            elif action == "metrics":
+                result = {"metrics": _metrics(payload)}
             else:
                 return 2
     except (Exception, SystemExit):
