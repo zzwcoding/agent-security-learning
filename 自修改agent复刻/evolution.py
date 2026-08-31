@@ -1,8 +1,8 @@
 """确定性编排:轨迹 → 修改请求 → 提案 → 验证 → 发布决定(逐阶段生长)。
 
-阶段 4:宿主静态闸 validate_candidate() 的前两格——py_compile 编译检查 +
-AST 拒绝列表。纪律:编译和 AST 扫描都不执行候选代码;拒绝列表只是快速
-纵深防御,不是执行不可信代码的安全边界(那是阶段 5 沙箱的事)。
+阶段 5:validate_candidate() 第三格 sandbox_execution 亮灯——候选代码的执行
+只发生在加固一次性容器里(candidate_sandbox.py),宿主机上绝不直接执行;
+SandboxError 一律按"检查失败"处理,fail closed。
 """
 
 from __future__ import annotations
@@ -10,6 +10,8 @@ from __future__ import annotations
 import ast
 import difflib
 import hashlib
+
+from candidate_sandbox import MAX_SOURCE_BYTES, SandboxError, run_in_sandbox
 from collections import defaultdict
 from pathlib import Path
 from typing import Any, Dict, Iterable
@@ -150,14 +152,31 @@ def _safe_ast(source: str) -> bool:
     )
 
 
-def validate_candidate(candidate_source: str) -> Dict[str, bool]:
-    """宿主静态闸(本阶段只含前两格):编译 + AST 拒绝列表,全 False 起步、
-    过一关亮一灯;沙箱检查接入前其余八格保持 False,绝不放行。"""
+def validate_candidate(
+    candidate_source: str,
+    trajectories: Iterable[Dict[str, Any]],
+    stable_source: str | None = None,
+) -> Dict[str, bool]:
+    """发布门槛灯表:全 False 起步、过一关亮一灯;任何一关没过,后续全灭。"""
     checks = {name: False for name in CHECK_NAMES}
     try:
+        if len(candidate_source.encode("utf-8")) > MAX_SOURCE_BYTES:
+            return checks
+    except UnicodeError:
+        return checks
+    try:
+        # 编译和 AST 扫描都不执行源码;拒绝列表只是快筛,容器才是安全边界
         compile(candidate_source, "candidate/retry_policy.py", "exec")
         checks["static_compile"] = True
         checks["security_scan"] = _safe_ast(candidate_source)
+        if not checks["security_scan"]:
+            return checks
     except Exception:
         return checks
+
+    try:
+        run_in_sandbox("validate", candidate_source, trajectories, stable_source=stable_source)
+    except SandboxError:
+        return checks
+    checks["sandbox_execution"] = True
     return checks
