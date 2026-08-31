@@ -1,12 +1,13 @@
 """确定性编排:轨迹 → 修改请求 → 提案 → 验证 → 发布决定(逐阶段生长)。
 
-阶段 3:generate_candidate() 生成确定性候选补丁。
-纪律:diff 用"整段匹配恰好一次"的整块替换(防改错位置);候选只写 output/candidate/,
-绝不覆盖 stable/;补丁生成是纯字符串变换,零模型参与。
+阶段 4:宿主静态闸 validate_candidate() 的前两格——py_compile 编译检查 +
+AST 拒绝列表。纪律:编译和 AST 扫描都不执行候选代码;拒绝列表只是快速
+纵深防御,不是执行不可信代码的安全边界(那是阶段 5 沙箱的事)。
 """
 
 from __future__ import annotations
 
+import ast
 import difflib
 import hashlib
 from collections import defaultdict
@@ -41,6 +42,21 @@ NEW_BREAKER = '''def should_open_circuit(consecutive_failures, *, error_code="",
         return consecutive_failures >= 1
     return consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD
 '''
+
+# 十项发布门槛清单:候选必须全绿才能 release_to_canary。
+# static_compile/security_scan 是宿主静态闸(本阶段);其余八项由沙箱与发布阶段逐个点亮。
+CHECK_NAMES = (
+    "static_compile",
+    "security_scan",
+    "sandbox_execution",
+    "public_api_compatible",
+    "failure_replay",
+    "nonretryable_circuit",
+    "temporary_recovery",
+    "old_task_regression",
+    "canary_ready",
+    "rollback_ready",
+)
 
 
 def sha256_text(source: str) -> str:
@@ -120,3 +136,28 @@ def write_candidate(candidate_source: str, path: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(candidate_source, encoding="utf-8")
     return path
+
+
+def _safe_ast(source: str) -> bool:
+    """AST 拒绝列表:拒绝一切 import,以及 eval/exec/compile/open/__import__ 调用。
+    只"读"语法树、不执行代码;它是快筛,不是安全边界。"""
+    tree = ast.parse(source)
+    forbidden_calls = {"eval", "exec", "compile", "open", "__import__"}
+    return not any(
+        isinstance(node, (ast.Import, ast.ImportFrom))
+        or (isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in forbidden_calls)
+        for node in ast.walk(tree)
+    )
+
+
+def validate_candidate(candidate_source: str) -> Dict[str, bool]:
+    """宿主静态闸(本阶段只含前两格):编译 + AST 拒绝列表,全 False 起步、
+    过一关亮一灯;沙箱检查接入前其余八格保持 False,绝不放行。"""
+    checks = {name: False for name in CHECK_NAMES}
+    try:
+        compile(candidate_source, "candidate/retry_policy.py", "exec")
+        checks["static_compile"] = True
+        checks["security_scan"] = _safe_ast(candidate_source)
+    except Exception:
+        return checks
+    return checks
