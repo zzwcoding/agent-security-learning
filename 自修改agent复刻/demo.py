@@ -1,13 +1,15 @@
 """实验 9-6 复刻:由失败轨迹触发的 Agent 自我修改。
 
-阶段 1 骨架:把生产失败轨迹读进来,让"病"能被看见——
-看 stable/retry_policy.py 的两个 bug 怎么在真实轨迹里发作。
+阶段 2:轨迹聚合 → 修改请求。同一失败模式要 ≥2 条轨迹支持才立案,
+单条意外不足以触发自我修改;根因(改哪个文件)由确定性代码给出。
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from evolution import diagnose
 
 ROOT = Path(__file__).parent
 
@@ -19,18 +21,24 @@ def load_trajectories() -> list[dict]:
 
 def main() -> None:
     trajectories = load_trajectories()
-    print(f"读到 {len(trajectories)} 条生产失败轨迹:\n")
-    for t in trajectories:
-        retries = t["attempts"] - 1  # 第一次是正常调用,之后才算重试
-        flag = "  ←← 不该重试却在重试!" if not t["retryable"] and retries > 0 else ""
-        print(f"  [{t['id']}] {t['tool']} 错误={t['error_code']} retryable={t['retryable']} "
-              f"共尝试 {t['attempts']} 次(重试 {retries} 次){flag}")
+    diagnosis = diagnose(trajectories)
 
-    bad = [t for t in trajectories if not t["retryable"] and t["attempts"] > 1]
-    print(f"\n病灶:retryable=false 的错误仍被重试,{len(bad)} 条轨迹实锤"
-          f"(最多的重试了 {max(t['attempts'] for t in bad) - 1} 次)。")
-    print("根因不在 prompt,在 stable/retry_policy.py:should_retry 只看次数不看 retryable 标志。")
-    print("\n✅ 阶段 1 跑通:失败轨迹读进来了,病看得见了。下一步把它聚合成『修改请求』。")
+    # 入案门槛是硬性的:retryable=true / 非失败 / 没重试的轨迹连分组都进不去
+    entered = {cid for p in diagnosis.get("patterns", []) for cid in p["source_case_ids"]}
+    skipped = [t["id"] for t in trajectories if t["id"] not in entered]
+    print(f"读到 {len(trajectories)} 条轨迹,进入聚合的分组判决:\n")
+    for p in diagnosis.get("patterns", []):
+        print(f"  模式 {p['cluster_id']} — {p['cross_trajectory_support']} 条轨迹支持,"
+              f"冗余重试 {p['total_redundant_calls']} 次 → ✅ 成案")
+    print(f"  被门槛排除:{', '.join(skipped) or '无'}(正常重试,不该立案)\n")
+
+    if not diagnosis["change_required"]:
+        print("没有足够支持的失败模式,不改代码。")
+        return
+    print(f"修改请求:根因={diagnosis['target']}({diagnosis['target_component']})")
+    print(f"证据轨迹:{', '.join(diagnosis['source_case_ids'])}")
+    print(f"理由:{diagnosis['reason']}")
+    print("\n✅ 阶段 2 跑通:散轨迹立成『修改请求』。下一步据此生成候选补丁。")
 
 
 if __name__ == "__main__":
