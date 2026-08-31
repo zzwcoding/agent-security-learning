@@ -1,13 +1,14 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(28):记忆落库脱敏——memory.json 写入前过 Presidio Analyzer→
-Anonymizer,PII 在落盘前替换为占位符(中文手机号/身份证用自定义识别器)。
-凭证(26/27)与执行面(21-23)防线不变。
+当前阶段(29):OTel GenAI 审计字段——每次工具调用旁路记一条五要素审计
+观测(谁/何时/以何理由/调什么工具带什么参数/碰什么数据分级),落 Langfuse。
+脱敏(28)、凭证(26/27)、执行面(21-23)防线不变。
 """
 import asyncio
 import json
 import re
 import sys
+from datetime import datetime, timezone
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
 from langchain.agents.middleware import wrap_model_call, wrap_tool_call  # 中间件:包模型调用 / 包工具调用
@@ -25,7 +26,7 @@ from memory_guard import sanitize_messages
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 28 跑通:memory.json 落库前 Presidio 脱敏(凭证代理 + microVM + 三层护栏不变)(/quit 退出)"
+BANNER = "✅ 阶段 29 跑通:工具级五要素审计字段落 Langfuse(脱敏 + 凭证代理 + microVM + 三层护栏)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -77,6 +78,49 @@ async def call_tool_any(tool: str, args: dict):
                 if tool in {t.name for t in (await session.list_tools()).tools}:
                     return await session.call_tool(tool, args)
     raise SystemExit(f"三个 server 都没有工具 {tool}")
+
+
+# 阶段 29:审计字段——OTel GenAI 语义约定的项目化落法,五要素:
+# 谁 / 何时 / 以何理由(引用本轮用户消息) / 调了什么工具带什么参数 / 碰了什么数据(分级)
+TOOL_DATA_CLASS = {
+    "read_file": "workspace 用户文件(读)",
+    "write_file": "workspace 用户文件(写)",
+    "list_dir": "workspace 目录清单",
+    "run_command": "一次性 microVM 内部(宿主不可见)",
+    "http_get": "出网请求(白名单域名)",
+    "http_post": "出网请求(白名单域名,可含凭证占位符)",
+}
+CURRENT_ROUND = {"why": ""}  # CLI 单线程:记本轮用户消息,供工具审计的"以何理由"引用
+
+
+def make_tool_audit(langfuse_client):
+    """审计观测:每次工具真实执行完,旁路补一条五要素审计记录(as_type=tool)。
+
+    与自动摄像头分工:摄像头记"模型看见了什么",审计记"事后查得清吗"——
+    谁、何时、为什么调的、带了什么参数、碰的是哪一类数据。失败不静默。
+    """
+    @wrap_tool_call
+    async def tool_audit(request, handler):
+        result = await handler(request)
+        call = request.tool_call
+        try:
+            # 审计观测落在本轮 trace 下(ask() 已用 cli-round 立起环境上下文)
+            with langfuse_client.start_as_current_observation(
+                name=f"audit:{call['name']}", as_type="tool",
+                input=call.get("args", {}),
+                metadata={
+                    "audit.who": THREAD["configurable"]["thread_id"],
+                    "audit.when": datetime.now(timezone.utc).isoformat(),
+                    "audit.why": CURRENT_ROUND["why"],
+                    "audit.params": call.get("args", {}),
+                    "audit.data_class": TOOL_DATA_CLASS.get(call["name"], "未分级"),
+                },
+            ):
+                pass
+        except Exception as e:
+            print(f"⚠️ 审计上报失败:{e}")
+        return result
+    return tool_audit
 
 
 def _chunks(text: str, size: int = 400):
@@ -136,7 +180,7 @@ def make_output_guard(scanner):
     return output_guard
 
 
-def build_agent(llm, injection_scanner, output_scanner):
+def build_agent(llm, injection_scanner, output_scanner, audit_client):
     """连上所有 MCP server,把工具清单交给 create_agent 组装成 ReAct 图。
 
     checkpointer:每步状态自动存档,同一 thread_id 下历史自动带上——
@@ -146,7 +190,9 @@ def build_agent(llm, injection_scanner, output_scanner):
     tools = asyncio.run(client.get_tools())  # 对每个 server:拉起子进程→握手→list_tools
     print(f"已加载 {len(tools)} 个 MCP 工具: {[t.name for t in tools]}")
     return create_agent(llm, tools, system_prompt=SYSTEM_PROMPT, checkpointer=InMemorySaver(),
-                        middleware=[make_tool_guard(injection_scanner), make_output_guard(output_scanner)])
+                        middleware=[make_tool_audit(audit_client),
+                                    make_tool_guard(injection_scanner),
+                                    make_output_guard(output_scanner)])
 
 
 def _text(content) -> str:
@@ -156,15 +202,29 @@ def _text(content) -> str:
     return "\n".join(b.get("text", "") for b in content if isinstance(b, dict))
 
 
-async def ask(agent, text: str, langfuse_handler: CallbackHandler) -> str:
+async def ask(agent, text: str, langfuse_handler: CallbackHandler, langfuse_client=None) -> str:
     """跑一轮 ReAct 循环,沿途把每次工具调用的输入/输出打印出来。
 
     只发本轮新消息;历史由 checkpointer 按 THREAD 自动补进 messages。
     callbacks 挂在 run 配置上:LangGraph 每跑一步(模型/工具)都会回调摄像头,
     它把看到的输入输出打包上报——业务代码完全无感,这就是"旁路观测"。
     """
+    CURRENT_ROUND["why"] = text  # 审计:工具观测的"以何理由"引用本轮用户消息
+    config = {**THREAD, "callbacks": [langfuse_handler],
+              "metadata": {"audit.when": datetime.now(timezone.utc).isoformat(), "audit.why": text}}
+    # 阶段 29:trace 级审计壳——v4 上下文不自动传播,自己先立上下文,
+    # 让本轮的 when/why 和中间件的审计观测有共同的归属
+    if langfuse_client is not None:
+        with langfuse_client.start_as_current_observation(
+            name="cli-round", as_type="chain",
+            metadata={"audit.when": config["metadata"]["audit.when"], "audit.why": text},
+        ):
+            return await _run_round(agent, text, config)
+    return await _run_round(agent, text, config)
+
+
+async def _run_round(agent, text: str, config: dict) -> str:
     answer = ""
-    config = {**THREAD, "callbacks": [langfuse_handler]}
     async for chunk in agent.astream({"messages": [HumanMessage(text)]}, config=config, stream_mode="values"):
         msg = chunk["messages"][-1]  # 每一步只看最新冒出来的那条消息
         if isinstance(msg, AIMessage) and msg.tool_calls:
@@ -214,12 +274,12 @@ def main() -> None:
     # 输出侧敏感数据扫描(首次自动下载 spacy 中英模型);
     # 实体白名单只留高信号类型——默认配置把 IP/日期也当敏感,中文技术文本误报实测爆表
     output_scanner = Sensitive(entity_types=["CREDIT_CARD", "CRYPTO", "US_SSN", "US_BANK_NUMBER", "IBAN_CODE"])
-    agent = build_agent(llm, injection_scanner, output_scanner)
     # 摄像头实例化即生效:从 LANGFUSE_* 环境变量拿 key 和地址(由启动脚本注入)。
     # 顺序有讲究:先建带 mask 的客户端注册进 SDK 的实例表,CallbackHandler 内部
     # get_client() 再据此重建——掩码设置随之继承,自动/手动两条上报路共用一道闸。
     langfuse_client = Langfuse(mask=mask_secrets)
     langfuse_handler = CallbackHandler()
+    agent = build_agent(llm, injection_scanner, output_scanner, langfuse_client)
     # load_memory(agent)
     print(BANNER)
     while True:
@@ -257,7 +317,8 @@ def main() -> None:
                     pass
                 langfuse_client.flush()  # 立即上报不攒批:攻击现场要马上可见
                 continue
-            print(f"Agent > {asyncio.run(ask(agent, user_input, langfuse_handler))}")
+            print(f"Agent > {asyncio.run(ask(agent, user_input, langfuse_handler, langfuse_client))}")
+    langfuse_client.flush()  # 审计与观测上报不攒批到进程退出:CLI 短命,不 flush 会丢
     save_memory(agent)
 
 
