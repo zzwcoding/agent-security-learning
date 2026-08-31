@@ -99,13 +99,16 @@ Stable module:
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0,
         "seed": seed,
-        "max_tokens": 4096,
+        "max_tokens": 8192,
         "response_format": {"type": "json_object"},
     }
     started = time.perf_counter()
     response = client.chat.completions.create(**request)
     elapsed = time.perf_counter() - started
     raw = response.model_dump(mode="json", exclude_none=True)
+    # 推理模型的思考块计入 max_tokens:被截断时正文是空的,提前给出明确错误
+    if response.choices[0].finish_reason == "length":
+        raise RuntimeError("LLM response truncated by max_tokens (think block ate the budget); raise it")
     payload = _extract_json(response.choices[0].message.content or "")
     source = str(payload.get("source", ""))
     if not source.endswith("\n"):
