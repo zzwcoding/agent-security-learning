@@ -1,0 +1,46 @@
+[08/31/26 23:37:43] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+                    INFO     Processing request of type            server.py:733
+                             ListToolsRequest                                   
+                    INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+                    INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+[08/31/26 23:37:44] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+                    INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+[08/31/26 23:37:44] INFO     Processing request of type            server.py:733
+                             CallToolRequest                                    
+[08/31/26 23:37:45] INFO     Processing request of type            server.py:733
+                             ListToolsRequest                                   
+
+===== 身份与内核 =====
+$ id; uname -a
+uid=0(root) gid=0(root) groups=0(root)
+Linux shell-f5e1d8ab 6.12.99 #1 SMP Fri Jul 24 13:01:52 WAT 2026 aarch64 GNU/Linux
+(本次调用 0.37s,含一次性 VM 拉起)
+
+===== 宿主用户目录 =====
+$ ls /Users 2>&1; ls ~/ 2>&1 | head -3
+ls: cannot access '/Users': No such file or directory
+(0.21s)
+
+===== 宿主挂载卷 =====
+$ mount | grep -iv -E 'proc|sys|dev|tmpfs|overlay' | head -5
+msb_runtime on /.msb type virtiofs (rw,relatime)
+(0.20s)
+
+===== 进程表(宿主进程可见?) =====
+$ ps aux | wc -l; ps aux | grep -iE 'uvicorn|agent|langfuse' | grep -v grep | head -3
+57
+(0.21s)
+
+===== 写入标记(为一次性验证埋点) =====
+$ echo pwned-stage31 > /tmp/marker31 && cat /tmp/marker31
+pwned-stage31
+(0.21s)
+
+===== 一次性验证(新调用 = 新 VM) =====
+$ cat /tmp/marker31
+cat: /tmp/marker31: No such file or directory

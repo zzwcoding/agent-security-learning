@@ -32,6 +32,6 @@
 | 28 | Presidio 脱敏:`memory.json` 落库前 Analyzer→Anonymizer;encrypt 可逆模式只画数据流图;手画 pipeline 数据流图 | ✅ 已完成(2026-08-31;lesson 0024,record 0028;memory_guard.py:NER 复用 en_core_web_sm+自定义 CN_PHONE/CN_ID 识别器;端到端铁证——落盘 6 处 `<CN_PHONE>`、原文 0 残留;encrypt 可逆模式与 pipeline 两张数据流图已画;记录 L4 对 PII 类话术连续 4 次误报) |
 | 29 | OTel GenAI 审计字段(谁/何时/以何理由/调什么工具带什么参数/碰什么数据分级)落到 Langfuse trace metadata | ✅ 已完成(2026-08-31;lesson 0025,record 0029;审计中间件每工具一条五要素观测+trace 级 when/why;OTLP 出网捕获字节级验证全部在案;踩坑实录:v4 events-only 读 API 不水合 input/metadata,验证绕道写端取证) |
 | 30 | chapter3/log-sanitization 复刻(平行窗口;顺手起 Ollama 为路线 4 热身) | ⬜ 施工中(平行窗口;产物 `日志脱敏复刻/`,复刻 1–2 已提交,交接 `HANDOFF-阶段30-日志脱敏复刻.md`) |
-| 31 | 四次主动攻击验收:逃逸 / egress / 密钥不可见 / 审计复盘,全程留证据 | ⬜ |
+| 31 | 四次主动攻击验收:逃逸 / egress / 密钥不可见 / 审计复盘,全程留证据 | ✅ 已完成(2026-08-31;四条全过,证据在 `attack-validation/` 四目录:①逃逸宿主零可见+用完即焚 ②egress 六格全拦含凭证走私拦截+VM 内私网全拒(公网残余如实记录) ③密钥全可见面枚举零命中(真 key 只在 Keychain+代理) ④两次真 Agent 会话 6 轮攻击 14 行审计时间线全量可查(五要素齐全,被拦的也留原文);防线命中:输入护栏 5/5+模型自拒 1+工具层白名单+VM 兜底;顺手抓出并修复 proxy.py gzip 透传 bug(aiter_raw→aiter_bytes);发现 filesystem 路径 double-join 记待办;Langfuse 栈重建丢历史数据,按 v4 events 架构重新取证;lesson 0026,record 0030) |
 | 32 | chapter5/async-agent 对照讨论(进程级 vs microVM 级白名单)+ Firecracker design doc、gVisor 架构指南精读对照笔记 | ⬜ |
 | 33 | 收官:`deliverables/route2/` 三件交付物;票 09 写 Answer 关闭 | ⬜ |

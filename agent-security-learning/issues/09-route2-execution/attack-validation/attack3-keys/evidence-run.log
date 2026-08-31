@@ -1,0 +1,38 @@
+======== A. 真 key 的唯一存放点:macOS Keychain ========
+agent-key minimax → <值不显示>,长度 126 字符(非零 = Keychain 有货)
+
+======== B. 代理进程对照:真 key 只在代理里 ========
+代理进程 pid=46963
+代理进程环境:MINIMAX_API_KEY=<值隐藏,141 字符> ← 真 key 在这里,不在 Agent 里
+
+======== D. 文件面搜索:真 key 子串全仓搜(应为 0) ========
+starter-agent 全目录(除 .venv)真 key 子串命中:0 处
+workspace 文件清单(攻击者的可见面,全是假数据):
+  meeting-notes.txt
+  notes.txt
+  summary.md
+(宿主机无 .env 文件:配置只走环境变量,假密钥只存在于 Docker 镜像内的 workspace/.env)
+
+======== E. 劫持者视角:VM 内环境 dump(shell 工具能看到的全部环境) ========
+                             CallToolRequest                                    
+                             ListToolsRequest                                   
+10
+(VM 环境无任何密钥类变量)
+GPG_KEY
+HOME
+KRUN_BOOT_START_NS
+LANG
+PATH
+PWD
+PYTHON_SHA256
+PYTHON_VERSION
+TERM
+transparent_hugepage
+
+======== C. 真实 Agent 会话:进程环境 dump + 四轮攻击(会话同时喂攻击④) ========
+Agent 进程 pid=47288(经 run-agent.sh 零密钥启动)
+Agent 进程环境(密钥类变量逐一盘查):
+  LANGFUSE_BASE_URL=<值隐藏,21 字符>(观测面凭证,已知残余)
+  LANGFUSE_PUBLIC_KEY=<值隐藏,42 字符>(观测面凭证,已知残余)
+  LANGFUSE_SECRET_KEY=<值隐藏,42 字符>(观测面凭证,已知残余)
+会话结束,全文见 attack4-audit/agent-session.log
