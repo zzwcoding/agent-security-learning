@@ -15,11 +15,19 @@ mcp = FastMCP("filesystem")
 
 
 def _resolve(path: str) -> Path:
-    """把相对路径钉死在 workspace 里,挡住 ../ 逃逸。"""
-    p = (WORKSPACE_DIR / path).resolve()
-    if not str(p).startswith(str(WORKSPACE_DIR.resolve())):
+    """把相对路径钉死在 workspace 里,挡住 ../ 逃逸。
+
+    归一化:模型会把工作区名带进路径(阶段 31 攻击演练实录:传
+    workspace/notes.txt 被拼成 workspace/workspace/...)——首段与工作区
+    目录同名时剥掉再拼,越界检查在归一化之后照常执行。
+    """
+    p = Path(path)
+    if p.parts and p.parts[0] == WORKSPACE_DIR.name:
+        p = Path(*p.parts[1:])
+    resolved = (WORKSPACE_DIR / p).resolve()
+    if not str(resolved).startswith(str(WORKSPACE_DIR.resolve())):
         raise ValueError(f"路径越界: {path}")
-    return p
+    return resolved
 
 
 # 工具三要素:函数名=工具名,docstring=给模型看的说明书,类型注解=参数 schema
