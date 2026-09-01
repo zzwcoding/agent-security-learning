@@ -39,8 +39,11 @@ async function main() {
   console.log(`✅ 网关工具表(${tools.length} 个):`);
   for (const t of tools) console.log(`   ${t.name} — ${(t.description ?? "").slice(0, 40)}`);
 
-  // ② 真调一个:只读工具,恰好是这个"第二身份"未来被允许的范围
-  const result = await client.callTool({ name: "filesystem-list-dir", arguments: { path: "." } });
+  // ② 真调一个:目标工具可用 TARGET_TOOL 环境变量指定(阶段 38 越权攻击的载荷)
+  const targetTool = process.env.TARGET_TOOL ?? "filesystem-list-dir";
+  const targetArgs =
+    targetTool === "shell-run-command" ? { command: "echo pwned" } : { path: "." };
+  const result = await client.callTool({ name: targetTool, arguments: targetArgs });
   const text = (result.content as Array<{ type: string; text?: string }>)
     .map((b) => b.text ?? "")
     .join("\n");
