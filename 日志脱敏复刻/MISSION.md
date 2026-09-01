@@ -20,7 +20,7 @@
 - ✅ 4 规则引擎下(PII 类剩余 5 条:邮箱/IBAN/SSN/手机/IPv4 + 类别 Counter 汇总)
 - ✅ 5 离线回归 pytest(截断 PEM/带空格口令/Basic 不吃普通英文/负例不误报)
 - ✅ 6 Ollama 起步(路线 4 热身):安装 + pull qwen3:0.6b + 裸 /api/chat 冒烟
-- ⬜ 7 LLM 引擎:Level 3 PII prompt + JSON Schema 结构化输出 + TTFT 指标
+- ✅ 7 LLM 引擎:Level 3 PII prompt + JSON Schema 结构化输出 + TTFT 指标
 - ⬜ 8 回填验收与失败模式:`_value_appears_in_text` 原文出现检查 + 拒收演示
 - ⬜ 9 混合管道:regex 先行,零命中才进 LLM,结果合并去重
 - ⬜ 10 campaign 基准:gold 用例集三引擎对比
