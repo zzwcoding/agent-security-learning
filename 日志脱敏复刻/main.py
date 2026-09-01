@@ -1,9 +1,9 @@
-"""日志脱敏复刻——阶段 4:规则引擎下(PII 类 5 条收尾 + 类别汇总)
+"""日志脱敏复刻——阶段 7:LLM 引擎对照(qwen3:0.6b 检测 Level 3 PII)
 
-阶段 2-3 的引擎已能脱密钥和带校验的卡号/证件,本阶段补齐 PII 类剩余 5 条
-(邮箱/IBAN/SSN/CN 手机/IPv4),规则引擎 18 条完工;main 加类别 Counter 汇总。
-预期观察:PII 类样本全部命中;负例 1(13800138000 ns)被 cn_phone 误报——
-这不是 bug,是负例考题在"考出"规则引擎的已知盲区,阶段 10 campaign 会量化它。
+规则引擎(18 条)已完工并回归锁死;本阶段在 main 末尾追加语义引擎对照段:
+对 PII 类样本调 Ollama 流式检测,打印检出项与 TTFT/吞吐指标。
+对照点:同一文本,规则引擎按格式抓,LLM 按"它认为的高敏"抓——两种口径并排看。
+运行前需要 Ollama 服务:brew services run ollama(临时,不注册自启)。
 """
 from collections import Counter
 
@@ -44,6 +44,20 @@ def main() -> None:
         print(f"  {CATEGORY_LABELS.get(cat, cat):<16} {n} 处")
     print("=" * 64)
     print(f"合计脱敏 {total} 处。规则引擎到此完工;下一站:pytest 回归(阶段 5)")
+
+    # LLM 引擎对照(阶段 7):同一条日志,语义引擎怎么看 Level 3 PII
+    from llm_engine import detect_pii
+    print("\n—— LLM 引擎对照(qwen3:0.6b,需要 Ollama 服务)——")
+    for name, category, text in SAMPLES:
+        if category != "PII类":
+            continue
+        items, metrics = detect_pii(text)
+        print(f"  [{name}] 检出 {len(items)} 项")
+        for it in items:
+            print(f"    {it.get('type')} = {it.get('value')!r}")
+        print(f"    指标: TTFT {metrics['ttft_ms']}ms | 总 {metrics['total_ms']}ms | "
+              f"prompt {metrics['prompt_tokens']} tok | 输出 {metrics['output_tokens']} tok"
+              f"(思考 {metrics['thinking_chars']} 字)")
 
 
 if __name__ == "__main__":
