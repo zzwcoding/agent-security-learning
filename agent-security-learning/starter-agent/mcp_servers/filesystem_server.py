@@ -11,7 +11,12 @@ from mcp.server.fastmcp import FastMCP
 # workspace 路径自己算
 WORKSPACE_DIR = Path(__file__).parent.parent / "workspace"
 
-mcp = FastMCP("filesystem")
+mcp = FastMCP(
+    "filesystem",
+    # 阶段 35:网关只收 HTTP 上游(研究结论:ContextForge 不代管 stdio 进程),给 server 一个 HTTP 形态
+    host="127.0.0.1",
+    port=8001,
+)
 
 
 def _resolve(path: str) -> Path:
@@ -51,4 +56,13 @@ def list_dir(path: str = ".") -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()  # 默认 stdio transport:从标准输入读请求,往标准输出写响应
+    # 阶段 35:两种形态并存——默认 stdio(agent 直连的老形态,阶段 36 拔除);
+    # MCP_TRANSPORT=http 时挂端口等网关来连(SSE 传输,路径 /sse——
+    # 实测网关客户端先 GET 开长驻事件流,stateless streamable-http 会被立即终结导致 30s 超时,
+    # SSE 是 ContextForge 官方桥接同款,握手最稳)
+    import os
+
+    if os.environ.get("MCP_TRANSPORT") == "http":
+        mcp.run(transport="sse")
+    else:
+        mcp.run()  # 默认 stdio transport:从标准输入读请求,往标准输出写响应
