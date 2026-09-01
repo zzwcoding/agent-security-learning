@@ -35,7 +35,8 @@ SAMPLES = [
         "密钥类",
         f"""[ERROR] db.connect failed after 3 retries
   dsn: postgres://admin:S3cr3t_P4ssw0rd@db.internal:5432/prod
-  fallback_config: {{"aws_access_key_id": "{AWS_KEY}"}}""",
+  fallback_config: {{"aws_access_key_id": "{AWS_KEY}"}}
+  host_ip: 192.168.10.24""",
     ),
     (
         "CI/CD 部署日志:平台令牌",

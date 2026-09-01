@@ -69,10 +69,20 @@ _RULES = [
     ("secret_assignment", "[REDACTED_SECRET]", re.compile(
         r"(?i)(?:password|passwd|pwd|secret|token|api[_-]?key|access[_-]?key|auth|credential)[\"']?\s*[=:]\s*"
         r"(?:\"([^\"]{4,})\"|'([^']{4,})'|([^\s\"',}]{4,}))"), (1, 2, 3), None),
+    ("email", "[REDACTED_EMAIL]", re.compile(
+        r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), 0, None),
     ("credit_card", "[REDACTED_CREDIT_CARD]", re.compile(
         r"\b(?:\d[ -]?){13,19}\b"), 0, _luhn_ok),
+    ("iban", "[REDACTED_IBAN]", re.compile(
+        r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), 0, None),
+    ("us_ssn", "[REDACTED_SSN]", re.compile(
+        r"\b\d{3}-\d{2}-\d{4}\b"), 0, None),
     ("cn_id_card", "[REDACTED_ID_CARD]", re.compile(
         r"\b\d{17}[\dXx]\b"), 0, _cn_id_ok),
+    ("cn_phone", "[REDACTED_PHONE]", re.compile(
+        r"(?<!\d)1[3-9]\d{9}(?!\d)"), 0, None),
+    ("ip_address", "[REDACTED_IP]", re.compile(
+        r"\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)\b"), 0, None),
 ]
 
 CATEGORY_LABELS = {
@@ -81,7 +91,9 @@ CATEGORY_LABELS = {
     "slack_token": "Slack 令牌", "google_api_key": "Google API Key",
     "api_key": "API Key (sk-)", "bearer_token": "Bearer 令牌",
     "basic_auth": "Basic 认证", "secret_assignment": "口令 / 密钥赋值",
-    "credit_card": "信用卡号", "cn_id_card": "身份证号",
+    "email": "邮箱地址", "credit_card": "信用卡号", "iban": "IBAN 银行账号",
+    "us_ssn": "美国社保号(SSN)", "cn_id_card": "身份证号",
+    "cn_phone": "手机号", "ip_address": "IP 地址",
 }
 
 

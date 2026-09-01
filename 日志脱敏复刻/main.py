@@ -1,20 +1,24 @@
-"""日志脱敏复刻——阶段 2:规则引擎上(密钥类 11 条)
+"""日志脱敏复刻——阶段 4:规则引擎下(PII 类 5 条收尾 + 类别汇总)
 
-阶段 1 的"清单打印"退役,换成本阶段的真流程:每条样本过一遍
-regex_sanitizer.sanitize(),打印 before/after 与命中明细。
-预期观察:密钥类 4 条样本被脱敏;PII 类 3 条原样通过(PII 规则阶段 4 才有,
-现在看到的是引擎的能力边界,不是 bug);负例 3 条零命中(密钥类规则不碰它们)。
+阶段 2-3 的引擎已能脱密钥和带校验的卡号/证件,本阶段补齐 PII 类剩余 5 条
+(邮箱/IBAN/SSN/CN 手机/IPv4),规则引擎 18 条完工;main 加类别 Counter 汇总。
+预期观察:PII 类样本全部命中;负例 1(13800138000 ns)被 cn_phone 误报——
+这不是 bug,是负例考题在"考出"规则引擎的已知盲区,阶段 10 campaign 会量化它。
 """
+from collections import Counter
+
 from samples import SAMPLES
 from regex_sanitizer import CATEGORY_LABELS, sanitize
 
 
 def main() -> None:
-    print("✅ 阶段 2 跑通:密钥类 11 条规则上线,样本 before/after 对比\n")
+    print("✅ 阶段 4 跑通:规则引擎完工(密钥类 11 + PII 类 7 = 18 条)\n")
     total = 0
+    category_counts: Counter = Counter()
     for name, category, text in SAMPLES:
         redacted, findings = sanitize(text)
         total += len(findings)
+        category_counts.update(f["category"] for f in findings)
         print("=" * 64)
         print(f"样本: {name}[{category}]  （命中 {len(findings)} 处）")
         print("--- 前 ---")
@@ -24,7 +28,7 @@ def main() -> None:
         for f in findings:
             label = CATEGORY_LABELS.get(f["category"], f["category"])
             print(f"   [{label}] {f['value']} -> {f['placeholder']}")
-    # 校验器能力展示(长期保留):格式像 ≠ 真的,校验算法是规则的第二道闸
+
     print("\n—— 校验器演示:格式像 ≠ 真的 ——")
     for label, demo_text in [
         ("真卡号(校验码过→脱)", "card: 4111 1111 1111 1111"),
@@ -35,8 +39,11 @@ def main() -> None:
         redacted, findings = sanitize(demo_text)
         print(f"  {label}  =>  {redacted}")
 
+    print("\n—— 类别汇总(Counter)——")
+    for cat, n in category_counts.most_common():
+        print(f"  {CATEGORY_LABELS.get(cat, cat):<16} {n} 处")
     print("=" * 64)
-    print(f"合计脱敏 {total} 处(PII 剩余类别阶段 4 接手)")
+    print(f"合计脱敏 {total} 处。规则引擎到此完工;下一站:pytest 回归(阶段 5)")
 
 
 if __name__ == "__main__":
