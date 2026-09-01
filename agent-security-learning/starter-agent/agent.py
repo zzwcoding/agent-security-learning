@@ -11,6 +11,7 @@ import os
 import re
 import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from langchain.agents import create_agent  # 原 langgraph.prebuilt.create_react_agent,v1.0 起迁居于此
 from langchain.agents.middleware import wrap_model_call, wrap_tool_call  # 中间件:包模型调用 / 包工具调用
@@ -95,6 +96,49 @@ TOOL_DATA_CLASS = {
 CURRENT_ROUND = {"why": ""}  # CLI 单线程:记本轮用户消息,供工具审计的"以何理由"引用
 
 
+# ── 阶段 41:哈希链证据日志 + 参数级数据分级 ─────────────────────
+# 与 Langfuse 的分工:观测面可查可看但可变(8-31 重建就丢过历史),
+# 证据链回答的是"这件事发生过且记录没被改"——append-only + 前条 hash 串联,
+# 改任何一条,后面所有 hash 全部对不上。
+EVIDENCE_FILE = Path(__file__).parent / "evidence-chain.jsonl"
+
+# 参数级分级:同一工具,参数不同危险度不同(env 文件 vs 普通笔记;出网命令 vs echo)。
+# 敏感模式命中 → 升级;都没命中 → 落回工具级默认(TOOL_DATA_CLASS)。
+_PARAM_PATTERNS = [
+    (("secret", "credential", ".env", "api_key", "password"), "凭证/机密相关(高危)"),
+    (("http", "curl", "wget", "https://"), "出网行为(外发风险)"),
+    (("rm ", "delete", "del "), "删除操作(破坏性)"),
+]
+
+
+def classify_data_class(tool: str, args: dict) -> str:
+    """参数级 data_class:扫描参数值里的敏感模式,命中即升级;否则用工具级默认。"""
+    blob = json.dumps(args, ensure_ascii=False).lower()
+    for needles, label in _PARAM_PATTERNS:
+        if any(n in blob for n in needles):
+            return label
+    return TOOL_DATA_CLASS.get(tool, "未分级")
+
+
+def append_evidence(record: dict) -> str:
+    """把一条审计记录写进哈希链:entry_hash = sha256(prev_hash + 本条内容)。
+
+    O_APPEND 只增不覆;prev_hash 把每条锁在前一条上——篡改/删除/重排
+    任何一条,其后整条链验不过。返回本条 entry_hash。
+    """
+    prev = ""
+    if EVIDENCE_FILE.exists() and EVIDENCE_FILE.stat().st_size:
+        lines = EVIDENCE_FILE.read_text(encoding="utf-8").splitlines()
+        if lines and lines[-1].strip():
+            prev = json.loads(lines[-1]).get("entry_hash", "")
+    record["prev_hash"] = prev
+    canonical = json.dumps(record, ensure_ascii=False, sort_keys=True)
+    record["entry_hash"] = hashlib.sha256((prev + canonical).encode()).hexdigest()
+    with open(EVIDENCE_FILE, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    return record["entry_hash"]
+
+
 def make_tool_audit(langfuse_client):
     """审计观测:每次工具真实执行完,旁路补一条五要素审计记录(as_type=tool)。
 
@@ -105,6 +149,8 @@ def make_tool_audit(langfuse_client):
     async def tool_audit(request, handler):
         result = await handler(request)
         call = request.tool_call
+        now = datetime.now(timezone.utc).isoformat()
+        data_class = classify_data_class(call["name"], call.get("args", {}) or {})
         try:
             # 审计观测落在本轮 trace 下(ask() 已用 cli-round 立起环境上下文)
             with langfuse_client.start_as_current_observation(
@@ -112,15 +158,29 @@ def make_tool_audit(langfuse_client):
                 input=call.get("args", {}),
                 metadata={
                     "audit.who": THREAD["configurable"]["thread_id"],
-                    "audit.when": datetime.now(timezone.utc).isoformat(),
+                    "audit.when": now,
                     "audit.why": CURRENT_ROUND["why"],
                     "audit.params": call.get("args", {}),
-                    "audit.data_class": TOOL_DATA_CLASS.get(call["name"], "未分级"),
+                    "audit.data_class": data_class,  # 阶段 41:参数级分级
                 },
             ):
                 pass
         except Exception as e:
             print(f"⚠️ 审计上报失败:{e}")
+        # 阶段 41:同一次遍历双写——观测面(Langfuse)+ 证据链(本地哈希链)
+        try:
+            entry_hash = append_evidence({
+                "seq_tool": call["name"],
+                "audit.who": THREAD["configurable"]["thread_id"],
+                "audit.when": now,
+                "audit.why": CURRENT_ROUND["why"],
+                "audit.params": call.get("args", {}),
+                "audit.data_class": data_class,
+                "result_head": _text(result.content)[:120],
+            })
+            print(f"⛓️ 证据链 +1({entry_hash[:12]}…)")
+        except Exception as e:
+            print(f"⚠️ 证据链写入失败:{e}")
         return result
     return tool_audit
 
