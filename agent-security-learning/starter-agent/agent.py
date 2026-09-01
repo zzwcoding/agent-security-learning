@@ -25,11 +25,12 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client  # 阶段 36:网关只开 HTTP 入口,stdio 客户端退役
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
+from task_token import issue_task_token, verify_task_token  # 阶段 42:任务级短时令牌
 from memory_guard import sanitize_messages
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 39 跑通:串联闸上岗(D4 规则+LLM 法官;缺口 3 核销;网关+FGA+脱敏+凭证+microVM+护栏+审计防线不变)(/quit 退出)"
+BANNER = "✅ 阶段 42 跑通:任务级短时令牌(每轮一票,scope+120s,过期/超范围 fail closed;防线全景不变)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -94,6 +95,7 @@ TOOL_DATA_CLASS = {
     "fetch-http-post": "出网请求(白名单域名,可含凭证占位符)",
 }
 CURRENT_ROUND = {"why": ""}  # CLI 单线程:记本轮用户消息,供工具审计的"以何理由"引用
+CURRENT_TASK = {"token": ""}  # 阶段 42:本轮任务的短时令牌(scope+exp),中间件持有,模型不可见
 
 
 # ── 阶段 41:哈希链证据日志 + 参数级数据分级 ─────────────────────
@@ -241,6 +243,23 @@ def make_tool_guard(scanner, judge_llm):
     return tool_guard
 
 
+# ── 阶段 42:任务票签发与 scope 推断 ──────────────────────────────
+# 最小 scope 的推断规则(教学版):读类工具总授予;写/网/壳按任务文本关键词授予。
+# 生产形态=意图分类或显式审批;规则版胜在可解释、零成本。
+READ_TOOLS = ["filesystem-list-dir", "filesystem-read-file"]
+
+
+def infer_scope(task: str) -> list[str]:
+    scope = list(READ_TOOLS)
+    if any(k in task for k in ("记", "写入", "写一个", "写一份", "创建", "保存", "追加")):
+        scope.append("filesystem-write-file")
+    if any(k in task for k in ("运行", "执行", "命令", "shell")):
+        scope.append("shell-run-command")
+    if any(k in task for k in ("请求", "http", "访问网页", "抓取")):
+        scope.extend(["fetch-http-get", "fetch-http-post"])
+    return scope
+
+
 # ── 阶段 39:串联闸(缺口 3 核销点)─────────────────────────────────
 # 缺口 3 的病根:语义正常的恶意调用("帮我删掉所有文件")不是注入,扫描器无话可说;
 # write_file 的参数(内容)侧更无扫描。药方 = 缺口清单备料的两层:
@@ -265,6 +284,13 @@ def make_gate(judge_llm):
     @wrap_tool_call
     async def gate(request, handler):
         call = request.tool_call
+        # ── 第零道(阶段 42):任务票校验——最便宜的闸,纯本地计算 ──
+        ok, reason = verify_task_token(CURRENT_TASK["token"], call["name"])
+        if not ok:
+            print(f"🛑 串联闸-任务票:拒绝 {call['name']}({reason})")
+            return ToolMessage(f"🛑 任务令牌校验拒绝:{reason}。"
+                               "请告知用户该操作超出本轮任务授权,不要重试。",
+                               tool_call_id=call["id"])
         if call["name"] not in DESTRUCTIVE_TOOLS:
             return await handler(request)  # 读工具零打扰
 
@@ -360,6 +386,8 @@ async def ask(agent, text: str, langfuse_handler: CallbackHandler, langfuse_clie
     它把看到的输入输出打包上报——业务代码完全无感,这就是"旁路观测"。
     """
     CURRENT_ROUND["why"] = text  # 审计:工具观测的"以何理由"引用本轮用户消息
+    # 阶段 42:每轮用户消息=一个任务,签一张短时票(scope 按任务推断,120 秒)
+    CURRENT_TASK["token"] = issue_task_token(text, infer_scope(text))
     config = {**THREAD, "callbacks": [langfuse_handler],
               "metadata": {"audit.when": datetime.now(timezone.utc).isoformat(), "audit.why": text}}
     # 阶段 29:trace 级审计壳——v4 上下文不自动传播,自己先立上下文,
