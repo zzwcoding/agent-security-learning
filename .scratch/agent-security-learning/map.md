@@ -25,10 +25,11 @@
 - [总体排期与里程碑](issues/03-schedule.md): 滚动式排期——无死线，只细化当前关，收官时按缺口清单排下一关；主干顺序 路线2→3→4红队→熟悉档+面试材料+架构蓝图；实验角色升级为复刻+精读；路线 3 验收含缺口 2/3/7 核销，Presidio 压至 1 天
 - [路线 2 堡垒落地化方案](issues/08-route2-plan.md): Agent 回宿主机直跑，shell+fetch 执行面进 microsandbox（egress 白名单核销缺口 1），加固 Docker 降为对照基线；自写 ~100 行凭证代理全管 LLM+fetch 密钥；Presidio 接 memory.json 落库前；三实验复刻穿插；验收 = 四次主动攻击（逃逸/egress/密钥不可见/审计复盘）
 - [路线 2 堡垒执行](issues/09-route2-execution.md): ✅ 已完成（2026-09-01）。microVM 执行面（shell/fetch 一次性 VM）→ 两层出网防御（工具层白名单+凭证策略 fail closed，PUBLIC profile 兜底；缺口 1 核销）→ 凭证代理（proxy.py LLM 路 + fetch 占位符路，Agent 零密钥）→ Presidio 记忆脱敏 → OTel 五要素审计（audit.who/when/why/params/data_class）→ 四次攻击验收全过（劫持无效化）→ 双复刻收官（验证沙箱选 microVM；三引擎脱敏分工拍板）；偏差与实测坑（beta 域名规则无效、gzip 透传 bug、chapter 编号误记）见票内 Answer；交付物在 `deliverables/route2/`，攻击证据在 `issues/09-route2-execution/attack-validation/`；残余：shell 公网出口、观测面凭证（归路线 3+）
+- [路线 3 城堡落地化方案](issues/10-route3-plan.md): ContextForge 全量收编（三 server 加 streamable HTTP 挂网关，唯一入口）+ OpenFGA 真引入（四元组"能执行什么"归 FGA，原生 RBAC 团队粒度管"能看什么"；check 落自写 tool_pre_invoke 插件）+ 串联闸留本地中间件（D4+LLM 法官——会话语义在 agent 侧；两 PEP 各管各的语义）+ 审计三面（Langfuse 观测 / audit_trails 平台 / 自写哈希链锚点，data_class 升参数级）+ 自写短时令牌 + Presidio 预算转投串联闸（票 03 那条作废）+ 供应链体检扫全上游（mcp-scan 已改名 snyk-agent-scan）+ harness-safety-gate 一场全复刻 + 语言策略：主体 Py 不动，TS 以裸官方 SDK 第二消费者轻触点引入（双 agent 使授权矩阵不退化，兼作路线 4 靶子）；分工一句话：网关管身份，agent 管会话，server 管出口；研究事实底座 `issues/10-route3-plan/research-contextforge-openfga.md`；执行票 11 已开
 
 ## Not yet specified
 
-- 路线 3–4 在起步 Agent 上的落地化方案（路线 1/2 已开票：02、08）
+- 路线 4 红队部分在起步 Agent 上的落地化方案（按滚动排期，路线 3 收官后按其缺口清单开票；路线 3 方案已开票：10）
 - "熟悉即可"档的检验形式（讲给谁、什么载体）
 - 面试材料的最终形态（各关复盘文档如何组织成可讲的整体）
 
