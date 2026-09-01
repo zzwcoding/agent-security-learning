@@ -13,3 +13,5 @@ __pycache__/
 
 
 .scratch/agent-security-learning/知识卡片-碎片
+# kimi 会话历史研究与交接产物(本地)
+.scratch/kimi-history/
