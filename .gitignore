@@ -23,3 +23,9 @@ __pycache__/
 
 # pytest 缓存(日志脱敏复刻阶段 5 起)
 .pytest_cache/
+
+# 任务令牌签名密钥与哈希链运行时文件(阶段 42/41,本地运行产物)
+.scratch/agent-security-learning/starter-agent/.task-token-secret
+.scratch/agent-security-learning/starter-agent/evidence-chain.jsonl
+.scratch/agent-security-learning/starter-agent/gateway/mcp.db-shm
+.scratch/agent-security-learning/starter-agent/gateway/mcp.db-wal
