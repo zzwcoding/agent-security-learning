@@ -34,4 +34,5 @@
 
 - chapter9/self-modifying-agent(阶段 25)✅ 已收官:产物 `自修改agent复刻/`,收官对照 `自修改agent复刻/对照复盘-验证沙箱选型.md`(选一次性 microVM)
 - chapter3/log-sanitization(阶段 30)🚧 施工中:产物 `日志脱敏复刻/`,交接 `HANDOFF-阶段30-日志脱敏复刻.md`
-- chapter5/async-agent(阶段 32)⬜ 未开——语料位置见 `LLM-Agent安全学习路线规划.md` 第五节
+- chapter6/async-agent(阶段 32)✅ 已完成(lesson 0027 对照讨论;⚠ 参考项目在 chapter6 非 chapter5,原记录有误)
+- chapter5/permission-embedded-data-objects:对照讨论时顺带核实——主题是数据层授权(实验 5-12),不是白名单;属路线 3 预习材料,路线 2 不用
