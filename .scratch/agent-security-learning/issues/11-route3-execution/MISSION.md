@@ -13,7 +13,7 @@
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 34 | 开工包:选型数据时效校验(GitHub API 重拉)+ ContextForge 安装最小闭环(独立 venv、init_secrets、4444 起服、UI 可见) | ✅ 已完成(2026-09-01;lesson 0029,record 0032;uv 钉 3.12(系统 3.14 超 requires-python 上限);网关 v1.0.8 于 127.0.0.1:4444,实测:/health 200、/ 303→登录墙、/admin/login 200、/docs 认证后才可见;UI/Admin API 默认关闭,已在 .env 打开;选型表 10 仓重拉:量级全部未变,ContextForge 仍 1–2 周一版) |
-| 35 | 三个自写 FastMCP server 加 streamable HTTP transport,注册进网关(/gateways),网关工具列表可见 | ⬜ |
+| 35 | 三个自写 FastMCP server 加 HTTP transport,注册进网关(/admin/gateways),网关工具列表可见 | ✅ 已完成(2026-09-01;lesson 0030,record 0033;最终走 SSE 传输(8001-8003,streamable-http 被 stateless 终结会话致握手超时);连环四坑:CSRF 只豁免 Bearer/teams=null 才是管理员旁路([]和缺席都是公开级)/SSRF 拒 localhost 上游(SSRF_ALLOW_LOCALHOST=true 只放回环)/静默替换失败靠日志抓到;网关工具列表 6 个全亮,命名空间前缀 filesystem-* 等) |
 | 36 | Agent 工具调用改走网关 + 拔直连(直连失败留证据)+ TS 裸 SDK 最小 client 第二身份出现 | ⬜ |
 | 37 | OpenFGA 单容器部署 + model.fga 建模(人×Agent×工具×资源)+ 授权矩阵文档 + 真实 tuples(Playground 可见) | ⬜ |
 | 38 | 自写 tool_pre_invoke CPEX 插件调 fga check + 越权攻击:TS client 越权被拒 fail closed | ⬜ |

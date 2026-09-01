@@ -10,7 +10,12 @@ import uuid
 from mcp.server.fastmcp import FastMCP
 from microsandbox import Sandbox
 
-mcp = FastMCP("shell")
+mcp = FastMCP(
+    "shell",
+    # 阶段 35:网关只收 HTTP 上游(研究结论:ContextForge 不代管 stdio 进程),给 server 一个 HTTP 形态
+    host="127.0.0.1",
+    port=8002,
+)
 
 # 跑命令用的镜像:就是个普通 python 镜像(OCI 生态直接复用),首次拉取后本地缓存
 SANDBOX_IMAGE = "python:3.12"
@@ -29,4 +34,13 @@ async def run_command(command: str) -> str:
 
 
 if __name__ == "__main__":
-    mcp.run()
+    # 阶段 35:两种形态并存——默认 stdio(agent 直连的老形态,阶段 36 拔除);
+    # MCP_TRANSPORT=http 时挂端口等网关来连(SSE 传输,路径 /sse——
+    # 实测网关客户端先 GET 开长驻事件流,stateless streamable-http 会被立即终结导致 30s 超时,
+    # SSE 是 ContextForge 官方桥接同款,握手最稳)
+    import os
+
+    if os.environ.get("MCP_TRANSPORT") == "http":
+        mcp.run(transport="sse")
+    else:
+        mcp.run()

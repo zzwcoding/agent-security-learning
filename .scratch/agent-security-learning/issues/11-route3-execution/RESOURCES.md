@@ -19,5 +19,7 @@
 
 ## 本地运行资产(阶段推进中更新)
 
-- 网关:ContextForge v1.0.8,`starter-agent/gateway/.venv`(uv 钉 Python 3.12),启动 `scripts/run-gateway.sh`,127.0.0.1:4444
+- 网关:ContextForge v1.0.8,`starter-agent/gateway/.venv`(uv 钉 Python 3.12),启动 `scripts/run-gateway.sh`,127.0.0.1:4444;`.env` 关键项:UI/Admin API 开、SECURE_COOKIES=false(本地 http)、SSRF_ALLOW_LOCALHOST=true(回环上游放行)
+- MCP server SSE 形态:`scripts/run-mcp-servers.sh`,filesystem 8001 / shell 8002 / fetch 8003(路径 /sse);stdio 直连形态保留(阶段 36 拔)
+- 程序化访问网关:Bearer JWT(`teams: null` + is_admin 才是管理员旁路),铸造方式见 lesson 0030/record 0033
 - (后续阶段追加:OpenFGA 容器、TS client、FGA 插件、哈希链、令牌服务)
