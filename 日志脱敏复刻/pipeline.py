@@ -20,9 +20,10 @@ def hybrid_sanitize(text: str) -> dict:
 
     llm_started = time.perf_counter()
     items, metrics = detect_pii(redacted)
-    # 占位符污染防御:模型可能把刚生成的 [REDACTED_*] 当敏感值检出来,
-    # 过闸(value 是子串)还真能通过——以 [REDACTED 开头的一律不收。
-    items = [i for i in items if not (i.get("value") or "").strip().startswith("[REDACTED")]
+    # 占位符污染防御:模型可能把刚生成的 [REDACTED_*] 当敏感值,还会摘内部词
+    # (如从 [REDACTED_URL_CRED] 里抠出 REDACTED_URL_CRED 报"护照号")——
+    # 只要 value 含 REDACTED 字样一律不收。
+    items = [i for i in items if "redacted" not in (i.get("value") or "").lower()]
     redacted, accepted, rejected = accept_and_redact(redacted, items)
 
     return {"redacted": redacted, "regex_hits": len(findings), "regex_ms": regex_ms,
