@@ -14,7 +14,7 @@
 |---|---|---|
 | 34 | 开工包:选型数据时效校验(GitHub API 重拉)+ ContextForge 安装最小闭环(独立 venv、init_secrets、4444 起服、UI 可见) | ✅ 已完成(2026-09-01;lesson 0029,record 0032;uv 钉 3.12(系统 3.14 超 requires-python 上限);网关 v1.0.8 于 127.0.0.1:4444,实测:/health 200、/ 303→登录墙、/admin/login 200、/docs 认证后才可见;UI/Admin API 默认关闭,已在 .env 打开;选型表 10 仓重拉:量级全部未变,ContextForge 仍 1–2 周一版) |
 | 35 | 三个自写 FastMCP server 加 HTTP transport,注册进网关(/admin/gateways),网关工具列表可见 | ✅ 已完成(2026-09-01;lesson 0030,record 0033;最终走 SSE 传输(8001-8003,streamable-http 被 stateless 终结会话致握手超时);连环四坑:CSRF 只豁免 Bearer/teams=null 才是管理员旁路([]和缺席都是公开级)/SSRF 拒 localhost 上游(SSRF_ALLOW_LOCALHOST=true 只放回环)/静默替换失败靠日志抓到;网关工具列表 6 个全亮,命名空间前缀 filesystem-* 等) |
-| 36 | Agent 工具调用改走网关 + 拔直连(直连失败留证据)+ TS 裸 SDK 最小 client 第二身份出现 | ⬜ |
+| 36 | Agent 工具调用改走网关 + 拔直连(直连失败留证据)+ TS 裸 SDK 最小 client 第二身份出现 | ✅ 已完成(2026-09-01;lesson 0031,record 0034;agent.py 拔除 stdio 名单换网关单条目(streamable_http+Bearer),工具名全线切网关前缀;真 Agent 轮次端到端——LLM 经凭证代理决策 filesystem-list-dir、网关转发执行返回 workspace 清单;dummy token 401 拒=认证闸活;ts-client 约 60 行第二消费者同门跑通(6 工具+一次真调用);踩坑:shell 嵌套引号撕碎多行 python -c→独立 mint 脚本+零插值 heredoc) |
 | 37 | OpenFGA 单容器部署 + model.fga 建模(人×Agent×工具×资源)+ 授权矩阵文档 + 真实 tuples(Playground 可见) | ⬜ |
 | 38 | 自写 tool_pre_invoke CPEX 插件调 fga check + 越权攻击:TS client 越权被拒 fail closed | ⬜ |
 | 39 | 串联闸:本地 wrap_tool_call 栈上 D4 规则 + LLM 法官 + fail-closed 审批(缺口 3 核销点) | ⬜ |

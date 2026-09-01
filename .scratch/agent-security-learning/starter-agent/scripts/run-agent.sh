@@ -11,4 +11,9 @@ export LANGFUSE_PUBLIC_KEY="$(agent-key langfuse-public)"
 export LANGFUSE_SECRET_KEY="$(agent-key langfuse-secret)"
 export LANGFUSE_BASE_URL="http://localhost:3000"
 
+# 阶段 36:网关通行证,启动时现铸、60 分钟短时、只进本进程环境不落盘。
+# 铸币逻辑在 mint-gateway-token.sh(内嵌引号会被 shell 撕碎的教训记在那边);
+# 当前先借管理员身份,阶段 37-38 换 per-agent 身份。
+export GATEWAY_TOKEN="$(scripts/mint-gateway-token.sh)"
+
 exec .venv/bin/python agent.py

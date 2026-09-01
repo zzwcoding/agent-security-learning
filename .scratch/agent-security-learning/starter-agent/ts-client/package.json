@@ -1,0 +1,16 @@
+{
+  "name": "ts-second-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "路线 3 阶段 36:第二消费者——TS 裸官方 SDK 最小 client,以第二身份消费网关(授权矩阵的 Agent 维靠它不退化;路线 4 的红队靶子)",
+  "scripts": {
+    "start": "tsx index.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0"
+  }
+}

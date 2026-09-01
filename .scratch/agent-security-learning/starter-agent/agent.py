@@ -1,11 +1,12 @@
 """起步 Agent —— CLI 入口。
 
-当前阶段(29):OTel GenAI 审计字段——每次工具调用旁路记一条五要素审计
-观测(谁/何时/以何理由/调什么工具带什么参数/碰什么数据分级),落 Langfuse。
-脱敏(28)、凭证(26/27)、执行面(21-23)防线不变。
+当前阶段(36):工具调用改走网关——Agent 只认网关一个地址(http://127.0.0.1:4444/mcp),
+不再逐个拉起 server 子进程;工具名从此带网关前缀(filesystem-read-file 等)。
+脱敏(28)、凭证(26/27)、执行面(21-23)、审计(29)防线不变。
 """
 import asyncio
 import json
+import os
 import re
 import sys
 from datetime import datetime, timezone
@@ -18,15 +19,15 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.checkpoint.memory import InMemorySaver
 from llm_guard.input_scanners import PromptInjection  # 注入分类模型:输入与工具返回两路共用
 from llm_guard.output_scanners import Sensitive  # 敏感数据扫描:模型输出侧(spacy NER + 正则)
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
+from mcp.client.streamable_http import streamablehttp_client  # 阶段 36:网关只开 HTTP 入口,stdio 客户端退役
 
 from config import LLM_API_KEY, LLM_BASE_URL, LLM_MODEL, MEMORY_FILE, WORKSPACE_DIR
 from memory_guard import sanitize_messages
 from langfuse import Langfuse  # 显式建客户端只为挂 mask;CallbackHandler 内部 get_client() 会复用它(掩码保留)
 from langfuse.langchain import CallbackHandler  # 摄像头自动模式:挂在 run config 上,图内每步自动上报
 
-BANNER = "✅ 阶段 29 跑通:工具级五要素审计字段落 Langfuse(脱敏 + 凭证代理 + microVM + 三层护栏)(/quit 退出)"
+BANNER = "✅ 阶段 36 跑通:工具调用改走网关(唯一入口,工具名带网关前缀;脱敏+凭证+microVM+护栏+审计防线不变)(/quit 退出)"
 
 # 出库前最后一道闸:凡是要发往 Langfuse 的字段,名字里带 key/secret/token/password 的
 # 键值对一律打码。观测系统也是攻击面——trace 里躺着 .env 原文,等于把密钥另存了一份。
@@ -48,47 +49,45 @@ SYSTEM_PROMPT = "你是一个简洁的中文助手。需要操作文件时,主�
 # checkpointer 按 thread_id 区分会话;整个 CLI 用同一个线程 = 同一个连续对话
 THREAD = {"configurable": {"thread_id": "cli-session"}}
 
-# 调试命令(/tools /call)和主工具表共用同一份 server 名单:
-# StdioServerParameters 给手动 stdio 连接,字典格式给 MultiServerMCPClient(多 transport 字段)
-ALL_SERVERS = {
-    name: StdioServerParameters(command=sys.executable, args=[f"mcp_servers/{name}_server.py"])
-    for name in ("filesystem", "shell", "fetch")
-}
-# shell(阶段 22)与 fetch(阶段 23)两个执行面都已搬进一次性 microVM
+# 阶段 36:工具调用收敛到网关唯一入口——Agent 不再知道任何 server 的地址和启动方式。
+# 直连 stdio 名单就此拔除(证据:本文件的 git diff + 工具名带网关前缀)。
+# 凭证纪律:GATEWAY_TOKEN 由 run-agent.sh 启动时现铸(60 分钟短时),不落盘、不进 .env;
+# 拿 JWT_SECRET_KEY 铸币的权力留在 gateway 家目录里,Agent 只拿短时通行证(阶段 42 的预演)。
+GATEWAY_URL = "http://127.0.0.1:4444/mcp"
+GATEWAY_HEADERS = {"Authorization": f"Bearer {os.environ.get('GATEWAY_TOKEN', '')}"}
 MCP_SERVERS = {
-    name: {"command": sys.executable, "args": [f"mcp_servers/{name}_server.py"], "transport": "stdio"}
-    for name in ALL_SERVERS
+    "gateway": {"url": GATEWAY_URL, "transport": "streamable_http", "headers": GATEWAY_HEADERS},
 }
 
 
-async def with_mcp(fn, server="filesystem"):
-    """连上指定 MCP server,把握过手的 session 交给 fn 用,用完关掉连接。"""
-    async with stdio_client(ALL_SERVERS[server]) as (read, write):
+async def with_mcp(fn):
+    """连上网关,把握过手的 session 交给 fn 用,用完关掉连接。"""
+    async with streamablehttp_client(GATEWAY_URL, headers=GATEWAY_HEADERS) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             return await fn(session)
 
 
 async def call_tool_any(tool: str, args: dict):
-    """调试命令用:问遍名单里的 server,谁认识这个工具谁来执行(工具名跨 server 不重名)。"""
-    for server in ALL_SERVERS:
-        async with stdio_client(ALL_SERVERS[server]) as (read, write):
-            async with ClientSession(read, write) as session:
-                await session.initialize()
-                if tool in {t.name for t in (await session.list_tools()).tools}:
-                    return await session.call_tool(tool, args)
-    raise SystemExit(f"三个 server 都没有工具 {tool}")
+    """调试命令用:工具名带网关前缀(如 filesystem-read-file),直接点名调用。"""
+    async with streamablehttp_client(GATEWAY_URL, headers=GATEWAY_HEADERS) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            if tool in {t.name for t in (await session.list_tools()).tools}:
+                return await session.call_tool(tool, args)
+    raise SystemExit(f"网关上没有工具 {tool}(先 /tools 查名字,要带前缀)")
 
 
 # 阶段 29:审计字段——OTel GenAI 语义约定的项目化落法,五要素:
 # 谁 / 何时 / 以何理由(引用本轮用户消息) / 调了什么工具带什么参数 / 碰了什么数据(分级)
+# 阶段 36:键换成网关命名空间前缀名——Agent 看到的工具名就是网关目录里的名字
 TOOL_DATA_CLASS = {
-    "read_file": "workspace 用户文件(读)",
-    "write_file": "workspace 用户文件(写)",
-    "list_dir": "workspace 目录清单",
-    "run_command": "一次性 microVM 内部(宿主不可见)",
-    "http_get": "出网请求(白名单域名)",
-    "http_post": "出网请求(白名单域名,可含凭证占位符)",
+    "filesystem-read-file": "workspace 用户文件(读)",
+    "filesystem-write-file": "workspace 用户文件(写)",
+    "filesystem-list-dir": "workspace 目录清单",
+    "shell-run-command": "一次性 microVM 内部(宿主不可见)",
+    "fetch-http-get": "出网请求(白名单域名)",
+    "fetch-http-post": "出网请求(白名单域名,可含凭证占位符)",
 }
 CURRENT_ROUND = {"why": ""}  # CLI 单线程:记本轮用户消息,供工具审计的"以何理由"引用
 
@@ -293,10 +292,9 @@ def main() -> None:
         if not user_input:
             continue
         if user_input == "/tools":
-            for server in ALL_SERVERS:
-                tools = asyncio.run(with_mcp(lambda s: s.list_tools(), server))
-                for t in tools.tools:
-                    print(f"  [{server}] {t.name} — {t.description}")
+            tools = asyncio.run(with_mcp(lambda s: s.list_tools()))
+            for t in tools.tools:
+                print(f"  {t.name} — {t.description}")
         elif user_input.startswith("/call "):
             name, _, raw = user_input[6:].partition(" ")
             result = asyncio.run(call_tool_any(name, json.loads(raw or "{}")))
