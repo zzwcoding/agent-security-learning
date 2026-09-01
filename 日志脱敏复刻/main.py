@@ -45,19 +45,33 @@ def main() -> None:
     print("=" * 64)
     print(f"合计脱敏 {total} 处。规则引擎到此完工;下一站:pytest 回归(阶段 5)")
 
-    # LLM 引擎对照(阶段 7):同一条日志,语义引擎怎么看 Level 3 PII
-    from llm_engine import detect_pii
-    print("\n—— LLM 引擎对照(qwen3:0.6b,需要 Ollama 服务)——")
+    # LLM 引擎对照(阶段 7)+ 回填验收闸(阶段 8):模型给出 → 过闸收/拒 → 回填
+    from llm_engine import accept_and_redact, detect_pii
+    print("\n—— LLM 引擎对照 + 回填验收(qwen3:0.6b,需要 Ollama 服务)——")
     for name, category, text in SAMPLES:
         if category != "PII类":
             continue
         items, metrics = detect_pii(text)
-        print(f"  [{name}] 检出 {len(items)} 项")
-        for it in items:
-            print(f"    {it.get('type')} = {it.get('value')!r}")
-        print(f"    指标: TTFT {metrics['ttft_ms']}ms | 总 {metrics['total_ms']}ms | "
-              f"prompt {metrics['prompt_tokens']} tok | 输出 {metrics['output_tokens']} tok"
-              f"(思考 {metrics['thinking_chars']} 字)")
+        redacted, accepted, rejected = accept_and_redact(text, items)
+        print(f"  [{name}] 模型给 {len(items)} 项 → 收下 {len(accepted)},拒收 {len(rejected)}")
+        for it in accepted:
+            print(f"    收下 {it.get('type')} = {it.get('value')!r}")
+        for it in rejected:
+            print(f"    拒收 {it.get('value')!r} —— {it['reason']}")
+        print(f"    回填后: {redacted.rstrip()}")
+        print(f"    指标: TTFT {metrics['ttft_ms']}ms | 总 {metrics['total_ms']}ms | 输出 {metrics['output_tokens']} tok")
+
+    # 幻觉演示:人工构造"模型可能说出的"输出,看闸怎么拦(验收是确定性的,用确定性输入演示)
+    print("\n  · 幻觉演示(人工构造的模型输出):")
+    _, ok, no = accept_and_redact(
+        "用户说:我网银的登录口令是 Blue moon over river 77,请帮我记住。",
+        [{"type": "password", "value": "Blue moon over river 77"},      # 原文有 → 收
+         {"type": "password", "value": "用户的网银登录口令"},             # 描述性短语 → 拒
+         {"type": "password", "value": "Blue moon over river 77 请"}])   # 编造尾巴 → 拒
+    for it in ok:
+        print(f"    收下 {it['value']!r}")
+    for it in no:
+        print(f"    拒收 {it['value']!r} —— {it['reason']}")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,7 @@ LLM 管"正则写不出"的语义盲区(病历/诊断/自然语言说出的口�
 零新增依赖:标准库 urllib 直调 Ollama /api/chat——阶段 6 裸 curl 的 Python 版。
 """
 import json
+import re
 import time
 import urllib.request
 
@@ -80,3 +81,30 @@ def detect_pii(text: str) -> tuple[list, dict]:
     except json.JSONDecodeError:
         items = []  # schema 强制下不该发生;失败模式阶段 8 讲
     return items, metrics
+
+
+def _value_appears_in_text(value: str, text: str) -> bool:
+    """验收闸:模型的 value 必须是原文(大小写不敏感)的逐字子串,才可信。"""
+    return bool(value) and value.lower() in text.lower()
+
+
+def accept_and_redact(text: str, items: list) -> tuple[str, list, list]:
+    """回填验收:过闸项替换为占位符;拒收项连同原因返回。
+
+    模型说"这里有敏感信息"≠它给的值是原文里真实存在的串——幻觉、改写、
+    描述性短语、标签碎片,全在"原文出现"这一步现形。这是防线:
+    prompt 里的"逐字摘抄"是劝,这里是闸(阶段 7 实证:劝没用)。
+    """
+    accepted, rejected = [], []
+    for it in items:
+        value = (it.get("value") or "").strip()
+        if _value_appears_in_text(value, text):
+            accepted.append({**it, "value": value})
+        else:
+            rejected.append({**it, "value": value, "reason": "非原文子串(幻觉/改写/描述性短语)"})
+    redacted = text
+    # 长值先替换:防止短值先动刀把长值的匹配位置破坏掉
+    for it in sorted(accepted, key=lambda x: len(x["value"]), reverse=True):
+        placeholder = f"[REDACTED_{re.sub(r'\s+', '_', str(it.get('type') or 'PII')).upper()}]"
+        redacted = re.sub(re.escape(it["value"]), placeholder, redacted, flags=re.IGNORECASE)
+    return redacted, accepted, rejected
