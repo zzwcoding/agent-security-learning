@@ -17,7 +17,7 @@
 | 36 | Agent 工具调用改走网关 + 拔直连(直连失败留证据)+ TS 裸 SDK 最小 client 第二身份出现 | ✅ 已完成(2026-09-01;lesson 0031,record 0034;agent.py 拔除 stdio 名单换网关单条目(streamable_http+Bearer),工具名全线切网关前缀;真 Agent 轮次端到端——LLM 经凭证代理决策 filesystem-list-dir、网关转发执行返回 workspace 清单;dummy token 401 拒=认证闸活;ts-client 约 60 行第二消费者同门跑通(6 工具+一次真调用);踩坑:shell 嵌套引号撕碎多行 python -c→独立 mint 脚本+零插值 heredoc) |
 | 37 | OpenFGA 单容器部署 + model.fga 建模(人×Agent×工具×资源)+ 授权矩阵文档 + 真实 tuples(Playground 可见) | ✅ 已完成(2026-09-01;lesson 0032,record 0035;`scripts/setup-openfga.sh` 一键幂等重建(store/model/12 tuples);六条 check 全中——运维位经 agent#admin 级联全量放行、只读位两读工具、资源级联双向、fail closed 默认拒;Playground localhost:3001(避让 Langfuse);授权模型文档草案 `authz-model.md`(阶段 46 升交付物 01);踩坑:API union 必须套 child 数组,400 靠错误体定位) |
 | 38 | 自写 tool_pre_invoke CPEX 插件调 fga check + 越权攻击:TS client 越权被拒 fail closed | ✅ 已完成(2026-09-01;lesson 0033,record 0036;`gateway/plugins/fga_check.py` 挂 tool_pre_invoke,user_map 身份映射+fail closed(裁判失联/id 缺失一律拒)+fga_ids.json 动态读 id;攻防矩阵四条全中——bob×shell/write=FGA_DENIED 带身份归属、bob×list-dir 放行、admin×shell=VM 真执行;集成三层课:户口(email_users)→可见性(工具置 public)→RBAC 执行权→才轮到 FGA,认证身份≠授权身份) |
-| 39 | 串联闸:本地 wrap_tool_call 栈上 D4 规则 + LLM 法官 + fail-closed 审批(缺口 3 核销点) | ⬜ |
+| 39 | 串联闸:本地 wrap_tool_call 栈上 D4 规则 + LLM 法官 + fail-closed 审批(缺口 3 核销点) | ✅ 已完成(2026-09-02;lesson 0034,record 0037;make_gate 落中间件栈第二位;实测四景——合法写入被初版法官误拒→调优放行真实落盘/稀释毒 0.00 穿透 L2 但 MiniMax 自拒未接钩/分类器中文短语盲区("读一下"3 字=1.00)/D4 误拒 date 查日期→模型绕行写入幻觉日期(闸门误拒把模型逼进幻觉);缺口 3 拦截面成立,回写留收官) |
 | 40 | 缺口 2/7 记忆装载校验(注入检查+来源标记+完整性,合并)+ 缺口 4 语义自检接线 | ⬜ |
 | 41 | 哈希链证据日志(append-only,前条 hash+五要素)+ audit.data_class 参数级映射 | ⬜ |
 | 42 | 短时令牌服务(短时效 JWT + scope=本轮工具子集 + fail closed,proxy.py 演进) | ⬜ |
