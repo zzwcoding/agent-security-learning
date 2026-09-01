@@ -24,4 +24,5 @@
 - Agent 侧网关接入:`MCP_SERVERS` 单条目 streamable_http + GATEWAY_TOKEN(run-agent.sh 启动时经 `scripts/mint-gateway-token.sh` 现铸,60 分钟短时不落盘)
 - TS 第二消费者:`starter-agent/ts-client/`(裸 @modelcontextprotocol/sdk 约 60 行),`GATEWAY_TOKEN=$(scripts/mint-gateway-token.sh) npx --prefix ts-client tsx ts-client/index.ts`
 - 程序化访问网关:Bearer JWT(`teams: null` + is_admin 才是管理员旁路),铸造方式见 lesson 0030/record 0033
-- (后续阶段追加:OpenFGA 容器、FGA 插件、哈希链、令牌服务)
+- OpenFGA:单容器内存存储,API 127.0.0.1:8080 / Playground localhost:3001;`scripts/setup-openfga.sh` 一键幂等重建(store/model/12 tuples/六条演示 check);模型与矩阵文档 `issues/11-route3-execution/authz-model.md`
+- (后续阶段追加:FGA 插件、哈希链、令牌服务)
