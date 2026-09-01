@@ -18,7 +18,7 @@
 - ✅ 2 规则引擎上(密钥类 11 条规则 + 占位符)
 - ✅ 3 校验器与重叠裁决(Luhn + 身份证校验码;高优先级胜出按 span 重建)
 - ✅ 4 规则引擎下(PII 类剩余 5 条:邮箱/IBAN/SSN/手机/IPv4 + 类别 Counter 汇总)
-- ⬜ 5 离线回归 pytest(截断 PEM/带空格口令/Basic 不吃普通英文/负例不误报)
+- ✅ 5 离线回归 pytest(截断 PEM/带空格口令/Basic 不吃普通英文/负例不误报)
 - ⬜ 6 Ollama 起步(路线 4 热身):安装 + pull qwen3:0.6b + 裸 /api/chat 冒烟
 - ⬜ 7 LLM 引擎:Level 3 PII prompt + JSON Schema 结构化输出 + TTFT 指标
 - ⬜ 8 回填验收与失败模式:`_value_appears_in_text` 原文出现检查 + 拒收演示

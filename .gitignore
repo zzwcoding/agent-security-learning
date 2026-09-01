@@ -15,3 +15,6 @@ __pycache__/
 .scratch/agent-security-learning/知识卡片-碎片
 # kimi 会话历史研究与交接产物(本地)
 .scratch/kimi-history/
+
+# pytest 缓存(日志脱敏复刻阶段 5 起)
+.pytest_cache/
