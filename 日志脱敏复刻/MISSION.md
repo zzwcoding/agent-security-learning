@@ -23,5 +23,5 @@
 - ✅ 7 LLM 引擎:Level 3 PII prompt + JSON Schema 结构化输出 + TTFT 指标
 - ✅ 8 回填验收与失败模式:`_value_appears_in_text` 原文出现检查 + 拒收演示
 - ✅ 9 混合管道:regex 先行,LLM 脱敏后文本补扫(实测推翻"零命中才进"省成本版;补位不替补)
-- ⬜ 10 campaign 基准:gold 用例集三引擎对比
+- ✅ 10 campaign 基准:gold 用例集三引擎对比(hybrid R=0.94/泄露2 最低;LLM 单跑泄露10>regex8;占位符幻觉磁铁失效模式揪出并补丁)
 - ⬜ 11 对照收官:同批样本过主线 memory_guard,五维对照表写复盘
