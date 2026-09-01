@@ -17,21 +17,20 @@
 
 - **阶段 21–29 全部提交完成**(最近三笔:阶段 29 `edb5d8d` OTel 审计字段、选型文档 `36054bd`、阶段 30 开工包 `d9e1d47`);逐阶段结论见 `MISSION.md` 阶段表(唯一实时真源)
 - **阶段 25 复刻(平行窗口)已收官**:commit `922348d`(12/12 阶段,16/16 gate)+ `02974d9`(lesson 0013 全流程总账);产物在仓库根目录 `自修改agent复刻/`;收官对照 `自修改agent复刻/对照复盘-验证沙箱选型.md` 落定:**候选验证沙箱选一次性 microVM,加固 Docker 降备选**(三候选双后端灯表 100% 一致,probe.sh 双跑数据在案)
-- **阶段 30 复刻(另一平行窗口)施工中**:仓库根目录 `日志脱敏复刻/`,交接 `HANDOFF-阶段30-日志脱敏复刻.md`,复刻 1–2 已提交;⚠ 该窗口工作区可能有未提交改动,主线提交时只 add 主线自己的文件
+- **阶段 30 复刻(另一平行窗口)已收官(2026-09-01)**:11/11 阶段,commit `555a1c7`→`c90302e`;产物 仓库根目录 `日志脱敏复刻/`;收官拍板 `对照复盘-三引擎分工拍板.md`——三出口分工:memory.json=Presidio 保留,Langfuse trace 与本地日志=regex 在线全量 + hybrid 离线补扫(阶段 33 可引用)
 
-## 2. 下一步:阶段 31 四次主动攻击验收(逃逸 / egress / 密钥不可见 / 审计复盘,全程留证据)
+## 2. 下一步:阶段 33 收官(`deliverables/route2/` 三件交付物 + 票 09 写 Answer 关闭)
 
-四条验收的地基已全部就位,验收是"组装 + 留证",不是新建设:
+~~阶段 31 四次主动攻击验收~~ ✅ 已完成(2026-08-31,`19098fe`;证据 `attack-validation/` 四目录,README 有总判表与复跑指南);~~阶段 32 对照讨论与精读~~ ✅ 已完成(2026-09-01,`d204e19`;lesson 0027/0028)。素材全部就位,收官是"组装 + 写报告":
 
-| 攻击 | 武器/地基(已有) | 验收动作 |
-|---|---|---|
-| ① 逃逸 | `escape-probe/probe.sh` + `run_in_microvm.py`(阶段 24 产物,evidence/ 已有 Docker vs microVM 对照;复刻窗口又双跑一遍,数据在 `对照复盘-验证沙箱选型.md` §二) | 注入得手后 shell 只见一次性 microVM 内部,重跑留新证据 |
-| ② egress | fetch_server 工具层白名单 fail closed(lesson 0020)+ VM 层 PUBLIC profile 兜底 | fetch 向白名单外域名外泄"密钥"被拒(缺口 1 核销证据) |
-| ③ 密钥不可见 | LLM 路走 proxy.py(lesson 0022)、fetch 路走 `{{SECRET:}}` 占位符(lesson 0023) | dump Agent 进程环境/可见面,找不到真 key |
-| ④ 审计复盘 | 阶段 29 五要素字段(OTLP 出网捕获字节级验证过,lesson 0025) | 四次攻击全程在 Langfuse 按 audit.* 字段可复盘 |
+- **三件交付物**(写进 `deliverables/route2/`,格式照抄 `deliverables/route1/`):
+  1. 边界对比报告:素材 = 阶段 24 escape-probe 证据 + 阶段 25 复刻双后端对照 + lesson 0028 光谱理论
+  2. 劫持无效化验证记录:素材 = 阶段 31 attack-validation/ 四攻击全文 + 防线命中统计
+  3. 缺口 1 核销记录:素材 = 阶段 23 两层出网设计 + 攻击②六格证据;核销说明回写 `deliverables/route1/03-已知缺口清单.md`
+  - 引用件:复刻收官拍板两份(`自修改agent复刻/对照复盘-验证沙箱选型.md`、`日志脱敏复刻/对照复盘-三引擎分工拍板.md`)
+- **票 09 Answer**:交付物位置、与方案 08 的偏差(egress 白名单 API 换形/凭证注入点移到 fetch_server/chapter 编号误记/一次 gzip bug 修复/架构新增 middleware 审计)、验收证据指针;Status 置 closed
 
-- 产出归 `deliverables/route2/` 三件(清单见 `HANDOFF.md` §5);缺口 1 核销还要回写 `deliverables/route1/03-已知缺口清单.md`
-- 之后:阶段 32(chapter5/async-agent 对照讨论 + Firecracker/gVisor 精读)→ 阶段 33 收官(`deliverables/route2/` 三件 + 票 09 写 Answer 关闭)
+之后回主窗口按滚动排期开**路线 3 方案票**(输入已备好:缺口 2/3/7 备料方案、ContextForge 研究结论票 05、根目录两份调研《Agent开发分层与语言选型》《沙箱机制与传统安全业务选型》)。
 
 ## 3. 纪律提醒(沿用)
 
