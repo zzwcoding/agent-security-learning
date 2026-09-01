@@ -24,8 +24,19 @@ def main() -> None:
         for f in findings:
             label = CATEGORY_LABELS.get(f["category"], f["category"])
             print(f"   [{label}] {f['value']} -> {f['placeholder']}")
+    # 校验器能力展示(长期保留):格式像 ≠ 真的,校验算法是规则的第二道闸
+    print("\n—— 校验器演示:格式像 ≠ 真的 ——")
+    for label, demo_text in [
+        ("真卡号(校验码过→脱)", "card: 4111 1111 1111 1111"),
+        ("假卡号(校验码不过→放行)", "card: 4111 1111 1111 1112"),
+        ("真身份证(校验码对→脱)", "证件号 11010519491231002X"),
+        ("假身份证(校验码错→放行)", "证件号 11010119900307721X"),
+    ]:
+        redacted, findings = sanitize(demo_text)
+        print(f"  {label}  =>  {redacted}")
+
     print("=" * 64)
-    print(f"合计脱敏 {total} 处(密钥类规则地盘;PII 类规则阶段 4 接手)")
+    print(f"合计脱敏 {total} 处(PII 剩余类别阶段 4 接手)")
 
 
 if __name__ == "__main__":
