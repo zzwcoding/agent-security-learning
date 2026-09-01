@@ -1,0 +1,31 @@
+# 路线 3 阶段 38:FGA 授权闸插件
+# 默认配置路径就是 plugins/config.yaml(相对网关 cwd),PLUGINS_ENABLED=true 即生效
+plugins:
+  - name: fga_check
+    kind: fga_check.FGACheckPlugin      # plugin_dirs 里的模块.类名
+    description: "OpenFGA can_execute 闸:每次工具调用先问裁判,False 即 403"
+    version: "0.1.0"
+    author: "route3-stage38"
+    hooks: ["tool_pre_invoke"]
+    tags: ["authz"]
+    mode: "enforce"                      # enforce | permissive | disabled
+    priority: 10                         # 越小越先跑,授权闸要排在最前
+    config:
+      fga_api_url: "http://127.0.0.1:8080"
+      ids_file: "plugins/fga_ids.json"   # store/model id 由 setup-openfga.sh 刷新
+      timeout_s: 3
+      user_map:                          # 网关身份 → FGA 用户
+        admin@example.com: "user:divh"   # 运维位(全量)
+        bob@example.com: "user:bob"      # 只读位(两读工具)
+      default_user: "user:bob"           # 认不出的脸按最小权限对待
+
+# 插件模块搜索目录(必须在 ALLOWED_PLUGIN_DIRS 白名单内,含 cwd)
+plugin_dirs:
+  - "plugins"
+
+plugin_settings:
+  parallel_execution_within_band: true
+  plugin_timeout: 30
+  fail_on_plugin_error: false
+  enable_plugin_api: true
+  plugin_health_check_interval: 60

@@ -100,5 +100,10 @@ for u, rel, obj, expect in checks:
     ok = "✓" if r["allowed"] == expect else "✗ 意外!"
     print(f"  {ok} check({u}, {rel}, {obj}) = {r['allowed']}(预期 {expect})")
 
+# 刷新网关插件的 id 文件(内存存储每次重建 id 都变,插件从这读,不写死)
+import pathlib
+ids_path = pathlib.Path("gateway/plugins/fga_ids.json")
+ids_path.write_text(json.dumps({"store_id": store, "model_id": model_id}))
+print(f"ids file  = {ids_path.resolve()}")
 print("playground: http://localhost:3001(store: agent-security-route3)")
 PYEOF
