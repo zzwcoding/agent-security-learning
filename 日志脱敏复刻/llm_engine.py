@@ -12,13 +12,19 @@ import urllib.request
 OLLAMA_URL = "http://127.0.0.1:11434/api/chat"
 MODEL = "qwen3:0.6b"
 
-# Level 3 PII 系统 prompt:只找高敏个人信息,值必须逐字摘抄——
+# Level 3 PII 系统 prompt:类别清单与 PII_TYPES 枚举一致;值必须逐字摘抄——
 # "逐字"这条是阶段 8 回填验收的前提,在这里先立规矩。
-SYSTEM_PROMPT = """你是隐私保护检测器,从日志中找出 Level 3 高敏个人信息:
-身份证号、银行卡号、病历/诊断/治疗信息、护照号、家庭住址、口令(包括用自然语言说出的口令)。
+SYSTEM_PROMPT = """你是隐私保护检测器,从日志中找出 Level 3 高敏个人信息,类别限定为:
+身份证号、社保号、银行卡号、护照号、驾照号、病历号、诊断、治疗、住址、口令(包括自然语言说出的口令)、金融PIN、生物特征。
 只找真正的敏感值:字段名、规范用语、指标数字不算。
 输出 JSON:{"pii_items": [{"type": "类别名", "value": "敏感值"}]}。
 value 必须逐字复制原文中出现的子串,不许改写、不许翻译、不许加任何描述。没有就返回空数组。"""
+
+# 类别枚举:进 schema 的 enum 后,0.6B 不再输出"敏感值"这种无区分度的泛型
+# (阶段 8 挂账:占位符 [REDACTED_敏感值] 可读性差)。注意格式型类别(手机号/邮箱/
+# 卡号)不在内——它们是 regex 的地盘,LLM 只管语义盲区(阶段 9 的分工)。
+PII_TYPES = ["身份证号", "社保号", "银行卡号", "护照号", "驾照号", "病历号",
+             "诊断", "治疗", "住址", "口令", "金融PIN", "生物特征"]
 
 # JSON Schema:Ollama 在解码层强制模型输出合法 JSON。
 # 阶段 6 冒烟实证:0.6B 裸提示词会把 JSON 包进 markdown 围栏——schema 是解药,不是装饰。
@@ -29,7 +35,10 @@ PII_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object",
-                "properties": {"type": {"type": "string"}, "value": {"type": "string"}},
+                "properties": {
+                    "type": {"type": "string", "enum": PII_TYPES},
+                    "value": {"type": "string"},
+                },
                 "required": ["type", "value"],
             },
         }
