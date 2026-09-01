@@ -18,7 +18,7 @@
 | 37 | OpenFGA 单容器部署 + model.fga 建模(人×Agent×工具×资源)+ 授权矩阵文档 + 真实 tuples(Playground 可见) | ✅ 已完成(2026-09-01;lesson 0032,record 0035;`scripts/setup-openfga.sh` 一键幂等重建(store/model/12 tuples);六条 check 全中——运维位经 agent#admin 级联全量放行、只读位两读工具、资源级联双向、fail closed 默认拒;Playground localhost:3001(避让 Langfuse);授权模型文档草案 `authz-model.md`(阶段 46 升交付物 01);踩坑:API union 必须套 child 数组,400 靠错误体定位) |
 | 38 | 自写 tool_pre_invoke CPEX 插件调 fga check + 越权攻击:TS client 越权被拒 fail closed | ✅ 已完成(2026-09-01;lesson 0033,record 0036;`gateway/plugins/fga_check.py` 挂 tool_pre_invoke,user_map 身份映射+fail closed(裁判失联/id 缺失一律拒)+fga_ids.json 动态读 id;攻防矩阵四条全中——bob×shell/write=FGA_DENIED 带身份归属、bob×list-dir 放行、admin×shell=VM 真执行;集成三层课:户口(email_users)→可见性(工具置 public)→RBAC 执行权→才轮到 FGA,认证身份≠授权身份) |
 | 39 | 串联闸:本地 wrap_tool_call 栈上 D4 规则 + LLM 法官 + fail-closed 审批(缺口 3 核销点) | ✅ 已完成(2026-09-02;lesson 0034,record 0037;make_gate 落中间件栈第二位;实测四景——合法写入被初版法官误拒→调优放行真实落盘/稀释毒 0.00 穿透 L2 但 MiniMax 自拒未接钩/分类器中文短语盲区("读一下"3 字=1.00)/D4 误拒 date 查日期→模型绕行写入幻觉日期(闸门误拒把模型逼进幻觉);缺口 3 拦截面成立,回写留收官) |
-| 40 | 缺口 2/7 记忆装载校验(注入检查+来源标记+完整性,合并)+ 缺口 4 语义自检接线 | ⬜ |
+| 40 | 缺口 2/7 记忆装载校验(注入检查+来源标记+完整性,合并)+ 缺口 4 语义自检接线 | ✅ 已完成(2026-09-02;lesson 0035,record 0038;记忆信封 envelope-v1(逐条 sha256)+装载三道闸(hash→分类器→语义自检,any-quarantine 全拒防 tool_call 配对断裂)+系统提示来源标记;工具返回语义自检挂分类器后;攻击实证:A 无钥匙篡改 hash 拒/B 全知攻击者重算 hash→分类器叙事毒 0.02 失明→语义自检抓/C 稀释毒工具返回→语义自检拦+无毒对照干净;真课:MCP block 列表 hash 炸/MiniMax 2013 配对/提示词两轮调优;已知限制 text[:600] 截断) |
 | 41 | 哈希链证据日志(append-only,前条 hash+五要素)+ audit.data_class 参数级映射 | ⬜ |
 | 42 | 短时令牌服务(短时效 JWT + scope=本轮工具子集 + fail closed,proxy.py 演进) | ⬜ |
 | 43 | 供应链体检:uvx snyk-agent-scan 扫全上游 + 自制 1–2 投毒样本 server + 1 真第三方 + 人工复核 2–3 高危 | ⬜ |
