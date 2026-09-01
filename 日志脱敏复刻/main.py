@@ -1,8 +1,8 @@
-"""日志脱敏复刻——阶段 7:LLM 引擎对照(qwen3:0.6b 检测 Level 3 PII)
+"""日志脱敏复刻——阶段 9:混合管道(regex 先行,LLM 脱敏后补扫)
 
-规则引擎(18 条)已完工并回归锁死;本阶段在 main 末尾追加语义引擎对照段:
-对 PII 类样本调 Ollama 流式检测,打印检出项与 TTFT/吞吐指标。
-对照点:同一文本,规则引擎按格式抓,LLM 按"它认为的高敏"抓——两种口径并排看。
+规则引擎(18 条)与 LLM 引擎(阶段 7-8 带验收闸)都已就位;本阶段接成一条管道:
+regex 微秒级先扫全量,LLM 在脱敏后文本上补扫语义盲区(总跑一遍防混合样本漏脱,
+占位符污染有防御)。可观察变化:每条样本打印两段引擎各干了什么。
 运行前需要 Ollama 服务:brew services run ollama(临时,不注册自启)。
 """
 from collections import Counter
@@ -45,33 +45,16 @@ def main() -> None:
     print("=" * 64)
     print(f"合计脱敏 {total} 处。规则引擎到此完工;下一站:pytest 回归(阶段 5)")
 
-    # LLM 引擎对照(阶段 7)+ 回填验收闸(阶段 8):模型给出 → 过闸收/拒 → 回填
-    from llm_engine import accept_and_redact, detect_pii
-    print("\n—— LLM 引擎对照 + 回填验收(qwen3:0.6b,需要 Ollama 服务)——")
+    # 混合管道(阶段 9):regex 先行,LLM 脱敏后补扫——每条样本打印两段引擎干了什么
+    from pipeline import hybrid_sanitize
+    print("\n—— 混合管道(regex 先行,LLM 补扫语义盲区)——")
     for name, category, text in SAMPLES:
-        if category != "PII类":
-            continue
-        items, metrics = detect_pii(text)
-        redacted, accepted, rejected = accept_and_redact(text, items)
-        print(f"  [{name}] 模型给 {len(items)} 项 → 收下 {len(accepted)},拒收 {len(rejected)}")
-        for it in accepted:
-            print(f"    收下 {it.get('type')} = {it.get('value')!r}")
-        for it in rejected:
-            print(f"    拒收 {it.get('value')!r} —— {it['reason']}")
-        print(f"    回填后: {redacted.rstrip()}")
-        print(f"    指标: TTFT {metrics['ttft_ms']}ms | 总 {metrics['total_ms']}ms | 输出 {metrics['output_tokens']} tok")
-
-    # 幻觉演示:人工构造"模型可能说出的"输出,看闸怎么拦(验收是确定性的,用确定性输入演示)
-    print("\n  · 幻觉演示(人工构造的模型输出):")
-    _, ok, no = accept_and_redact(
-        "用户说:我网银的登录口令是 Blue moon over river 77,请帮我记住。",
-        [{"type": "password", "value": "Blue moon over river 77"},      # 原文有 → 收
-         {"type": "password", "value": "用户的网银登录口令"},             # 描述性短语 → 拒
-         {"type": "password", "value": "Blue moon over river 77 请"}])   # 编造尾巴 → 拒
-    for it in ok:
-        print(f"    收下 {it['value']!r}")
-    for it in no:
-        print(f"    拒收 {it['value']!r} —— {it['reason']}")
+        r = hybrid_sanitize(text)
+        print(f"  [{category}] {name}")
+        print(f"      regex 命中 {r['regex_hits']} 处({r['regex_ms']:.3f}ms)"
+              f" + LLM 补扫(给 {r['llm_given']} 收 {r['llm_kept']} 拒 {r['llm_rejected']},"
+              f"{r['llm_ms']:.0f}ms)")
+        print(f"      结果: {r['redacted'].splitlines()[0][:64]}")
 
 
 if __name__ == "__main__":
