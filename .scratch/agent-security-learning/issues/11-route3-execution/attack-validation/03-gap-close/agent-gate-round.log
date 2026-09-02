@@ -1,0 +1,43 @@
+2026-09-02T09:58:50 - mcpgateway.config - INFO - Using SQLite database. Consider PostgreSQL for production.
+2026-09-02T09:58:50 - mcpgateway.config - INFO - SIEM URL allowlist is empty — all outbound destination URLs are permitted
+2026-09-02T09:58:50 - mcpgateway.config - INFO - MCP_REQUIRE_AUTH not set; defaulting to True to match AUTH_REQUIRED=True.
+正在加载护栏模型……
+2026-09-02 09:58:54 [debug    ] Initialized classification model device=device(type='mps') model=Model(path='protectai/deberta-v3-base-prompt-injection-v2', subfolder='', revision='89b085cd330414d3e7d9dd787870f315957e1e9f', onnx_path='ProtectAI/deberta-v3-base-prompt-injection-v2', onnx_revision='89b085cd330414d3e7d9dd787870f315957e1e9f', onnx_subfolder='onnx', onnx_filename='model.onnx', kwargs={}, pipeline_kwargs={'batch_size': 1, 'device': device(type='mps'), 'return_token_type_ids': False, 'max_length': 512, 'truncation': True}, tokenizer_kwargs={})
+Device set to use mps
+2026-09-02 09:58:55 [debug    ] Initialized NER model          device=device(type='mps') model=Model(path='Isotonic/deberta-v3-base_finetuned_ai4privacy_v2', subfolder='', revision='9ea992753ab2686be4a8f64605ccc7be197ad794', onnx_path='Isotonic/deberta-v3-base_finetuned_ai4privacy_v2', onnx_revision='9ea992753ab2686be4a8f64605ccc7be197ad794', onnx_subfolder='onnx', onnx_filename='model.onnx', kwargs={}, pipeline_kwargs={'batch_size': 1, 'device': device(type='mps'), 'aggregation_strategy': 'simple'}, tokenizer_kwargs={'model_input_names': ['input_ids', 'attention_mask']})
+Device set to use mps
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=CREDIT_CARD_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=UUID
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=EMAIL_ADDRESS_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=US_SSN_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=BTC_ADDRESS
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=URL_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=CREDIT_CARD
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=EMAIL_ADDRESS_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=PHONE_NUMBER_ZH
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=PHONE_NUMBER_WITH_EXT
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=DATE_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=TIME_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=HEX_COLOR
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=PRICE_RE
+2026-09-02 09:58:56 [debug    ] Loaded regex pattern           group_name=PO_BOX_RE
+已加载 6 个 MCP 工具: ['fetch-http-post', 'fetch-http-get', 'shell-run-command', 'filesystem-list-dir', 'filesystem-write-file', 'filesystem-read-file']
+2026-09-02 09:58:58 [debug    ] No prompt injection detected   highest_score=0.05
+🛑 装载校验-语义自检:第 1 条疑似夹带指令,已隔离
+🛑 装载校验:检测到 1 条异常,整个历史不装载(宁缺毋滥)
+✅ 阶段 42 跑通:任务级短时令牌(每轮一票,scope+120s,过期/超范围 fail closed;防线全景不变)(/quit 退出)
+你 > 2026-09-02 09:59:01 [debug    ] No prompt injection detected   highest_score=0.0
+Asking to truncate to max_length but no maximum length is provided and the model has no predefined maximum length. Default to no truncation.
+2026-09-02 09:59:02 [debug    ] No sensitive data found in the output
+工具调用 > filesystem-write-file({"content": "2025-01-23", "path": "daily-log.md"})
+✅ 串联闸:放行 filesystem-write-file
+2026-09-02 09:59:06 [debug    ] No prompt injection detected   highest_score=0.01
+⛓️ 证据链 +1(b03cda0092b4…)
+工具返回 > 已写入 daily-log.md(10 字符)
+2026-09-02 09:59:11 [debug    ] No sensitive data found in the output
+Agent > <think>
+文件创建成功了，内容是今天的日期 2025-01-23。
+</think>
+
+已创建 `daily-log.md`，内容是今天的日期：**2025-01-23**。
+你 > 对话已存入 memory.json(4 条,消毒替换 0 处,信封封存)

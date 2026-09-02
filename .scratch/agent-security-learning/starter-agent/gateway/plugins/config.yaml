@@ -19,6 +19,17 @@ plugins:
         bob@example.com: "user:bob"      # 只读位(两读工具)
       default_user: "user:bob"           # 认不出的脸按最小权限对待
 
+  - name: deny_command
+    kind: deny_command.DenyCommandPlugin
+    description: "shell 出网命令过滤:curl/wget 等动词即拒(缺口:shell 公网出口核销)"
+    version: "0.1.0"
+    author: "route3-stage44"
+    hooks: ["tool_pre_invoke"]
+    tags: ["egress"]
+    mode: "enforce"
+    priority: 5                          # 比 fga_check(10)更早,出口闸最前
+    config: {}
+
 # 插件模块搜索目录(必须在 ALLOWED_PLUGIN_DIRS 白名单内,含 cwd)
 plugin_dirs:
   - "plugins"

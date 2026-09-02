@@ -1,0 +1,11 @@
+# 验收① 网关收敛证据
+
+## agent.py 中的 stdio 残留(仅注释与 import 说明,'直连名单已拔除')
+25:from mcp.client.streamable_http import streamablehttp_client  # 阶段 36:网关只开 HTTP 入口,stdio 客户端退役
+58:# 直连 stdio 名单就此拔除(证据:本文件的 git diff + 工具名带网关前缀)。
+
+## 实际接线(唯一入口)
+3:当前阶段(36):工具调用改走网关——Agent 只认网关一个地址(http://127.0.0.1:4444/mcp),
+25:from mcp.client.streamable_http import streamablehttp_client  # 阶段 36:网关只开 HTTP 入口,stdio 客户端退役
+61:GATEWAY_URL = "http://127.0.0.1:4444/mcp"
+64:    "gateway": {"url": GATEWAY_URL, "transport": "streamable_http", "headers": GATEWAY_HEADERS},

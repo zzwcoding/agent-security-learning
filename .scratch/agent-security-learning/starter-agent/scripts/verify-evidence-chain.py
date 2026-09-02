@@ -24,6 +24,12 @@ def main() -> int:
         for i, line in enumerate(f, 1):
             total += 1
             entry = json.loads(line)
+            if i == 1 and entry.get("prev_hash"):
+                # 首条 prev 非空 = 文件是从更早的链截断/续写来的,本文件内无法锚定起点
+                print(f"⚠️ 首条 prev_hash 非空({entry['prev_hash'][:16]}…):文件是前代链的延续,\n"
+                      f"   本文件内无法验证完整历史(防'截断重造'的信号;生产应外锚链头)。\n"
+                      f"   本文件内 {total} 条自洽性不可验,按破坏处理。")
+                return 1
             expected_input = {k: v for k, v in entry.items() if k != "entry_hash"}
             canonical = json.dumps(expected_input, ensure_ascii=False, sort_keys=True)
             recomputed = hashlib.sha256((prev + canonical).encode()).hexdigest()

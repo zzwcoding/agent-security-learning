@@ -1,0 +1,4 @@
+ok (True, "task='看看 notes.txt' scope=2 个工具")
+拒-超scope: 工具 shell-run-command 不在本任务 scope 内(最小授权 ['filesystem-list-dir', 'filesystem-read-file'])
+拒-伪造: 签名不符(票被伪造或密钥轮换)
+拒-过期: 票已过期(exp=1788314384,任务级短时效)
