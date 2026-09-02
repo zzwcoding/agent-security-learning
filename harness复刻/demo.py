@@ -1,4 +1,4 @@
-"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 4 提案打包。
+"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 5 静态闸。
 
 运行:cd harness复刻 && python3 demo.py(纯标准库,无需装依赖)
 """
@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import confirmation_gate as gate
-from evolution import diagnose, generate_candidate
+from evolution import diagnose, generate_candidate, validate_candidate
 from stable.tool_dispatcher import default_env, dispatch
 
 ROOT = Path(__file__).parent
@@ -88,6 +88,24 @@ def stage4_proposal(trajectories):
     print("\n".join(f"   {line}" for line in candidate["integration_diff"].splitlines()))
 
 
+def stage5_static():
+    """静态闸:不运行候选,只体检文本——超限/编译/导入白名单/禁危险内建。"""
+    good = (ROOT / "confirmation_gate.py").read_text(encoding="utf-8")
+    static = ("static_compile", "security_scan")
+    checks = validate_candidate(good)
+    pending = [k for k in checks if k not in static]
+    print(f"我们的门禁:通过 {[k for k in static if checks[k]]};"
+          f"{pending} 尚未验收(阶段 6-7 接管)")
+    for name, src in [
+        ("坏提案·语法残废", good.replace('VERSION = "1.1.0-candidate"', 'VERSION = "1.1.0-candidate"\ndef broken(:', 1)),
+        ("坏提案·偷带 import os", good + "\nimport os  # 白名单外的模块\n"),
+        ("坏提案·藏一个 eval", good + "\npreview = eval('1+1')  # 动态执行\n"),
+    ]:
+        c = validate_candidate(src)
+        where = "静态编译" if not c["static_compile"] else "安全扫描"
+        print(f"{name}:通过 {[k for k, v in c.items() if v]} ← 卡在{where}")
+
+
 def main():
     trajectories = load("failure_trajectories.json")
 
@@ -102,6 +120,9 @@ def main():
 
     print("\n✅ 阶段 4 跑通:提案打包 —— 门禁源码变成可评审的建议书")
     stage4_proposal(trajectories)
+
+    print("\n✅ 阶段 5 跑通:静态闸 —— 不执行源码的体检")
+    stage5_static()
 
 
 if __name__ == "__main__":
