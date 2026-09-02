@@ -1,0 +1,3 @@
+reports/*.html
+calibration/workspace-bare/
+__pycache__/
