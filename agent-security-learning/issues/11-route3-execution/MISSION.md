@@ -21,7 +21,7 @@
 | 40 | 缺口 2/7 记忆装载校验(注入检查+来源标记+完整性,合并)+ 缺口 4 语义自检接线 | ✅ 已完成(2026-09-02;lesson 0035,record 0038;记忆信封 envelope-v1(逐条 sha256)+装载三道闸(hash→分类器→语义自检,any-quarantine 全拒防 tool_call 配对断裂)+系统提示来源标记;工具返回语义自检挂分类器后;攻击实证:A 无钥匙篡改 hash 拒/B 全知攻击者重算 hash→分类器叙事毒 0.02 失明→语义自检抓/C 稀释毒工具返回→语义自检拦+无毒对照干净;真课:MCP block 列表 hash 炸/MiniMax 2013 配对/提示词两轮调优;已知限制 text[:600] 截断) |
 | 41 | 哈希链证据日志(append-only,前条 hash+五要素)+ audit.data_class 参数级映射 | ✅ 已完成(2026-09-02;lesson 0036,record 0039;审计中间件一次遍历双写(Langfuse+evidence-chain.jsonl),entry_hash=sha256(prev+canonical);verify-evidence-chain.py 独立验证器;攻击实证:篡改第 1 条/删除第 1 条全部现形;真课:写入器漏拼 prev 前缀单链巧合通过双链必断(测试要覆盖链长>1)/seek 找链尾小文件越界;data_class 参数级(凭证/出网/删除模式命中升级)) |
 | 42 | 短时令牌服务(短时效 JWT + scope=本轮工具子集 + fail closed,proxy.py 演进) | ✅ 已完成(2026-09-02;lesson 0037,record 0040;task_token.py 约 50 行手写最小 JWT(HMAC-SHA256+compare_digest);每轮 ask() 签票 scope=infer_scope(关键词规则)+120s;gate 第零道验票按成本排序(票→D4→法官→执行);单测四关全过(真票/超scope/伪造/过期)+真实链路签发-验票-执行-链+1;两层票分工:网关 JWT 身份 60min,任务票行为 120s;边界:进程级代码执行可自签→FGA/审计不可省) |
-| 43 | 供应链体检:uvx snyk-agent-scan 扫全上游 + 自制 1–2 投毒样本 server + 1 真第三方 + 人工复核 2–3 高危 | ⬜ |
+| 43 | 供应链体检:uvx snyk-agent-scan 扫全上游 + 自制 1–2 投毒样本 server + 1 真第三方 + 人工复核 2–3 高危 | ✅ 已完成(2026-09-02;lesson 0038,record 0041;SNYK_TOKEN 用户录入 agent-key(HITL);扫描四 server:毒样本 add 工具 1000/1000 抓获(SSH 窃密+隐瞒用户)+300+100,净样本≤100 信息级,官方对照 0;人工复核三红旗:功能不匹配/要求隐瞒/敏感数据进参数;X009 教学点:不启动拉不到描述,体检需同意运行受检样本;报告 supply-chain/report.md,投毒样本入库进路线 4 回归集) |
 | 44 | 五条验收攻击(网关收敛/越权/串联闸/审计三面/令牌 fail closed)全程留证据 | ⬜ |
 | 45 | chapter9/harness-safety-gate 全复刻(平行窗口)+ permission-embedded-data-objects 与 small-model-codified-rules 对照讨论 | ⬜ |
 | 46 | 收官:deliverables/route3/ 三件交付物 + 票 11 Answer 关闭 + route1 缺口清单回写 | ⬜ |
