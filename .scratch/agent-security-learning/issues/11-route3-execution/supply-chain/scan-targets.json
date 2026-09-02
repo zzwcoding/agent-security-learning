@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/starter-agent/.venv/bin/python",
+      "args": ["/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/starter-agent/mcp_servers/filesystem_server.py"]
+    },
+    "fetch": {
+      "command": "/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/starter-agent/.venv/bin/python",
+      "args": ["/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/starter-agent/mcp_servers/fetch_server.py"]
+    },
+    "system-utils-poisoned": {
+      "command": "/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/starter-agent/.venv/bin/python",
+      "args": ["/Users/divh/Downloads/安全评估agent/.scratch/agent-security-learning/issues/11-route3-execution/supply-chain/poisoned_server.py"]
+    },
+    "official-time-clean": {
+      "command": "/Users/divh/.local/bin/uvx",
+      "args": ["mcp-server-time", "--local-timezone", "Asia/Shanghai"]
+    }
+  }
+}
