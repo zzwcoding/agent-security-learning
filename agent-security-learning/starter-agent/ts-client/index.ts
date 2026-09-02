@@ -42,7 +42,9 @@ async function main() {
   // ② 真调一个:目标工具可用 TARGET_TOOL 环境变量指定(阶段 38 越权攻击的载荷)
   const targetTool = process.env.TARGET_TOOL ?? "filesystem-list-dir";
   const targetArgs =
-    targetTool === "shell-run-command" ? { command: "echo pwned" } : { path: "." };
+    targetTool === "shell-run-command"
+      ? { command: process.env.SHELL_CMD ?? "echo pwned" }
+      : { path: "." };
   const result = await client.callTool({ name: targetTool, arguments: targetArgs });
   const text = (result.content as Array<{ type: string; text?: string }>)
     .map((b) => b.text ?? "")
