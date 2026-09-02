@@ -1,7 +1,7 @@
 # 复习导图制作（路线 1–3 知识体系）
 
 Type: task
-Status: open
+Status: claimed
 Blocked by: 15
 
 ## Question
