@@ -1,4 +1,4 @@
-"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 3 确认门禁本体。
+"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 4 提案打包。
 
 运行:cd harness复刻 && python3 demo.py(纯标准库,无需装依赖)
 """
@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 import confirmation_gate as gate
-from evolution import diagnose
+from evolution import diagnose, generate_candidate
 from stable.tool_dispatcher import default_env, dispatch
 
 ROOT = Path(__file__).parent
@@ -74,6 +74,20 @@ def stage3_gate():
           f"执行器调用 {before}→{len(calls)},缓存文件还在:{'tmp/cache-0417.tmp' in env['files']}")
 
 
+def stage4_proposal(trajectories):
+    """把手写门禁打包成提案:代码 diff + 接入 diff + SHA 锚定。"""
+    stable_source = (ROOT / "stable" / "tool_dispatcher.py").read_text(encoding="utf-8")
+    candidate = generate_candidate(stable_source, diagnose(trajectories))
+    print(f"提案文件:{candidate['module']} | 源码指纹 {candidate['source_sha256'][:12]}"
+          f" | 新增 {candidate['patch_size']['added_lines']} 行 | 生成方式:"
+          f"{candidate['generator_metadata']['generator']}(0 次 API 调用)")
+    print("证据溯源(每条支撑轨迹一个哈希,改一个字都对不上):")
+    for s in diagnose(trajectories)["source_trajectories"][:3]:
+        print(f"  - {s['id']}({s['signal']}) {s['trajectory_sha256'][:12]}…  共 9 条")
+    print("接入 diff(提案,不落盘——stable/ 在发布前纹丝不动):")
+    print("\n".join(f"   {line}" for line in candidate["integration_diff"].splitlines()))
+
+
 def main():
     trajectories = load("failure_trajectories.json")
 
@@ -85,6 +99,9 @@ def main():
 
     print("\n✅ 阶段 3 跑通:确认门禁本体 —— 高风险先挂起,一次性 token 验票放行")
     stage3_gate()
+
+    print("\n✅ 阶段 4 跑通:提案打包 —— 门禁源码变成可评审的建议书")
+    stage4_proposal(trajectories)
 
 
 if __name__ == "__main__":
