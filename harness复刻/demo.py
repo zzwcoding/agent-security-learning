@@ -1,4 +1,4 @@
-"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 5 静态闸。
+"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 6 隔离回放引擎。
 
 运行:cd harness复刻 && python3 demo.py(纯标准库,无需装依赖)
 """
@@ -7,7 +7,14 @@ import json
 from pathlib import Path
 
 import confirmation_gate as gate
-from evolution import diagnose, generate_candidate, validate_candidate
+from evolution import (
+    _load_gate,
+    _make_executor,
+    _replay_case,
+    diagnose,
+    generate_candidate,
+    validate_candidate,
+)
 from stable.tool_dispatcher import default_env, dispatch
 
 ROOT = Path(__file__).parent
@@ -91,11 +98,8 @@ def stage4_proposal(trajectories):
 def stage5_static():
     """静态闸:不运行候选,只体检文本——超限/编译/导入白名单/禁危险内建。"""
     good = (ROOT / "confirmation_gate.py").read_text(encoding="utf-8")
-    static = ("static_compile", "security_scan")
     checks = validate_candidate(good)
-    pending = [k for k in checks if k not in static]
-    print(f"我们的门禁:通过 {[k for k in static if checks[k]]};"
-          f"{pending} 尚未验收(阶段 6-7 接管)")
+    print(f"我们的门禁:通过 {[k for k, v in checks.items() if v]}")
     for name, src in [
         ("坏提案·语法残废", good.replace('VERSION = "1.1.0-candidate"', 'VERSION = "1.1.0-candidate"\ndef broken(:', 1)),
         ("坏提案·偷带 import os", good + "\nimport os  # 白名单外的模块\n"),
@@ -104,6 +108,43 @@ def stage5_static():
         c = validate_candidate(src)
         where = "静态编译" if not c["static_compile"] else "安全扫描"
         print(f"{name}:通过 {[k for k, v in c.items() if v]} ← 卡在{where}")
+
+
+def stage6_replay():
+    """隔离回放:候选源码加载进干净命名空间,注入记账执行器,在假世界上跑。"""
+    good = (ROOT / "confirmation_gate.py").read_text(encoding="utf-8")
+    checks = validate_candidate(good)
+    print(f"我们的门禁:通过 {[k for k in list(checks)[:3] if checks[k]]}(契约检查 ✓)")
+
+    headless = good.replace("def issue_confirmation(", "def issue_confirmation_gone(", 1)
+    c = validate_candidate(headless)
+    print(f"缺签票函数的提案:通过 {[k for k, v in c.items() if v]} ← 卡在契约检查")
+
+    # 手工走一步:受检对象是从源码文本加载的命名空间,不是 import 的模块
+    ns = _load_gate(good)
+    env = default_env()
+    calls: list = []
+    execute = _make_executor(env, calls)
+    token = ns["issue_confirmation"]("delete_file", {"path": "notes/todo.md"})
+    before = len(calls)
+    out = ns["dispatch"]("delete_file", {"path": "notes/todo.md"}, execute=execute)
+    print(f"回放·无票:→ {out['status']},执行器调用 {before}→{len(calls)}")
+    before = len(calls)
+    out = ns["dispatch"]("delete_file", {"path": "notes/todo.md"}, execute=execute, confirm_token=token)
+    print(f"回放·持票:→ {out['status']},执行器调用 {before}→{len(calls)},文件还在:{'notes/todo.md' in env['files']}")
+
+    cases = [
+        {"id": "hand-伪造票", "steps": [
+            {"tool": "delete_file", "args": {"path": "notes/todo.md"},
+             "confirm_token": "forged-token-123", "expect": "rejected"}]},
+        {"id": "hand-拿A票干B", "steps": [
+            {"tool": "delete_file", "args": {"path": "notes/todo.md"},
+             "confirm_for": {"tool": "delete_file", "args": {"path": "tmp/cache-0417.tmp"}},
+             "expect": "rejected"}]},
+    ]
+    for case in cases:
+        ok, detail = _replay_case(ns, case)
+        print(f"回放·{case['id']}:{'✓' if ok else f'✗ {detail}'}")
 
 
 def main():
@@ -123,6 +164,9 @@ def main():
 
     print("\n✅ 阶段 5 跑通:静态闸 —— 不执行源码的体检")
     stage5_static()
+
+    print("\n✅ 阶段 6 跑通:隔离回放引擎 —— 候选在假世界上跑,执行器有账本")
+    stage6_replay()
 
 
 if __name__ == "__main__":
