@@ -1,4 +1,4 @@
-"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 1 缺陷现场。
+"""实验 9-7 复刻教学入口:demo 每阶段往前长一步,当前 = 阶段 2 诊断聚簇。
 
 运行:cd harness复刻 && python3 demo.py(纯标准库,无需装依赖)
 """
@@ -6,37 +6,52 @@
 import json
 from pathlib import Path
 
+from evolution import diagnose
 from stable.tool_dispatcher import default_env, dispatch
 
 ROOT = Path(__file__).parent
 
 
-def main():
-    # 1) 案卷:读入 11 条失败轨迹,按三类外部信号分组计数
-    trajectories = json.loads((ROOT / "failure_trajectories.json").read_text(encoding="utf-8"))
+def load(name):
+    return json.loads((ROOT / name).read_text(encoding="utf-8"))
+
+
+def stage1_scene(trajectories):
+    """缺陷现场:三类信号计数 + 重演一次未确认删除。"""
     signals: dict[str, list] = {}
     for t in trajectories:
         signals.setdefault(t["signal"], []).append(t["id"])
-
-    print("✅ 阶段 1 跑通:缺陷现场 —— 高风险调用未经确认直接执行\n")
-    print(f"失败轨迹共 {len(trajectories)} 条,信号来源:")
-    for signal, ids in signals.items():
-        print(f"  - {signal}: {len(ids)} 条")
-
-    # 2) 抽案卷里第一条用户纠正轨迹,看现场记录长什么样
+    print(f"案卷 {len(trajectories)} 条:" + ", ".join(
+        f"{s} {len(ids)} 条" for s, ids in signals.items()))
     case = trajectories[0]
-    print(f"\n案例 {case['id']}({case['signal']}):")
-    print(f"  用户反馈:{case['user_feedback']}")
-    print(f"  涉案调用:{case['tool_calls'][0]['tool']} {case['tool_calls'][0]['args']}")
-
-    # 3) 现场重演:同一条缺陷调用,现在再犯一次——看它是否被拦
+    print(f"典型案例 {case['id']}:{case['tool_calls'][0]['tool']} → 用户说:{case['user_feedback']}")
     env = default_env()
     target = "reports/2026-Q1-draft.docx"
-    print(f"\n用稳定版调度器重演:dispatch('delete_file', path={target!r})")
     result = dispatch("delete_file", {"path": target}, env=env)
-    print(f"  调度器返回:{result['result']}")
-    print(f"  该文件还在环境里吗:{target in env['files']}")
-    print("\n结论:删除与读文件一样被直接执行,中间没有任何确认环节——这就是后续阶段要修的缺陷。")
+    print(f"现场重演:{result['result']},文件还在吗:{target in env['files']}"
+          f" ← 中间没有任何确认环节,这就是缺陷")
+
+
+def stage2_diagnose(trajectories):
+    """把散落的失败聚成失败簇:跨轨迹支持度 ≥2 才立案。"""
+    d = diagnose(trajectories)
+    print(f"立案:{d['change_required']} → 目标 {d['target']}({d['target_component']})")
+    for p in d["patterns"]:
+        print(f"  失败簇 {p['cluster_id']}:支持度 {p['cross_trajectory_support']},"
+              f"信号 {'/'.join(p['signals'])}")
+    print("  正确排除:0723 rm -rf 仅 1 条未达门槛;0725 已确认删除是对照轨迹;"
+          "0724 周报措辞点踩属低风险质量反馈")
+    print(f"  立案理由:{d['reason'][:36]}……")
+
+
+def main():
+    trajectories = load("failure_trajectories.json")
+
+    print("✅ 阶段 1 跑通:缺陷现场")
+    stage1_scene(trajectories)
+
+    print("\n✅ 阶段 2 跑通:诊断聚簇 —— 散落的失败立成案")
+    stage2_diagnose(trajectories)
 
 
 if __name__ == "__main__":
