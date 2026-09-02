@@ -1,10 +1,36 @@
 # 路线 3 城堡执行
 
 Type: task
-Status: open
+Status: resolved
 Blocked by: 10
 
 > 执行前先读:票 10 Answer(全部已定决策)+ 研究核查摘要 `issues/10-route3-plan/research-contextforge-openfga.md`(部署命令、插件模式、建模示例、密钥变量都在里面)。
+
+
+## Answer（2026-09-02,阶段 34–46 全部完成）
+
+**交付物**（`deliverables/route3/` 三件）:
+1. `01-授权模型设计文档.md`——授权矩阵(双 agent:运维位全量/只读位两读工具)+model.fga+三元组级联表达四元组+"为什么鉴权是 PEP 不是 prompt"+三层 PEP 分工(网关管身份/Agent 管会话/server 管出口)+RBAC(能看什么)/OpenFGA(能执行什么)粒度分工+深化方向(数据层下沉/确认门/出口白名单/链头外锚)
+2. `02-网关收敛与攻击复盘.md`——拓扑变迁+三道网关闸(可见性/FGA/EGRESS)+五条验收判表+四次代表性攻击复盘+审计三面+防线全景图
+3. `03-缺口核销记录.md`——缺口 2/3/7 全销+缺口 4 路线 3 接线+shell 公网出口(deny_command);累计核销表(route1 清单 7 条中 5 销 1 半 1 留)
+
+**与方案 10 的偏差**:
+1. 串联闸按方案留本地中间件;**新增第零道任务票**(阶段 42,原方案"短时令牌"独立阶段提前融合进闸)——票/D4/法官三道同闸按成本排序
+2. 语义自检(缺口 4 接线)双通道落地:工具返回(补盲不阻断)+记忆装载(第三道闸),超出方案原定"仅工具返回"
+3. TS client 落地为 ts-client/(裸官方 SDK 60 行),身份映射经插件 user_map(认证身份≠授权身份的简化,生产由 IDP 组决定)
+4. OpenFGA 用内存存储(教学),生产须 Postgres;audit_trails 实为 admin 操作审计,工具调用审计走 tool_metrics+结构化日志(文档按实际行为写)
+5. 复刻:harness-safety-gate 平行复刻进行至 6/13 后由用户暂停(状态在 `harness复刻/MISSION.md`),两对照讨论(lesson 0040/0041)已完成
+
+**验收证据**(`issues/11-route3-execution/attack-validation/README.md` 判表):
+- ① 收敛:agent.py 唯一入口,stdio 直连拔除,三调用全经网关
+- ② 授权:bob×shell=FGA_DENIED(带身份归属)/bob×read=放行/admin×shell=放行执行
+- ③ 核销:缺口 2/3/7 全销+4 接线+shell 公网出口(deny_command EGRESS_DENIED,admin 同拦)
+- ④ 审计三面(Langfuse/tool_metrics/哈希链篡改即断+截断重造报警)+任务票四关
+- ⑤ 体检:毒样本 1000/1000 抓获+人工复核三红旗(supply-chain/report.md)
+
+**教学记录**:lessons 0029–0039(主线 11 篇)+对照讨论 0040/0041;learning-records 0032–0042;复刻窗口 harness复刻/ 自编号(6/13 暂停);根目录新增《Agent开发分层与语言选型》启用。
+
+**残余归属(路线 4 种子)**:缺口 4 本体(标定+CI)/缺口 5(新增标本:中文短语盲区)/缺口 6/TS client 作红队靶子/哈希链外锚/出口白名单完整版。
 
 ## Question
 
