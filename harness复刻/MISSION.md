@@ -1,6 +1,6 @@
 # MISSION:chapter9/harness-safety-gate 对照复刻(路线 3 阶段 45,平行窗口)
 
-> **状态:🚧 开工(2026-09-02),阶段路线已定,待逐阶段推进。**
+> **状态:⏸️ 暂停于阶段 6/13(2026-09-02)。** 阶段 1-6 已提交(缺陷现场→诊断聚簇→门禁本体→提案打包→静态闸→隔离回放引擎);续作先读 learning-records/0001-0006 与 git log,从阶段 7 开工(见文末"暂停点")。
 > 平行窗口:主线窗口做阶段 46 收官组装,本窗口复刻实验 9-7,产物只放 `harness复刻/`。
 
 **一句话目标**:从零复刻"实验 9-7:由用户反馈触发的高风险操作确认门禁",搞懂它的安全骨架——
@@ -45,3 +45,11 @@ AST 静态检查+内存回放,无沙箱。
 - commit 前缀 `阶段 45 复刻·N:`(HANDOFF §4 默认);lessons/learning-records 自编号 0001 起,只在本目录递增
 - 参考项目只读勿改:`/Users/divh/Downloads/深入理解agent 实验/ai-agent-book/chapter9/harness-safety-gate/`
 - microsandbox/网关等主线服务与本窗口无关,勿动;离线优先,pytest+demo 全程不需要 API Key
+
+## 暂停点(2026-09-02,续作从这里接)
+
+- **代码现状**:demo.py 长至阶段 6 段;evolution.py 已有诊断聚簇/提案打包/静态闸(_safe_ast+validate_candidate 前三项)/隔离回放引擎(_load_gate/_check_contract/_make_executor/_replay_case,STABLE 按路径加载);confirmation_gate.py 手写原型可跑;**validate_candidate 的签名目前只收 source,boundary/retention 两参在阶段 7 再扩**。
+- **下一步 = 阶段 7(全量门槛)**:从参照项目复制 `boundary_cases.json`(8 条)+ `retention_cases.json`(7 条,可信根数据,照抄不改动);evolution.py 补 `_check_single_use` + `_replay_all`,validate_candidate 收齐后三项;demo 打印六项检查全绿。
+- **再往后**:阶段 8 反例("放行一切"的 REJECTED 版过同一门槛必拒)→ 9 发布决定+release_manifest(此时给 diagnose 补 change_contract,阶段 2 埋的最后一个 deferred)→ 10 验收入口 `--quick`(SHA 快照+11 条验收 gate)→ 11 真 LLM(可选,Keychain minimax)→ 12 加固版 safety_policy_gate(可裁剪,27 测试)→ 13 收官对照。
+- **收官勿忘**:必答"什么场景必须人来确认 vs 可自动裁决"(HANDOFF §3,三方对照:9-7 确认门 / safety_policy_gate / 主线串联闸+任务票);strip 注释逐文件 diff 时核对 NOTES.md 里记的三处参照项目怪点与两处有意改进(门禁独立成文件、demo 为教学入口)。
+- **编号现状**:lessons/ 与 learning-records/ 已至 0006;commit 前缀 `阶段 45 复刻·N:` 已用至 6。

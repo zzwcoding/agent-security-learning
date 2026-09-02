@@ -1,4 +1,4 @@
-"""实验 9-7 复刻:诊断与编排层。当前 = 阶段 5:静态闸(不执行源码的体检)。
+"""实验 9-7 复刻:诊断与编排层。当前 = 阶段 6:隔离回放引擎。
 
 与实验 9-6 的对照:9-6 改控制层(重试/熔断),信号来自系统内部错误日志;
 本实验改安全/验证层(工具调度确认门禁),信号来自用户纠正、点踩与
@@ -8,6 +8,7 @@
 import ast
 import difflib
 import hashlib
+import importlib.util
 import re
 from collections import defaultdict
 from pathlib import Path
@@ -237,7 +238,7 @@ def _safe_ast(source: str) -> bool:
 
 
 def validate_candidate(candidate_source: str) -> dict:
-    """模型外发布门槛。当前 = 静态两项;后四项由阶段 6-7 接管。"""
+    """模型外发布门槛。当前 = 静态两项 + 契约检查;后三项由阶段 7 接管。"""
     checks = {name: False for name in CHECK_NAMES}
     if len(candidate_source.encode("utf-8")) > MAX_SOURCE_BYTES:
         return checks
@@ -249,4 +250,90 @@ def validate_candidate(candidate_source: str) -> dict:
     if not _safe_ast(candidate_source):
         return checks
     checks["security_scan"] = True
+    try:
+        gate = _load_gate(candidate_source)
+    except Exception:
+        return checks
+    checks["gate_contract"] = _check_contract(gate)
     return checks
+
+
+# ---- 阶段 6:隔离回放引擎 ----------------------------------------------------
+
+def _load_stable_dispatcher():
+    """按路径加载稳定版调度器,避免依赖包结构——stable 是"文件"不是"包"。"""
+    spec = importlib.util.spec_from_file_location(
+        "stable_tool_dispatcher", ROOT / "stable" / "tool_dispatcher.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+STABLE = _load_stable_dispatcher()
+
+
+def _load_gate(source: str) -> dict:
+    """在干净命名空间中加载候选模块(此前必须已通过静态闸)。
+
+    exec 进独立 dict:候选的全局变量、import 都被关在这个命名空间里,
+    不污染验证器;每次加载都是全新实例,候选内部的 _pending 互不相通。
+    """
+    namespace: dict = {"__name__": "candidate_confirmation_gate"}
+    exec(compile(source, "candidate/confirmation_gate.py", "exec"), namespace)
+    return namespace
+
+
+def _check_contract(gate: dict) -> bool:
+    """契约检查:先验接口形状,缺任何一个约定函数都不进回放。"""
+    return all(
+        callable(gate.get(name))
+        for name in ("requires_confirmation", "issue_confirmation", "dispatch")
+    )
+
+
+def _make_executor(env: dict, calls: list):
+    """注入给候选的执行器:在内存模拟环境上回放稳定版调度,并记账。
+
+    候选唯一能触到的"世界"就是这个假环境;calls 是执行器账本,
+    回放靠核对账本来断言"挂起/拒绝时绝没执行"。
+    """
+    def execute(tool_name, args):
+        calls.append((tool_name, args))
+        return STABLE.dispatch(tool_name, args, env=env)
+    return execute
+
+
+def _replay_case(gate: dict, case: dict) -> tuple[bool, str]:
+    """回放单条用例:逐步核对返回状态与执行器账本,任何不符即失败。"""
+    env = STABLE.default_env()
+    calls: list = []
+    execute = _make_executor(env, calls)
+    last_token = None
+    for step in case["steps"]:
+        token = step.get("confirm_token")
+        if step.get("confirm"):
+            # 用例内签票:为"本步"这次调用签一张
+            last_token = gate["issue_confirmation"](step["tool"], step.get("args"))
+            token = last_token
+        elif step.get("confirm_for"):
+            # 为"另一次"调用签票:专测拿 A 的票干 B 会不会被拦
+            other = step["confirm_for"]
+            last_token = gate["issue_confirmation"](other["tool"], other.get("args"))
+            token = last_token
+        elif step.get("use_token") == "previous":
+            # 复用上一步的票:专测单次性
+            token = last_token
+        before = len(calls)
+        outcome = gate["dispatch"](
+            step["tool"], step.get("args"), execute=execute, confirm_token=token
+        )
+        expect = step["expect"]
+        status = outcome.get("status") if isinstance(outcome, dict) else None
+        if status != expect:
+            return False, f"{case['id']}: 期望 {expect},实际 {status}"
+        if expect in ("pending_confirmation", "rejected") and len(calls) != before:
+            return False, f"{case['id']}: 未确认/被拒绝的调用竟然执行了"
+        if expect == "executed" and len(calls) != before + 1:
+            return False, f"{case['id']}: 已确认的调用未被执行"
+    return True, ""
