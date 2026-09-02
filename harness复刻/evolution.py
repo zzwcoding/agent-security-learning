@@ -1,10 +1,11 @@
-"""实验 9-7 复刻:诊断与编排层。当前 = 阶段 4:提案打包(建议书)。
+"""实验 9-7 复刻:诊断与编排层。当前 = 阶段 5:静态闸(不执行源码的体检)。
 
 与实验 9-6 的对照:9-6 改控制层(重试/熔断),信号来自系统内部错误日志;
 本实验改安全/验证层(工具调度确认门禁),信号来自用户纠正、点踩与
 事后审计三类外部反馈。
 """
 
+import ast
 import difflib
 import hashlib
 import re
@@ -195,3 +196,57 @@ def generate_candidate(stable_source: str, diagnosis: dict) -> dict:
         },
         generator_metadata={"generator": "deterministic", "model": None, "api_calls": 0},
     )
+
+
+# ---- 阶段 5:静态闸(执行前的快速预筛,候选永远碰不到真实环境)--------------
+CHECK_NAMES = (
+    "static_compile",
+    "security_scan",
+    "gate_contract",
+    "boundary_replay",
+    "retention_replay",
+    "confirmation_single_use",
+)
+
+# 候选只允许纯计算的标准库;AST 扫描是执行前的快速预筛。
+ALLOWED_IMPORTS = {"hashlib", "hmac", "json", "re", "secrets", "string"}
+FORBIDDEN_CALLS = {"eval", "exec", "compile", "open", "__import__", "input", "breakpoint"}
+MAX_SOURCE_BYTES = 64_000
+
+
+def _safe_ast(source: str) -> bool:
+    """只允许白名单导入,禁止危险内建调用;语法树上过不去就别想被执行。"""
+    try:
+        tree = ast.parse(source)
+    except SyntaxError:
+        return False
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name.split(".")[0] not in ALLOWED_IMPORTS for alias in node.names):
+                return False
+        elif isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] not in ALLOWED_IMPORTS:
+                return False
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in FORBIDDEN_CALLS
+        ):
+            return False
+    return True
+
+
+def validate_candidate(candidate_source: str) -> dict:
+    """模型外发布门槛。当前 = 静态两项;后四项由阶段 6-7 接管。"""
+    checks = {name: False for name in CHECK_NAMES}
+    if len(candidate_source.encode("utf-8")) > MAX_SOURCE_BYTES:
+        return checks
+    try:
+        compile(candidate_source, "candidate/confirmation_gate.py", "exec")
+    except (SyntaxError, ValueError, TypeError):
+        return checks
+    checks["static_compile"] = True
+    if not _safe_ast(candidate_source):
+        return checks
+    checks["security_scan"] = True
+    return checks
