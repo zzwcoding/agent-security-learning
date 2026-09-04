@@ -58,6 +58,9 @@
 - **Seam**：出站写库 = M2 REST（adapter：真实 HTTP / 内存 stub 供单测）
 - **测试计划**：同一 fixture 连推 3 次只建 1 条；7 类具名 fixture 映射全过；注入变体带 `untrusted` 标记（eval 断言）
 - **内部**：映射表、去重键约束均为确定性代码，无 LLM
+- **回放载体（2026-09-04 与用户讨论定案）**：`scripts/replay.ts`，几十行 CLI——读 fixture 目录按速率 POST 进 webhook，**扮演外部 Wazuh**。三条铁律：① 数据绝不直接塞数据库，必须走 webhook 正门（否则 M1 的去重/映射/不可信标记演了空城计）；② 推模式，不做定时轮询（对齐真实 Wazuh 姿态）；③ 不进 compose，是非运行时件；Web 告警列表页的回放按钮（FR-M10.1）背后是同一个东西
+- **重复计数（2026-09-04 用户提出）**：重复推送时 `occurrences` +1 并刷新 `lastSeen`（PRD v1.1 变更 4）
+- **内部结构**：接收校验 → 去重（唯一约束兜底在 M2 SQLite）→ 映射 → 不可信标记 → 写 M2 → 发事件；内部架构图见 `docs/architecture-m1-internal.html`
 
 ### M2 案件后端 → services/case-backend
 

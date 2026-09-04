@@ -8,3 +8,6 @@ data/
 *.db
 .env
 .env.local
+
+# archify visual-check 的截图/报告副产物(可再生)
+docs/*.visual-check.*

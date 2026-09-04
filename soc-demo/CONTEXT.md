@@ -23,4 +23,5 @@
 ## 工程
 
 - **深模块（deep module）**：简单接口 + 大量隐藏实现；本仓库的组织原则
+- **回放（replay）**：`scripts/replay.ts` 扮演外部 Wazuh，把 `fixtures/alerts/` 的告警按速率 POST 进 webhook；演示布景入口。推模式、不进 compose、绝不直接塞数据库
 - **防线（D1–D8）**：八道安全防线，编号与对照见 PRD §7.1

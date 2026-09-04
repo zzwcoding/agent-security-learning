@@ -7,8 +7,9 @@
 
 ## 文档地图
 
-- PRD v1.0（冻结）：`../deliverables/route5/product-handbook.md`
-- 模块划分：`specs/modules.md`（阶段 2 产出）
+- PRD v1.1（冻结+变更记录）：`../deliverables/route5/product-handbook.md`
+- 模块划分：`specs/modules.md`
 - 术语表：`CONTEXT.md`
 - 架构决策：`docs/adr/`
-- 架构图：`docs/architecture-v*.html`
+- 架构图：`docs/architecture-v4.html`（点节点跳详情页 `docs/nodes/`）；M1 内部结构图 `docs/architecture-m1-internal.html`
+- 节点注解源文件：`docs/arch-notes.json`（改注解改它，改完跑 `node scripts/inject-arch-notes.mjs`；archify 重出主图后也要重跑一次）

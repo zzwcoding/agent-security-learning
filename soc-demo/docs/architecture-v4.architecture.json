@@ -1,0 +1,359 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "SOC 数字员工 · 架构图 v4",
+    "output": "architecture-v4.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [
+      1240,
+      620
+    ]
+  },
+  "components": [
+    {
+      "id": "alert-src",
+      "type": "external",
+      "label": "告警源",
+      "sublabel": "Wazuh 格式 / fixture 回放",
+      "pos": [
+        30,
+        320
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "真实数据"
+    },
+    {
+      "id": "ingest",
+      "type": "backend",
+      "label": "M1 告警接入",
+      "sublabel": "Fastify :3001",
+      "pos": [
+        230,
+        320
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "去重+不可信标记"
+    },
+    {
+      "id": "case-backend",
+      "type": "database",
+      "label": "M2 案件后端",
+      "sublabel": "Fastify + SQLite :3002",
+      "pos": [
+        450,
+        320
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "六实体+审计"
+    },
+    {
+      "id": "agent-core",
+      "type": "backend",
+      "label": "M3-M8 编排与 workers",
+      "sublabel": "LangGraph.js :3003",
+      "pos": [
+        700,
+        310
+      ],
+      "size": [
+        200,
+        84
+      ],
+      "tag": "supervisor+4worker"
+    },
+    {
+      "id": "web",
+      "type": "frontend",
+      "label": "M10 Web 演示窗",
+      "sublabel": "Vite+React :5173",
+      "pos": [
+        450,
+        80
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "六页面薄客户端"
+    },
+    {
+      "id": "gateway",
+      "type": "security",
+      "label": "C5 网关三容器",
+      "sublabel": "ContextForge+OpenFGA+自写铸币/凭证代理",
+      "pos": [
+        980,
+        180
+      ],
+      "size": [
+        220,
+        76
+      ],
+      "tag": "RBAC·FGA·铸票"
+    },
+    {
+      "id": "guards",
+      "type": "security",
+      "label": "C4 防护微服务",
+      "sublabel": "llm-guard + Presidio :8001",
+      "pos": [
+        980,
+        460
+      ],
+      "size": [
+        200,
+        64
+      ],
+      "tag": "注入扫描·PII"
+    },
+    {
+      "id": "llm-provider",
+      "type": "cloud",
+      "label": "LLM Provider",
+      "sublabel": "MiniMax-M2",
+      "pos": [
+        1015,
+        50
+      ],
+      "size": [
+        150,
+        60
+      ],
+      "tag": "永不见真 key"
+    },
+    {
+      "id": "chroma",
+      "type": "database",
+      "label": "Chroma 知识库",
+      "sublabel": "向量检索 :8000",
+      "pos": [
+        710,
+        520
+      ],
+      "size": [
+        170,
+        60
+      ],
+      "tag": "人审后才入库"
+    },
+    {
+      "id": "sandbox",
+      "type": "security",
+      "label": "microsandbox",
+      "sublabel": "analyzer 一次性 microVM",
+      "pos": [
+        470,
+        520
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "第四攻击面"
+    },
+    {
+      "id": "eval",
+      "type": "backend",
+      "label": "M11 Eval 体系",
+      "sublabel": "vitest fixture 驱动",
+      "pos": [
+        230,
+        520
+      ],
+      "size": [
+        160,
+        60
+      ],
+      "tag": "三维评估"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "单机 docker-compose（上云=同套 compose 搬 VPS）",
+      "wraps": [
+        "ingest",
+        "case-backend",
+        "agent-core",
+        "web",
+        "gateway",
+        "guards",
+        "chroma"
+      ]
+    },
+    {
+      "kind": "security-group",
+      "label": "安全控制面 M9（全部 fail-closed）",
+      "wraps": [
+        "agent-core",
+        "gateway",
+        "guards"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "src-to-ingest",
+      "from": "alert-src",
+      "to": "ingest",
+      "label": "POST /webhooks/alerts",
+      "variant": "emphasis",
+      "labelAt": [
+        205,
+        298
+      ]
+    },
+    {
+      "id": "ingest-to-case",
+      "from": "ingest",
+      "to": "case-backend",
+      "label": "写 Alert（去重）",
+      "variant": "emphasis",
+      "labelAt": [
+        415,
+        298
+      ]
+    },
+    {
+      "id": "case-to-agent",
+      "from": "case-backend",
+      "to": "agent-core",
+      "label": "alert.created 事件",
+      "variant": "emphasis",
+      "labelAt": [
+        660,
+        298
+      ]
+    },
+    {
+      "id": "agent-to-case",
+      "from": "agent-core",
+      "to": "case-backend",
+      "label": "读写案件 / 审计",
+      "labelAt": [
+        610,
+        396
+      ]
+    },
+    {
+      "id": "agent-to-gateway",
+      "from": "agent-core",
+      "to": "gateway",
+      "label": "申领任务票 · LLM 占位符调用",
+      "variant": "security",
+      "labelAt": [
+        945,
+        282
+      ]
+    },
+    {
+      "id": "gateway-to-llm",
+      "from": "gateway",
+      "to": "llm-provider",
+      "label": "注入真 key 转发",
+      "variant": "security",
+      "labelDy": -14
+    },
+    {
+      "id": "agent-to-guards",
+      "from": "agent-core",
+      "to": "guards",
+      "label": "不可信段扫描 / 出域脱敏",
+      "variant": "security",
+      "labelAt": [
+        945,
+        424
+      ]
+    },
+    {
+      "id": "agent-to-chroma",
+      "from": "agent-core",
+      "to": "chroma",
+      "label": "KB 检索（仅 approved）",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        735,
+        474
+      ]
+    },
+    {
+      "id": "agent-to-sandbox",
+      "from": "agent-core",
+      "to": "sandbox",
+      "label": "analyzer 沙箱执行",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        500,
+        474
+      ]
+    },
+    {
+      "id": "web-to-agent",
+      "from": "web",
+      "to": "agent-core",
+      "label": "REST + SSE 全量消费",
+      "fromSide": "right",
+      "toSide": "top",
+      "labelAt": [
+        600,
+        158
+      ]
+    },
+    {
+      "id": "eval-to-agent",
+      "from": "eval",
+      "to": "agent-core",
+      "label": "fixture 评测驱动",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "bottom",
+      "labelAt": [
+        440,
+        484
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "告警主流水线",
+      "items": [
+        "M1 接入去重 → M2 落库发事件 → M3 编排拉起 M4 分诊 → M5 调查 → M6 富化 → 响应建议",
+        "L2 高危动作永远 interrupt 等人点头：审批通过铸一次性 ApprovalToken，用后焚毁",
+        "M7 知识沉淀：案件关闭 → 提炼草稿 → 人审入库 → 下次分诊提速"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "安全控制面（差异化主体）",
+      "items": [
+        "LLM 永不见真实凭证：凭证代理在执行侧注入，全链路金丝雀断言",
+        "验票闸强制执行：L0 免验 / L1 任务票 / L2 审批铸票，越权一律 403 + DENIED 审计",
+        "子 agent 权限收窄：分诊 agent 物理上没有遏制工具的票",
+        "注入双通道防护：llm-guard 文本扫描 + 验票行为兜底，纵深两层"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "演示与评测",
+      "items": [
+        "M10 六页面薄客户端，全部功能 curl 可演（Web 消费 M2/M3/M8/M9 公开 API）",
+        "M11 三维评估：分诊准确率 / 防线拦截率（四攻击面）/ 成本口径",
+        "M12 MCP 体检 CLI 独立分发（不在本图 compose 内）"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "M1 告警接入 · 内部结构",
+    "output": "architecture-m1-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [1200, 580]
+  },
+  "components": [
+    { "id": "replay", "type": "external", "label": "回放脚本", "sublabel": "scripts/replay.ts", "pos": [40, 120], "size": [160, 60], "tag": "演示触发·可配速率" },
+    { "id": "wazuh-real", "type": "external", "label": "真实 Wazuh", "sublabel": "logtest 产告警", "pos": [40, 360], "size": [160, 60], "tag": "可选 profile" },
+    { "id": "webhook", "type": "backend", "label": "① 接收校验", "sublabel": "Fastify 路由 + JSON Schema", "pos": [280, 240], "size": [160, 64], "tag": "畸形→422" },
+    { "id": "dedup", "type": "backend", "label": "② 去重", "sublabel": "source+sourceRef 唯一约束", "pos": [510, 240], "size": [170, 64], "tag": "重复→occurrences+1" },
+    { "id": "mapper", "type": "backend", "label": "③ 映射器", "sublabel": "Wazuh → TheHive 方言翻译", "pos": [750, 240], "size": [170, 64], "tag": "severity/tags/observables" },
+    { "id": "marker", "type": "security", "label": "④ 不可信标记", "sublabel": "full_log / data.* → untrusted", "pos": [980, 240], "size": [170, 64], "tag": "数据不是指令" },
+    { "id": "m2client", "type": "backend", "label": "⑤ M2 客户端", "sublabel": "REST 写 Alert / 拿 id", "pos": [980, 420], "size": [170, 60] },
+    { "id": "m2", "type": "database", "label": "M2 案件后端", "sublabel": "SQLite 唯一索引兜底 + 发事件", "pos": [720, 420], "size": [190, 60], "tag": "外部依赖" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "compose 服务 ingest :3001（镜像 node:22-alpine）", "wraps": ["webhook", "dedup", "mapper", "marker", "m2client"] }
+  ],
+  "connections": [
+    { "id": "replay-to-webhook", "from": "replay", "to": "webhook", "label": "POST /webhooks/alerts", "variant": "emphasis", "labelAt": [195, 190] },
+    { "id": "wazuh-to-webhook", "from": "wazuh-real", "to": "webhook", "label": "真实模式同一扇门", "variant": "dashed", "labelAt": [195, 320] },
+    { "id": "webhook-to-dedup", "from": "webhook", "to": "dedup", "label": "解析通过", "labelDy": -14 },
+    { "id": "dedup-to-mapper", "from": "dedup", "to": "mapper", "label": "新告警", "labelDy": -14 },
+    { "id": "mapper-to-marker", "from": "mapper", "to": "marker", "labelDy": -14 },
+    { "id": "marker-to-m2client", "from": "marker", "to": "m2client", "labelDy": 24 },
+    { "id": "m2client-to-m2", "from": "m2client", "to": "m2", "label": "upsert（唯一约束判重）", "labelAt": [945, 496] },
+    { "id": "dedup-dup-return", "from": "dedup", "to": "webhook", "label": "重复：返回既有 id，不触发流水线", "variant": "dashed", "fromSide": "bottom", "toSide": "bottom", "via": [[595, 400], [360, 400]], "labelAt": [480, 392] }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "技术栈", "items": ["TypeScript + Fastify 5（JSON Schema 校验内置，畸形请求白捡 422）", "tsx 直接跑 TS（骨架期不编译）；测试 vitest + app.inject 打 seam", "无 LLM——去重、映射、标记全是确定性代码"] },
+    { "dot": "emerald", "title": "部署", "items": ["compose 服务 ingest，单容器，端口 3001，健康检查 /healthz", "镜像 node:22-alpine；pnpm workspace 构建，packageManager 锁版本", "数据不落地在本服务——经 M2 REST 落 SQLite（唯一约束在 M2 侧兜底）"] },
+    { "dot": "rose", "title": "铁律", "items": ["告警只许外部推入，不许手工创建（TheHive 定位照抄）", "去重靠数据库唯一索引硬约束，不做应用层查-插（防并发重复）", "不可信标记入库即打，下游 prompt 装配消费这个标记"] }
+  ]
+}
