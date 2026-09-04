@@ -1,0 +1,14 @@
+{
+  "name": "soc-demo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "SOC 数字员工：告警分诊与响应助手（路线 5 演示项目）",
+  "scripts": {
+    "lint": "pnpm -r run lint",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
