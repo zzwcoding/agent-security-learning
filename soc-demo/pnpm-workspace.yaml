@@ -1,3 +1,12 @@
 packages:
   - "services/*"
   - "packages/*"
+
+# 关闭 minimumReleaseAge 供应链闸门（pnpm 10 的设置放这里才生效，.npmrc 同名项是给旧版兜底）：
+# demo 演进快，"24 小时冷静期"会把刚发布一天的正常包挡在 Docker 构建外。
+# 替代控制 = lockfile 入库 + PR 审 diff。
+minimumReleaseAge: 0
+
+# pnpm 10 默认拦截依赖的安装脚本；esbuild（tsx/vite 依赖）需要跑 postinstall 才能用
+onlyBuiltDependencies:
+  - esbuild

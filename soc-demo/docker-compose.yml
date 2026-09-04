@@ -1,0 +1,70 @@
+# SOC 数字员工 · 单机编排（PRD §4.1 组件清单 C1-C7；eval/MCP CLI 不进 compose）
+# 端口规划：ingest 3001 / case-backend 3002 / agent 3003 / web 5173 / guards 8001 / gateway 8002 / chroma 8000
+# 健康检查一律用 127.0.0.1 不用 localhost：alpine 镜像里 localhost 优先解析 ::1，服务只绑 IPv4 会被误判挂掉
+services:
+  ingest:
+    build: { context: ., dockerfile: services/ingest/Dockerfile }
+    ports: ["3001:3001"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  case-backend:
+    build: { context: ., dockerfile: services/case-backend/Dockerfile }
+    ports: ["3002:3002"]
+    volumes: ["./data/case-backend:/data"]
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  agent:
+    build: { context: ., dockerfile: services/agent/Dockerfile }
+    ports: ["3003:3003"]
+    depends_on:
+      case-backend: { condition: service_healthy }
+      guards: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  guards:
+    build: ./services/guards
+    ports: ["8001:8001"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  gateway:
+    build: ./services/gateway
+    ports: ["8002:8002"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  chroma:
+    image: chromadb/chroma:latest # TODO: 上云前锁定具体版本号
+    ports: ["8000:8000"]
+    volumes: ["./data/chroma:/data"]
+    # 官方镜像里没有 wget/curl/python，做不了容器内健康检查；宿主机 curl /api/v2/heartbeat 验证
+
+  web:
+    build: { context: ., dockerfile: services/web/Dockerfile }
+    ports: ["5173:5173"]
+    depends_on:
+      gateway: { condition: service_healthy }
+      agent: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
