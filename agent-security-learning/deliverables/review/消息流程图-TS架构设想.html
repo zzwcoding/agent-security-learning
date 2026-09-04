@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<title>消息流程图 · TS 架构设想（v2，对齐消息旅程）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { font-family: -apple-system, "PingFang SC", sans-serif; background: #0f1115; color: #d5dae3; }
+  .layout { display: grid; grid-template-columns: minmax(560px, 60%) 1fr; height: 100vh; }
+  .left { position: sticky; top: 0; height: 100vh; overflow: auto; background: #14171d; border-right: 1px solid #262c38; padding: 20px 14px; }
+  .left h1 { font-size: 14px; color: #8b93a3; margin-bottom: 14px; font-weight: 600; }
+  .left .mermaid { min-width: max-content; }
+  .left .mermaid svg { display: block; margin: 0 auto; }
+  .right { overflow-y: auto; height: 100vh; padding: 20px 22px 100px; }
+  .step { background: #161a22; border: 1px solid #262c38; border-radius: 8px; padding: 12px 16px; margin-bottom: 12px; }
+  .step h2 { font-size: 15px; margin-bottom: 4px; color: #e8ebf0; }
+  .step h2 .num { color: #6f8bff; margin-right: 6px; }
+  .kv { margin: 3px 0; font-size: 13px; line-height: 1.65; color: #b8c0cd; }
+  .kv b { color: #e8ebf0; }
+  code { background: #232936; color: #a8c0ff; padding: 1px 5px; border-radius: 4px; font-size: 12px; font-family: "SF Mono", Menlo, monospace; }
+  .decide { background: #221f14; border-color: #6b5a26; }
+  .done { background: #14221a; border-color: #2f6b47; }
+  .note { font-size: 12px; color: #6b7280; margin-top: 4px; }
+  .tag { display: inline-block; font-size: 11px; background: #1d2433; color: #8fa4d8; border: 1px solid #3a4356; border-radius: 4px; padding: 0 6px; margin-left: 8px; vertical-align: 2px; }
+  /* 悬停高亮:节点 + 相连边(一跳),其余淡出 */
+  .mermaid g.node, .mermaid path.flowchart-link, .mermaid g.edgePath, .mermaid g.edgeLabel { transition: opacity .15s; }
+  .mermaid.hovering g.node:not(.hl), .mermaid.hovering path.flowchart-link:not(.hl), .mermaid.hovering g.edgePath:not(.hl), .mermaid.hovering g.edgeLabel:not(.hl) { opacity: .18; }
+  .mermaid g.node.hl rect, .mermaid g.node.hl polygon, .mermaid g.node.hl circle { stroke: #6f8bff !important; stroke-width: 2.5px !important; }
+  .mermaid path.flowchart-link.hl { stroke: #6f8bff !important; stroke-width: 2.5px !important; }
+  .mermaid g.edgePath.hl path { stroke: #6f8bff !important; stroke-width: 2.5px !important; }
+</style>
+</head>
+<body>
+<div class="layout">
+  <div class="left">
+    <h1>发送一条消息的流程 · TS 架构设想 v3（站位 = 消息旅程图）｜ ◐=待定组件 ｜ 捏合缩放 / 双指平移 / 双击复位</h1>
+    <pre class="mermaid">
+flowchart TD
+  subgraph P0["阶段 0 · 登录与能力圈（会话开始前一次）"]
+    L["用户登录"] --> KC["Keycloak<br/>铸币① 门票（登录时）"]
+    KC --> DIR["拿门票问网关<br/>→ 工具目录 + 分级表"]
+    DIR --> REG["可见工具注册进图<br/>模型只见能力圈"]
+  end
+
+  subgraph AG["TS Agent 端 ×N（LangChain.js + LangGraph.js）"]
+    A["用户输入"] --> B["① 输入护栏<br/><small>站1 · 人→客户端</small>"]
+    B -->|"含注入"| BX["🛑 拦截并留痕"]
+    B -->|"干净"| M["② 记忆装载 · 进图<br/><small>站2</small>"]
+    M --> M1["②a hash 完整性"]
+    M1 -->|"篡改/数量不符"| MQ["🛑 全部隔离<br/>历史不装载"]
+    M1 -->|"通过"| M2["②b 注入分类器"]
+    M2 -->|"高分"| MQ
+    M2 -->|"通过"| M3["②c LLM 语义自检"]
+    M3 -->|"可疑"| MQ
+    MQ -->|"新会话照常"| T
+    M3 -->|"干净"| T["③ 工具分级表<br/><small>站3 · 低级免签 / 高级待人工授权</small>"]
+    T --> D["④ LLM 调用<br/><small>站4-5</small>"]
+    D -->|"返回 tool_calls"| GT["⑤ 分级验票闸<br/><small>站6 · 低级直通 · 高级验短令牌</small>"]
+    D -->|"直接回答"| H["⑨ 输出护栏<br/><small>站11</small>"]
+    GT -->|"低级工具"| F["⑥ 发起工具调用"]
+    GT -->|"高级·无票"| HB["⏸ 挂起 · 请求人工授权"]
+    HB -->|"输入框显式调用 / 审批确认"| MINT["🔑 铸币② 短令牌签发（调用时）"]
+    MINT -->|"带票重验"| GT
+    GT -->|"高级·验票通过"| F
+    R["工具返回"] --> I["⑧ 返回扫描<br/><small>站10</small>"]
+    I -->|"有毒"| IX["🛑 换成警告消息回喂"]
+    I -->|"干净"| D
+    H -->|"含敏感数据"| HX["🛑 替换为拒答文案"]
+    H -->|"干净"| Z["展示给用户"]
+    Z --> P["⑩ 落库脱敏<br/><small>站12</small>"]
+  end
+
+  PR["凭证代理<br/><small>站4</small>"]
+  LLM["推理端 LLM<br/><small>站5</small>"]
+  GS["llm-guard 微服务（HTTP）"]
+  GW["网关：门票→可见性→FGA<br/><small>站7 · 授权 agent 端工具使用</small>"]
+  SV["MCP server<br/><small>站8</small>"]
+  VM["执行面 microVM<br/><small>站9</small>"]
+  AU["审计伴随（Langfuse / 哈希链）<br/><small>站13 · 每站旁路出 trace</small>"]
+  SC["⓪ 供应链体检（snyk-agent-scan）<br/><small>站0 · 组件接入网关前</small>"]
+
+  SC -.-|"接入前扫描工具描述"| GW
+
+  REG --> A
+  DIR <-.->|"验门票 + 可见性 / 目录下发"| GW
+  MINT <-.->|"token exchange"| KC
+  B <-.->|"HTTP"| GS
+  I <-.->|"HTTP"| GS
+  H <-.->|"HTTP"| GS
+  M2 <-.->|"HTTP"| GS
+  M3 <-.->|"LLM 评判"| PR
+  PR -.-|"HTTPS 经凭证代理"| D
+  PR -.- LLM
+  F -->|"MCP + Bearer 门票"| GW
+  GW --> SV --> VM --> R
+  B -.- AU
+  F -.- AU
+  MINT -.- AU
+    </pre>
+  </div>
+  <div class="right">
+
+    <div class="step">
+      <h2><span class="num">⓪</span>供应链体检<span class="tag">站 0 · 组件接入网关前</span></h2>
+      <p class="kv"><b>做什么</b>：第三方 MCP server 接入前，用 <code>snyk-agent-scan</code> 审工具描述——描述 = 给 LLM 的提示词 = 攻击面。毒样本实测 1000/1000 抓获；人工复核三红旗（功能不匹配/要求隐瞒用户/敏感数据进参数）。</p>
+      <p class="kv"><b>机制</b>：静态体检 + 动态防线双层——体检把毒拒在门外，漏网的进运行时四层闸；体检是把防线工作量降到零，不是替代防线。注意：拉描述必须启动受检 server（X009），体检本身要逐个询问授权。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：普通 TS——接入流程里的人工步骤/CI 脚本（忽略），不在图的运行时路径上。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">🚪</span>登录与能力圈<span class="tag">阶段 0 · 会话开始前一次</span></h2>
+      <p class="kv"><b>做什么</b>：用户登录 → Keycloak 铸门票（<b>铸币时刻①</b>）→ 拿门票问网关 → 验票 + RBAC 可见性 → 下发"工具目录 + 分级表" → 可见工具注册进图。</p>
+      <p class="kv"><b>机制</b>：模型从出生在能力圈里——看不见的工具连名字都不知道，是第一道不动声色的闸。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：登录与换票是普通 TS（OAuth2 fetch，忽略）；注册进图 = 建图时按目录过滤 <code>tools</code> 数组再传入 <code>createReactAgent</code>——能力圈即 tools 实参。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">①</span>输入护栏<span class="tag">站 1 · 人→客户端</span></h2>
+      <p class="kv"><b>做什么</b>：用户消息进图之前查提示注入；多 Agent 端（TS 客户端 ×N）共用同一护栏微服务。</p>
+      <p class="kv"><b>用什么</b>：TS 侧 <code>fetch</code> → 自建 llm-guard 微服务（FastAPI 包 PromptInjection，deberta 本地推理）。</p>
+      <p class="kv"><b>机制</b>：拦在进图前，毒输入不进图、不进 checkpointer、不污染记忆；被拦也留痕。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：普通 TS——主循环 <code>graph.invoke()</code> 之前的 if 判断（忽略）。故意不进中间件：beforeModel 触发时消息已入图状态，太晚。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">②</span>记忆装载 · 进图<span class="tag">站 2</span></h2>
+      <p class="kv"><b>做什么</b>：checkpointer 按 thread_id 带出历史；历史是"昨天埋的雷"，装载 = 受审通道，三道闸串联：</p>
+      <p class="kv"><b>②a hash 完整性</b>：TS 侧 <code>crypto.subtle</code> 逐条 sha256 对信封——防无钥匙篡改；数量不符整文件拒载</p>
+      <p class="kv"><b>②b 注入分类器</b>：走 llm-guard 微服务（HTTP）——抓形状毒；叙事毒它实测失明（0.02）</p>
+      <p class="kv"><b>②c LLM 语义自检</b>：判官 LLM（一词裁决"干净/可疑"）——抓分类器失明的叙事毒；只审 human 消息</p>
+      <p class="kv"><b>机制</b>：任一隔离 → 整个历史不装载（all-or-nothing：逐条剔除会破坏 tool_call 配对）；三层各补各的盲，串联才闭环。TS 版已定案复刻（checkpointer 装饰器做信封 hash）。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：<b>checkpointer 装饰器</b>——自写 class 包住真实 saver，<code>put</code> 时算指纹、<code>getTuple</code> 时验封；②b/②c 在验封通过后逐条过（普通 TS 循环内 await 微服务/判官 LLM）。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">③</span>工具分级表<span class="tag">站 3 · 已定案</span></h2>
+      <p class="kv"><b>做什么</b>：工具在网关注册时定级——<b>低级</b>（只读类：list/read 等）免签直用；<b>高级</b>（写/shell/出网等不可逆）必须人工授权后才生成短时令牌。</p>
+      <p class="kv"><b>机制</b>：分级表随网关工具目录下发，Agent 端每轮开局读取；等级是工具属性，不随任务变。<b>注意</b>：本站只是"读表"，授权动作发生在 ⑤（站 6）。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：普通 TS——一张 <code>Record&lt;string, "low"|"high"&gt;</code> 常量（忽略）。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">④</span>LLM 调用<span class="tag">站 4-5 · 已定案：经凭证代理</span></h2>
+      <p class="kv"><b>做什么</b>：消息数组发模型，拿回复或工具调用意图。</p>
+      <p class="kv"><b>用什么</b>：LangChain.js <code>ChatOpenAI</code>，base_url 指向凭证代理（真 key 只活在代理进程，客户端只持占位符）。</p>
+      <p class="kv"><b>机制</b>：模型只产出 <code>tool_calls</code> <b>意图</b>而非动作。"劫持了 Agent" ≠ "拿到了密钥"。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：<b>function calling</b> 本体——<code>ChatOpenAI</code> 初始化只换 <code>baseURL</code>/<code>apiKey</code> 两个字段（凭证代理协议透明）；模型的 <code>tool_calls</code> 由 <code>bindTools</code> 注册的 schema 驱动。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑤</span>分级验票闸 + 短时令牌生成机制<span class="tag">站 6 · 已定案（新设计）</span></h2>
+      <p class="kv"><b>做什么</b>：模型的工具提议执行前过闸——低级工具直通；高级工具查票，无票则<b>挂起</b>。</p>
+      <p class="kv"><b>触发（两条路）</b>：a) 用户在输入框显式调用（如 <code>@shell 运行 ls</code>）；b) 模型提议高级工具 → 挂起 → 客户端向用户弹审批（展示工具名+完整参数）→ 用户确认。</p>
+      <p class="kv"><b>签发</b>：确认后由<b>网关侧铸币</b>（铸币权集中、可撤销；教学版可本地 HMAC 自签）生成一次性令牌：HS256，payload = <code>{ tool, args_hash, thread_id, nonce, exp=120s }</code>。</p>
+      <p class="kv"><b>绑定</b>：工具名 + 完整参数哈希 + 会话——防"批了 A 执行 B"、防参数篡改。</p>
+      <p class="kv"><b>验票</b>：闸第零道 verify（签名 / exp / nonce 未消费 / 参数哈希一致），fail closed；<b>用后即焚</b>——nonce 消费记录，重放即拒。</p>
+      <p class="kv"><b>机制</b>：低级免签保可用性，高级人工授权保不可逆动作；替代原"每轮自动任务票"（0037）的自动推断。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：闸 = <code>createMiddleware</code> 的 <code>wrapToolCall</code>（无票返回 <code>ToolMessage</code> "需人工授权"，不执行）；审批回路在主循环（普通 TS 三拍：闸拒→用户批→模型重试）；对照路径 <code>interrupt()</code> + <code>Command(resume=)</code> 留作学习。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑥</span>网关授权<span class="tag">站 7 · 网关授权 agent 端工具使用</span></h2>
+      <p class="kv"><b>做什么</b>：所有 Agent 端（×N）的工具调用只过这一扇门。</p>
+      <p class="kv"><b>用什么</b>：<code>@modelcontextprotocol/sdk</code> 的 <code>Client + StreamableHTTPClientTransport</code>，headers 带 Bearer 门票。</p>
+      <p class="kv"><b>机制</b>：三关按序——验门票（你是谁）→ 可见性/RBAC（你能看见什么）→ FGA 裁决（你能不能调，fail closed）。拓扑知识从客户端收走；收敛先于治理。裁决大脑是 OpenFGA——ContextForge 的 tool_pre_invoke 插件每次调用前去问它。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：普通 TS——MCP client 调用（忽略）；注意授权裁决在网关侧，TS 端无代码。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑦</span>server 与执行面<span class="tag">站 8-9</span></h2>
+      <p class="kv"><b>做什么</b>：MCP server 出口策略（白名单/凭证策略）→ shell/fetch 在一次性 microVM 里执行。</p>
+      <p class="kv"><b>用什么</b>：现有 Python server + microsandbox 执行面原样沿用（与客户端语言无关）。</p>
+      <p class="kv"><b>机制</b>：独立内核 + 用完即焚 + 出网兜底——劫持得手的爆炸半径 = 一台即焚 VM。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑧</span>工具返回扫描<span class="tag">站 10 · 间接注入主入口</span></h2>
+      <p class="kv"><b>做什么</b>：工具结果回喂模型前查间接注入。</p>
+      <p class="kv"><b>用什么</b>：同一 llm-guard 微服务（分块扫描——稀释是分类器死穴）。</p>
+      <p class="kv"><b>机制</b>：有毒 → ToolMessage 换成警告消息回喂，模型知情但不接触毒原文。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：<code>wrapToolCall</code> 中间件的<b>回程半边</b>——<code>const result = await handler(request)</code> 拿到返回值后先扫再放行；有毒则构造替换的 ToolMessage 返回。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑨</span>输出护栏<span class="tag">站 11</span></h2>
+      <p class="kv"><b>做什么</b>：回复展示前扫密钥/敏感数据——上游全失守也不让密钥出门。</p>
+      <p class="kv"><b>用什么</b>：llm-guard 微服务的 Sensitive 类扫描（NER+正则，实体白名单收窄防误报）。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：<code>wrapModelCall</code> 中间件——包住模型调用，响应落图状态之前过扫描；命中则替换整条 AIMessage（脏内容也进不了记忆）。</p>
+    </div>
+
+    <div class="step">
+      <h2><span class="num">⑩</span>落库脱敏<span class="tag">站 12</span></h2>
+      <p class="kv"><b>做什么</b>：记忆写回前过 Presidio（Analyzer→Anonymizer）。</p>
+      <p class="kv"><b>机制</b>：消毒点选出口不选入口；已定案走微服务——与 llm-guard 同一模式（FastAPI 包 Presidio，HTTP 调用），可与护栏微服务同服务多端点。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：checkpointer 装饰器的 <code>put</code> 半边——写盘前过消毒管道（同 ② 的装饰器，一读一写各管一段）。</p>
+    </div>
+
+    <div class="step">
+      <h2>◆ 审计伴随<span class="tag">站 13</span></h2>
+      <p class="kv"><b>做什么</b>：每站旁路出 trace——五要素（谁/何时/以何理由/什么参数/什么数据分级），被拦的也留痕。</p>
+      <p class="kv"><b>用什么</b>：Langfuse（观测）+ 哈希链（不可抵赖）沿用现有；TS 端经 SDK/HTTP 上报。令牌签发/挂起事件单独留痕（MINT 节点虚线入审计）。</p>
+      <p class="kv"><b>LangChain/LangGraph 实现</b>：<b>callbacks</b>——LangChain.js 的 <code>CallbackHandler</code> 传进 <code>graph.invoke(input, { callbacks })</code>，旁路观察不改行为；图外事件（拦截/签发）手动补录。</p>
+    </div>
+
+    <div class="step done">
+      <h2>✅ 已定案（2026-09-03/04）</h2>
+      <p class="kv"><b>1. 凭证代理</b>：保留——④ 经凭证代理，真 key 撤出客户端攻击面。</p>
+      <p class="kv"><b>2. 本地闸</b>：改造而非取消——0037 的"每轮自动任务票"升级为"工具分级 + 高级工具人工授权短令牌"（见 ⑤）；D4/法官可留作低级工具之外的纵深，按需裁。</p>
+      <p class="kv"><b>3. 记忆装载校验</b>：要做——TS 版用 checkpointer 装饰器复刻信封 hash（写入算指纹、读取验封）。</p>
+      <p class="kv"><b>4. 多 Agent 端身份</b>：门票 claims 区分——同一把铸币钥匙、票面印身份，网关验签后按 claims 裁决。</p>
+      <p class="kv"><b>5. Presidio 路径</b>：走微服务——与 llm-guard 同一模式（FastAPI 包库，HTTP 调用），可与护栏微服务同服务多端点。</p>
+      <p class="kv"><b>6. 令牌签发方</b>：教学版本地 HMAC 自签（0037 已有实现）；蓝图企业形态 = Keycloak/STS 铸币（token exchange）、ContextForge 验票——印钞厂拆给 STS，网关只当门卫。</p>
+    </div>
+
+    <div class="step">
+      <h2>📋 决策点全部收口</h2>
+      <p class="kv">6/6 已定案。架构可进入实施排期。</p>
+    </div>
+
+  </div>
+</div>
+<script type="module">
+  import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+  mermaid.initialize({ startOnLoad: true, theme: "dark", themeVariables: { background: "#14171d", primaryColor: "#1d2433", primaryTextColor: "#d5dae3", primaryBorderColor: "#3a4356", lineColor: "#6b7280", secondaryColor: "#1d2433", tertiaryColor: "#161a22" }, flowchart: { curve: "basis", useMaxWidth: false, htmlLabels: true } });
+
+  const wait = () => new Promise(res => {
+    const t = setInterval(() => {
+      const svg = document.querySelector(".left .mermaid svg");
+      if (svg) { clearInterval(t); res(svg); }
+    }, 100);
+  });
+  const svg = await wait();
+
+  let scale = 1, tx = 0, ty = 0;
+  const apply = () => { svg.style.transformOrigin = "0 0"; svg.style.transform = `translate(${tx}px, ${ty}px) scale(${scale})`; };
+  const zoomAt = (factor, cx, cy) => {
+    const next = Math.min(4, Math.max(0.3, scale * factor));
+    tx = cx - (cx - tx) * (next / scale);
+    ty = cy - (cy - ty) * (next / scale);
+    scale = next; apply();
+  };
+
+  const pane = document.querySelector(".left");
+  pane.addEventListener("wheel", e => {
+    e.preventDefault();
+    const r = svg.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) zoomAt(e.deltaY < 0 ? 1.08 : 1 / 1.08, e.clientX - r.left, e.clientY - r.top);
+    else { tx -= e.deltaX; ty -= e.deltaY; apply(); }
+  }, { passive: false });
+  let gScale = 1;
+  pane.addEventListener("gesturestart", e => { e.preventDefault(); gScale = scale; });
+  pane.addEventListener("gesturechange", e => {
+    e.preventDefault();
+    const r = svg.getBoundingClientRect();
+    const next = Math.min(4, Math.max(0.3, gScale * e.scale));
+    const cx = e.clientX - r.left, cy = e.clientY - r.top;
+    tx = cx - (cx - tx) * (next / scale); ty = cy - (cy - ty) * (next / scale);
+    scale = next; apply();
+  });
+  let drag = null;
+  svg.addEventListener("pointerdown", e => { drag = { x: e.clientX - tx, y: e.clientY - ty }; svg.setPointerCapture(e.pointerId); });
+  svg.addEventListener("pointermove", e => { if (drag) { tx = e.clientX - drag.x; ty = e.clientY - drag.y; apply(); } });
+  svg.addEventListener("pointerup", () => drag = null);
+  svg.addEventListener("dblclick", () => { scale = 1; tx = 0; ty = 0; apply(); });
+  svg.style.cursor = "grab";
+
+  // ── 悬停高亮:节点 + 相连边 + 一跳邻接节点,其余淡出 ──
+  // 邻接表直接写死(图源即此文件内的 mermaid 定义),不依赖 DOM id 格式
+  const ADJ = {
+    L:["KC"], KC:["L","DIR","MINT"], DIR:["KC","REG","GW"], REG:["DIR","A"],
+    A:["B","REG"], B:["A","BX","M","GS","AU"], BX:["B"], M:["B","M1"],
+    M1:["M","MQ","M2"], MQ:["M1","M2","M3","T"], M2:["M1","MQ","M3","GS"],
+    M3:["M2","MQ","T","PR"], T:["MQ","M3","D"], D:["T","GT","H","I","PR"],
+    GT:["D","F","HB","MINT"], HB:["GT","MINT"], MINT:["HB","GT","AU","KC"],
+    H:["D","HX","Z","GS"], F:["GT","GW","AU"],
+    R:["I","VM"], I:["R","IX","D","GS"], IX:["I"], HX:["H"], Z:["H","P"], P:["Z"],
+    PR:["M3","D","LLM"], LLM:["PR"], GS:["B","I","H","M2"],
+    GW:["F","SV","DIR","SC"], SV:["GW","VM"], VM:["SV","R"], AU:["B","F","MINT"], SC:["GW"]
+  };
+  const mermaidEl = document.querySelector(".left .mermaid");
+  // 节点识别:按显示文字匹配(标签是我们自己写的,最可靠;DOM id 带时间戳前缀不可信)
+  const LABELS = {
+    L:"用户登录", KC:"铸币①", DIR:"工具目录", REG:"注册进图",
+    A:"用户输入", B:"输入护栏", BX:"拦截并留痕", M:"记忆装载", M1:"hash完整性",
+    MQ:"全部隔离", M2:"注入分类器", M3:"语义自检", T:"工具分级表", D:"LLM调用",
+    GT:"分级验票闸", HB:"挂起", MINT:"铸币②",
+    H:"输出护栏", F:"发起工具调用", R:"工具返回", I:"返回扫描",
+    IX:"换成警告消息回喂", HX:"替换为拒答文案", Z:"展示给用户", P:"落库脱敏",
+    PR:"凭证代理", LLM:"推理端LLM", GS:"llm-guard微服务", GW:"可见性→FGA",
+    SV:"MCPserver", VM:"执行面microVM", AU:"审计伴随", SC:"供应链体检"
+  };
+  const nodeById = {};
+  const missed = [];
+  svg.querySelectorAll("g.node").forEach(n => {
+    const txt = n.textContent.replace(/\s+/g, "");
+    const hit = Object.entries(LABELS).find(([, lb]) => txt.includes(lb.replace(/\s+/g, "")));
+    if (hit && !nodeById[hit[0]]) nodeById[hit[0]] = n;
+    else if (!hit) missed.push(txt.slice(0, 12));
+  });
+  // 边:mermaid v11 实测 path 带 data-et="edge" + data-id="L_A_B_0"(已验证)
+  const edgeOf = {};
+  svg.querySelectorAll('[data-et="edge"]').forEach(el => {
+    const parts = (el.getAttribute("data-id") || "").replace(/^L_/, "").split("_").filter(x => x && !/^\d+$/.test(x));
+    if (parts.length < 2) return;
+    const key = [parts[0], parts[1]].sort().join("|");
+    (edgeOf[key] ||= []).push(el);
+  });
+  // 页面上直接显示识别结果(不用开控制台)
+  const h1 = document.querySelector(".left h1");
+  const ok = Object.keys(nodeById).length, eok = Object.keys(edgeOf).length;
+  h1.textContent += ` ｜ 识别:节点 ${ok}/31 边 ${eok}/47` + (missed.length ? ` ｜ 未识别:${missed.join("、")}` : "");
+  h1.style.color = (ok === 31 && eok === 47) ? "#4caf7d" : "#e0a040";
+
+  const clearHl = () => {
+    mermaidEl.classList.remove("hovering");
+    svg.querySelectorAll(".hl").forEach(el => el.classList.remove("hl"));
+  };
+  Object.entries(nodeById).forEach(([nid, el]) => {
+    el.addEventListener("mouseenter", () => {
+      clearHl();
+      mermaidEl.classList.add("hovering");
+      el.classList.add("hl");
+      (ADJ[nid] || []).forEach(nbr => {
+        nodeById[nbr]?.classList.add("hl");
+        const key = [nid, nbr].sort().join("|");
+        (edgeOf[key] || []).forEach(e => e.classList.add("hl"));
+      });
+    });
+    el.addEventListener("mouseleave", clearHl);
+  });
+</script>
+</body>
+</html>
