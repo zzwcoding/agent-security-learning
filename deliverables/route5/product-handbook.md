@@ -1,7 +1,7 @@
-# SOC 数字员工 · 产品需求文档（PRD v0.2）
+# SOC 数字员工 · 产品需求文档（PRD v1.0）
 
-> 路线 5 需求层文档。v0.1 为票 17「路线 5 阶段 A：参考项目深析与需求制造」产出的草案；v0.2 在完整保留 v0.1 六项冻结内容（§0 水位线 / §1 叙事 / §10 参照对照表 / §11 边界声明 / §12 决策记录）的基础上，扩写到可指导开发施工的细度。
-> 状态：**v0.2，待用户过审**。过审后冻结为阶段 B（票 18 技术设计）的输入。
+> 路线 5 需求层文档。v0.1 为票 17「路线 5 阶段 A：参考项目深析与需求制造」产出的草案；v0.2 在完整保留 v0.1 六项冻结内容（§0 水位线 / §1 叙事 / §10 参照对照表 / §11 边界声明 / §12 决策记录）的基础上，扩写到可指导开发施工的细度；v1.0 经用户过审、12 条待定项全部拍板（见附录）后冻结。
+> 状态：**v1.0，已冻结（2026-09-04）**，作为阶段 B（票 18 技术设计）的输入。
 > 事实底座：`立项调研.md（已脱敏）` + 六份参照深析（`ref-tracecat.md` / `ref-agentic-soc-platform.md` / `ref-m507-ai-soc-agent.md` / `ref-thehive-cortex.md` / `ref-wazuh-alerts.md` / `ref-holmesgpt.md`）。正文中以〔ref-xxx §n〕标注来源；推断不出又必须定的事项标注「待定：阶段 B 决策」，不做编造。
 > 架构底座：前序产物「消息流程图 TS 架构设想 v3」（6/6 决策已定案，见 `deliverables/review/消息流程图-TS架构设想.html`），本 demo 是它的多 agent 化落地，继承映射见 §3。
 
@@ -95,7 +95,7 @@ v0.2 追加一条施工纪律：本 PRD 中每个模块的「功能点表 / 实�
 
 | # | 组件 | 技术栈 | 职责 | 部署形态 |
 |---|---|---|---|---|
-| C1 | 告警接入服务 | TypeScript / Node（Fastify 或 Express，待定：阶段 B 决策） | Wazuh 格式告警 webhook 接收、字段映射、`source+sourceRef` 去重、severity 映射、fixture 回放入口 | docker-compose 服务 `ingest`，单容器 |
+| C1 | 告警接入服务 | TypeScript / Node + **Fastify**（待定项①已决） | Wazuh 格式告警 webhook 接收、字段映射、`source+sourceRef` 去重、severity 映射、fixture 回放入口 | docker-compose 服务 `ingest`，单容器 |
 | C2 | mock 案件后端 | TypeScript + SQLite（better-sqlite3） | TheHive 风格 Alert/Case/Task/Observable/Timeline/Audit 的 CRUD 与状态机；审计条目落库 | docker-compose 服务 `case-backend`，SQLite 文件挂卷 |
 | C3 | agent 编排服务 | TypeScript + LangChain.js / LangGraph.js | supervisor + 4 worker 图编排、checkpointer、工具注册表、验票中间件、SSE 事件总线 | docker-compose 服务 `agent` |
 | C4 | llm-guard / Presidio 微服务 | Python + FastAPI（复用路线 1-3 管线） | 注入扫描（llm-guard）与 PII 识别/脱敏（Presidio），可同服务多端点 | docker-compose 服务 `guards` |
@@ -1122,7 +1122,7 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 
 ### A.1 工具分级表（完整）
 
-> 分级口径：L0 只读免验 / L1 写需任务票 / L2 高危需审批铸票。`requires_approval` 参数规则为首版固定规则表（DSL 待定：阶段 B 决策）。
+> 分级口径：L0 只读免验 / L1 写需任务票 / L2 高危需审批铸票。`requires_approval` 参数规则采**首版固定规则表**（待定项②已决：不抽象 DSL；规则表收敛为独立深模块，输入工具名+参数、输出分级判定，未来如需 DSL 只换该模块实现）。
 
 | 工具名 | 所属 worker | 分级 | requires_approval 参数规则 | 说明 |
 |---|---|---|---|---|
@@ -1167,19 +1167,21 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 
 ---
 
-## 附：v0.2 待定项汇总（阶段 B 决策输入）
+## 附：待定项决策记录（2026-09-04 全部拍板，v1.0 冻结）
 
-1. C1 告警接入服务的 HTTP 框架选型（Fastify vs Express）
-2. `requires_approval` 参数规则的 DSL 形态（首版固定规则表之外是否抽象）
-3. Ticket TTL 是否按 worker 差异化（当前统一 900s）
-4. LLM 节点超时时长是否按节点调（当前统一 60s）
-5. M5 调查循环 `max_steps` 默认值（暂 20）
-6. M7 检索注入 top-k（暂 5）
-7. `LLM_MODEL` / `JUDGE_MODEL` 具体选型
-8. Presidio 是否对内部网段 IP 豁免脱敏
-9. SSE 断线重连的事件 offset 重放语义
-10. M11 跑测时拉起完整 compose 栈 vs 单测级注入的分层策略
-11. M12 扫描走 C4 微服务还是 CLI 本地内嵌
-12. `MAX_TOKENS_PER_RUN` 默认值
+| # | 待定项 | 决策 | 理由一句话 |
+|---|---|---|---|
+| 1 | C1 HTTP 框架选型 | **Fastify** | 内置 JSON schema 校验（422 拒绝白捡）、TS 友好；Express 无独有优势 |
+| 2 | `requires_approval` DSL 形态 | **首版固定规则表，不抽象 DSL** | 规则仅附录 A.1 一页，抽象是过度设计；规则表收敛为独立深模块，未来可换 DSL 实现（记 ADR） |
+| 3 | Ticket TTL 按 worker 差异化 | **统一 900s** | 差异化无实际收益，只增配置面 |
+| 4 | LLM 节点超时按节点调 | **统一 60s，留 per-node env 覆盖口子** | 不提前抽象，实测慢了再单点调 |
+| 5 | M5 `max_steps` | **20** | 配合 `MAX_TOKENS_PER_RUN` 双保险 |
+| 6 | M7 检索注入 top-k | **5** | top-k 越小，投毒演示攻击面越可控 |
+| 7 | `LLM_MODEL` / `JUDGE_MODEL` | **`LLM_MODEL=minimax-m2`；`JUDGE_MODEL` 先同款**，均走 env 可换 | 复用 starter-agent 已有 Keychain 注入链路；judge 只评分不进门槛，判分不稳再升级 |
+| 8 | Presidio 内网 IP 豁免 | **豁免 RFC1918 网段（allowlist 配置）** | 内网 IP 是同主机归并/资产核对的关键证据，脱敏破坏业务正确性 |
+| 9 | SSE 断线重连语义 | **事件自增 id 落 SQLite，支持 `Last-Event-ID` 补发** | 演示现场断网可恢复；与审计留痕共用持久化 |
+| 10 | M11 评测分层策略 | **两层都要，CI 分快慢两道**：PR 门禁跑单测级注入（<5min），每日+手动跑全栈 compose 评测 | 守住 CI 反馈速度，幕 6 实证数字从全栈层出 |
+| 11 | M12 扫描形态 | **CLI 本地内嵌** | 定位就是独立 npm bin，走 C4 反而加部署耦合 |
+| 12 | `MAX_TOKENS_PER_RUN` | **默认 50k/run，超限强制挂起转人工** | 幕 6 成本口径直接使用 |
 
-> 以上均不影响 v0.1 已冻结决策；阶段 B 逐条拍板后回填本表。
+> 以上 12 条均为 2026-09-04 与用户逐条确认，不影响 §12 已冻结决策；后续如推翻需记 ADR。

@@ -11,7 +11,7 @@
 - 交付物位置：`.scratch/agent-security-learning/deliverables/`；起步 Agent 位于 `.scratch/agent-security-learning/starter-agent/`
 - 每次会话应参考：`CONTEXT.md`（术语）、图纸（`LLM-Agent安全学习路线规划.md`）、靶场（`Agent安全调研总结.md`）、练兵场（`../深入理解agent 实验/ai-agent-book/.local/security-scan/SECURITY-EXPERIMENTS.md`）、TS 架构图（`deliverables/review/消息流程图-TS架构设想.html`，v3 已定案 6/6）
 - 范围档位：路线 1/2/3 全量完成；路线 4 红队挂起；路线 5 demo 为收口主线
-- 当前状态（2026-09-04）：路线 4 红队执行（票 13）挂起第 2 天；复习期已收口（票 15/16）；路线 5 启动，三阶段票已开：17 阶段 A 参考项目深析与需求制造（前沿）→ 18 阶段 B 技术设计 → 19 阶段 C 开发实施
+- 当前状态（2026-09-04）：路线 4 红队执行（票 13）挂起中；复习期已收口（票 15/16）；路线 5 票 17 阶段 A 已收口——PRD v1.0 冻结（12 条待定项全决），票 18 阶段 B 技术设计解锁为前沿；工程流程启用 sdd-flow 三层窗口制（skill 在 `~/.agents/skills/sdd-flow/`：L0 总窗口统筹 / L1 设计 / L2 编码走 learn-by-rebuild，产物即状态）
 
 ## Decisions so far
 
@@ -31,6 +31,7 @@
 - [路线 4 红队落地化方案](issues/12-route4-redteam-plan.md): 范围=图纸步骤 1 红队+缺口 4/5/6 核销（步骤 2 运行时监控降熟悉档：macOS 无 eBPF）；姿态=收官形态主靶+剥层对照（每次只关一层，判表带"漏到第几层"纵深语义；反向案例只作武器校准靶）；注入/外泄/多轮全量、越狱对照；garak 打薄 HTTP chat 层（发现器+语料发生器）、PyRIT 进程内编排+五条确定性 scorer（主场）、TS client=第二攻击通道（bob 越权+user_map 滥用面）；缺口 4/5 并成标定流程（标本集+阈值扫描+入 CI）、6 只实测穿透率+聚合方案（实现另开票）；garak 白名单五族；Crescendo/PAIR 全量 TAP 对照；judge=MiniMax-M2 只评分不进门槛；回归集落 `starter-agent/redteam-regression/`（种子十条）；验收六条；交付物三件 `deliverables/route4/`；新术语入 CONTEXT（剥层对照/武器校准靶/标定流程）；执行票 13 已开
 - [思维导图工具选型](issues/14-mindmap-tooling.md): 主用 markmap（markdown 源直进 git 可 diff、节点原生支持本地相对链接、markmap-cli 出自包含离线 HTML、VS Code 扩展实时预览），备选 Freeplane（XML 可 diff、手动布局/打印级导出）；Mermaid mindmap 无折叠无节点链接、drawio 非文本驱动、Obsidian Canvas 白板错配层级导图，均排除
 - [路线 1–3 复习方案（思维导图）](issues/15-review-plan.md): 素材不动原文件、按分类体系新建骨架（agent 搭骨架+用户逐节点复习）；四层防线为一级主轴，分支内按"攻击面→机制→实现链接→残余缺口"展开；markmap 文本驱动进 git；路线 4 方案作 ◐ 未实践分支纳入；导图兼作汇报材料整合第一块；票 13 挂起待恢复
+- [路线 5 阶段 A：PRD](issues/17-route5-plan.md): ✅ 已完成（2026-09-04）。PRD 落 `deliverables/route5/product-handbook.md`，v1.0 冻结：M1-M12 模块规格（四要素齐全）+ 八道防线 × 三攻击面矩阵 + 六幕演示剧本 + 12 条待定项全决（Fastify/规则表不做 DSL/TTL 900s/超时 60s/max_steps 20/top-k 5/minimax-m2/内网 IP 豁免/SSE 补发/Eval 快慢两道/M12 CLI 内嵌/MAX_TOKENS 50k）；工程化定 sdd-flow 三层窗口制 + 不上 Redis/Kafka（EventBus 留 seam）+ 收官单 VPS 上云；票 18 解锁
 
 ## Not yet specified
 

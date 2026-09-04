@@ -1,7 +1,7 @@
 # 路线 5 阶段 A：参考项目深析与需求制造
 
 Type: grilling
-Status: claimed
+Status: closed (2026-09-04)
 Blocked by:
 
 ## 目标
@@ -26,3 +26,10 @@ Blocked by:
 
 - `issues/17-route5-plan/立项调研.md（已脱敏）`（目标场景 分析+业务画像+亮点清单策略）
 - 路线图谱全部已决票；TS 架构图 v3（deliverables/review/消息流程图-TS架构设想.html）
+
+## Answer（2026-09-04 收口）
+
+- 产物：`deliverables/route5/product-handbook.md`（PRD），六份参照深析与 目标场景 研究在 `issues/17-route5-plan/`。
+- 状态：PRD 经用户过审，**v1.0 已冻结（2026-09-04）**；12 条待定项全部拍板并回填附录（Fastify / 固定规则表不做 DSL / TTL 900s / 超时 60s / max_steps 20 / top-k 5 / LLM=minimax-m2 / 内网 IP 豁免 / SSE Last-Event-ID 补发 / Eval 快慢两道 / M12 CLI 内嵌 / MAX_TOKENS 50k）。
+- 工程化配套：确立 sdd-flow 组合流程（skill 在 `~/.agents/skills/sdd-flow/`），阶段 B/C 改走 sdd-flow 三层窗口制（L0 总窗口 / L1 设计 / L2 编码 learn-by-rebuild）；Redis/Kafka 不引入，EventBus 留 seam（SQLite outbox 首版）；收官后单 VPS + compose + Caddy 上云。
+- 票 18 随之解锁。

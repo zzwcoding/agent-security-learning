@@ -29,3 +29,6 @@ __pycache__/
 .scratch/agent-security-learning/starter-agent/evidence-chain.jsonl
 .scratch/agent-security-learning/starter-agent/gateway/mcp.db-shm
 .scratch/agent-security-learning/starter-agent/gateway/mcp.db-wal
+
+# SOC 数字员工 demo:独立 git 仓库(嵌套),父仓不跟踪
+soc-demo/
