@@ -22,10 +22,10 @@
 2. `gateway` 服务的最终形态 = contextforge 镜像 + openfga 镜像 + 自写插件/脚本薄层（当前 FastAPI 占位在阶段 2 替换）。
 3. 工作量估计：小。各件均 <110 行，以参数化改造为主；主要工作是 OpenFGA 授权模型按 A.2 重建（约半天）。
 
-## 两个暴露出来的范围问题（回 L0 总窗口拍板）
+## 两个暴露出来的范围问题（2026-09-04 用户已拍板）
 
-- **Langfuse 依赖栈过重**：PRD §9.2 把 Langfuse 列为 trace 收集，但 Langfuse 自托管 v3 需要 postgres + clickhouse + valkey + minio 四个依赖，与"一键可起"水位线直接冲突。建议：审计主链路走 M2 AuditEntry（本来就有），Langfuse 降为可选 compose profile `observability`，不进默认路径。**待用户确认。**
-- **microsandbox 不带**：PRD C5 列了 microsandbox，但 soc-demo 的高危动作全部是 mock 执行（PRD §12 决策 5），没有不可信代码执行面，沙箱无对象可装。建议不带。**待用户确认。**
+- **Langfuse 砍出默认路径**：审计主链路走 M2 AuditEntry；Langfuse 降为可选 compose profile `observability`，不进默认一键启动。**已确认。**
+- **microsandbox 保留，改挂 M6**：用户决定不砍——M6 富化升级为"analyzer 沙箱运行时"（Cortex 真实架构：analyzer 是可执行代码，在一次性 microVM 里跑），攻击面改为刻意布置的教学场景（投毒 analyzer 逃逸/外联被拦）。**已确认，方案 A。**
 
 ## 后果
 
