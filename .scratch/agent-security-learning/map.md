@@ -2,16 +2,16 @@
 
 ## Destination
 
-走完图纸路线 1–3 全部 + 路线 4 红队部分（推理端与端云隐私降为"熟悉即可"），交付物沉淀在本目录 `deliverables/`，能用 JD 的语言讲清每个设计决策。
+路线 1–3 已完成。终点改为：**路线 5 = 最终面试 demo**——TS 实现的 SOC 数字员工（告警分诊与响应助手），含多 agent 协同（LangGraph.js supervisor）、带防护 RAG（Chroma）、Eval 回归体系、人工审批回路；不设时间盒，以充实为先。完成标准 = 能拿去面试：全链路演示 + 攻击演示 + 架构讲解材料。路线 4 红队挂起中，demo 收官后视求职节奏恢复。
 
 ## Notes
 
-- 领域：LLM Agent 安全学习；全职冲刺 6–10 周；macOS（Apple Silicon）+ Docker，无 Linux KVM
+- 领域：LLM Agent 安全学习 → 面试 demo 项目；macOS（Apple Silicon）+ Docker，无 Linux KVM
 - 颗粒度约定：本地图只解决决策，实现由用户完成；步骤级指导以图纸为准；需要更细落地讨论时单开 prototype 票
 - 交付物位置：`.scratch/agent-security-learning/deliverables/`；起步 Agent 位于 `.scratch/agent-security-learning/starter-agent/`
-- 每次会话应参考：`CONTEXT.md`（术语）、图纸（`LLM-Agent安全学习路线规划.md`）、靶场（`Agent安全调研总结.md`）、练兵场（`../深入理解agent 实验/ai-agent-book/.local/security-scan/SECURITY-EXPERIMENTS.md`）
-- 范围档位：路线 1/2/3 全量 + 路线 4 红队部分全量；路线 4 端云隐私与推理端项目降为熟悉
-- 当前状态：路线 4 红队执行（票 13）自 2026-09-03 挂起——用户暂停攻击内容，先做路线 1–3 思维导图复习（票 15/16），复习完成后恢复 13
+- 每次会话应参考：`CONTEXT.md`（术语）、图纸（`LLM-Agent安全学习路线规划.md`）、靶场（`Agent安全调研总结.md`）、练兵场（`../深入理解agent 实验/ai-agent-book/.local/security-scan/SECURITY-EXPERIMENTS.md`）、TS 架构图（`deliverables/review/消息流程图-TS架构设想.html`，v3 已定案 6/6）
+- 范围档位：路线 1/2/3 全量完成；路线 4 红队挂起；路线 5 demo 为收口主线
+- 当前状态（2026-09-04）：路线 4 红队执行（票 13）挂起第 2 天；复习期已收口（票 15/16）；路线 5 启动，方案票 17 在前沿
 
 ## Decisions so far
 
@@ -34,9 +34,10 @@
 
 ## Not yet specified
 
-- 路线 4 熟悉档（端云隐私+推理端+运行时行为监控——步骤 2 经票 12 降档，mcp-sec-audit 三层架构与 protect-mcp 回执思想纸面入蓝图）与收尾三件（熟悉即可检验形式/面试材料整合/零信任架构蓝图）；票 11 残余"哈希链外锚+出口白名单完整版"属防线改进项，归此收尾
+- 路线 4 熟悉档（端云隐私+推理端+运行时行为监控——步骤 2 经票 12 降档，mcp-sec-audit 三层架构与 protect-mcp 回执思想纸面入蓝图）与收尾三件（熟悉即可检验形式/面试材料整合/零信任架构蓝图）；票 11 残余"哈希链外锚+出口白名单完整版"属防线改进项，归此收尾——**均顺延至路线 5 之后**
 - 缺口 6 会话级聚合闸实现（防线改动票，待票 13 红队实测穿透率+聚合判定方案文档回来后开）
-- harness 复刻续作(6/13 暂停,状态在 harness复刻/MISSION.md;非主线阻塞)
+- harness 复刻续作(6/13 暂停,状态在 harness复刻/MISSION.md;非主线阻塞——⑤ 审批回路已吸收其设计答案)
+- 路线 5 收官后的恢复项：票 13 红队（TS 版将成为第二靶子）、RAG/多 agent 的深化（视面试反馈）
 
 ## Out of scope
 
