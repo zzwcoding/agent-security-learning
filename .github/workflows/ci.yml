@@ -1,0 +1,53 @@
+# SOC 数字员工 CI 守门（sdd-flow 阶段 6 产物；仓库根是父仓，实际工程在 soc-demo/ 子目录）
+# 最小门禁：lint + 类型检查 + 测试 + compose 配置校验。不绿不合并。
+name: ci
+
+on:
+  push:
+    branches: [main]
+    paths: ["soc-demo/**", ".github/workflows/ci.yml"]
+  pull_request:
+    paths: ["soc-demo/**", ".github/workflows/ci.yml"]
+
+jobs:
+  ts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soc-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版本读根 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: soc-demo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: soc-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r services/guards/requirements.txt -r services/guards/requirements-dev.txt -r services/gateway/requirements.txt -r services/gateway/requirements-dev.txt
+      - run: ruff check services/guards services/gateway
+      # 各服务目录内独立跑 pytest：prepend 模式会把服务目录加进 sys.path，app 模块直接可 import
+      - run: python -m pytest
+        working-directory: soc-demo/services/guards
+      - run: python -m pytest
+        working-directory: soc-demo/services/gateway
+
+  compose-config:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose -f soc-demo/docker-compose.yml config -q
