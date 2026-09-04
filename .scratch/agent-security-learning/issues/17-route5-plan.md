@@ -1,7 +1,7 @@
 # 路线 5 阶段 A：参考项目深析与需求制造
 
 Type: grilling
-Status: open
+Status: claimed
 Blocked by:
 
 ## 目标
