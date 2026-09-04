@@ -23,7 +23,7 @@
 <a class="back" href="../architecture-v4.html">← 返回架构图 v4</a>
 <div class="card">
 <h1>M1 告警接入 —— 告警进系统的唯一入口</h1>
-<p><b>干什么：</b>收 webhook → source+sourceRef 去重（重复时 occurrences+1，不新建不重复触发）→ Wazuh 字段映射成 Alert → full_log/data.* 打上不可信标记 → 发事件喊流水线开工。</p><ul><li><b>接口</b>：POST /api/v1/webhooks/alerts；POST /internal/replay（fixture 回放）</li><li><b>Seam</b>：写库走 M2 REST（可换内存 stub 测试）；去重唯一约束在 M2 SQLite 兜底</li><li><b>验收</b>：同一 fixture 连推 3 次只建 1 条；7 类具名 fixture 映射全过</li><li>全是确定性代码，无 LLM</li></ul><p><b>内部结构图</b>（接收校验→去重→映射→标记→写 M2→发事件，含技术栈与部署说明）：同目录 architecture-m1-internal.html</p>
+<p><b>干什么：</b>收 webhook → source+sourceRef 去重（重复时 occurrences+1，不新建不重复触发）→ Wazuh 字段映射成 Alert → full_log/data.* 打上不可信标记 → 发事件喊流水线开工。</p><p><b>本质定位：</b>门卫 + 翻译 + 打标——入口归一化。不管什么来源，过了这扇门都变成统一格式、统一去重身份、贴上"这是数据不是指令"标签。纯确定性代码，无 LLM。</p><ul><li><b>接口</b>：POST /api/v1/webhooks/alerts；POST /internal/replay（fixture 回放）</li><li><b>Seam</b>：写库走 M2 REST（可换内存 stub 测试）；去重唯一约束在 M2 SQLite 兜底</li><li><b>验收</b>：同一 fixture 连推 3 次只建 1 条；7 类具名 fixture 映射全过</li><li>全是确定性代码，无 LLM</li></ul><p><b>内部结构图</b>（接收校验→去重→映射→标记→写 M2→发事件，含技术栈与部署说明）：同目录 architecture-m1-internal.html</p>
 <div class="links">📎 <a href="../architecture-m1-internal.html">M1 内部结构图（五步流水线 + 技术栈 + 部署）</a></div>
 </div>
 </body>

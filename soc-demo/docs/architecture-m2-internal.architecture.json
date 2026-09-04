@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "M2 案件后端 · 内部结构",
+    "output": "architecture-m2-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [1320, 640]
+  },
+  "components": [
+    { "id": "m1", "type": "external", "label": "M1 告警接入", "sublabel": "ingest :3001", "pos": [30, 30], "size": [140, 60], "tag": "写 Alert" },
+    { "id": "workers", "type": "external", "label": "M3/M4-M7", "sublabel": "agent 内 workers", "pos": [30, 140], "size": [140, 64], "tag": "读写案件·三结局" },
+    { "id": "webui", "type": "external", "label": "M10 Web", "sublabel": "薄前端", "pos": [30, 260], "size": [140, 60], "tag": "只读 REST+SSE" },
+    { "id": "rest", "type": "backend", "label": "① REST 面", "sublabel": "Fastify + JSON Schema", "pos": [270, 140], "size": [180, 64], "tag": "六实体 CRUD" },
+    { "id": "statemachine", "type": "backend", "label": "② 状态机", "sublabel": "迁移函数集中定义", "pos": [510, 140], "size": [190, 64], "tag": "非法转移→409" },
+    { "id": "audit", "type": "security", "label": "③ audit-signal 拦截器", "sublabel": "写操作统一拦截", "pos": [760, 140], "size": [190, 64], "tag": "自动落审计" },
+    { "id": "sqlite", "type": "database", "label": "④ SQLite（WAL）", "sublabel": "六实体表+唯一索引兜底", "pos": [1020, 140], "size": [180, 64], "tag": "better-sqlite3" },
+    { "id": "outbox", "type": "messagebus", "label": "⑤ outbox 表", "sublabel": "alert.created 事件", "pos": [1060, 330], "size": [130, 60], "tag": "EventBus seam" },
+    { "id": "m3", "type": "external", "label": "M3 编排", "sublabel": "supervisor", "pos": [1100, 470], "size": [150, 60], "tag": "轮询 outbox 接力" }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "compose 服务 case-backend :3002（卷 ./data/case-backend:/data）", "wraps": ["rest", "statemachine", "audit", "sqlite", "outbox"] }
+  ],
+  "connections": [
+    { "id": "m1-to-rest", "from": "m1", "to": "rest", "label": "POST /alerts", "variant": "emphasis", "fromSide": "right", "toSide": "top", "labelAt": [260, 52] },
+    { "id": "workers-to-rest", "from": "workers", "to": "rest", "label": "读写·三结局", "labelDy": -14 },
+    { "id": "webui-to-rest", "from": "webui", "to": "rest", "label": "GET 只读查询", "fromSide": "right", "toSide": "bottom", "labelAt": [250, 282] },
+    { "id": "rest-to-statemachine", "from": "rest", "to": "statemachine", "label": "状态变更", "labelDy": -14 },
+    { "id": "statemachine-to-audit", "from": "statemachine", "to": "audit", "label": "合法迁移放行", "labelAt": [730, 120] },
+    { "id": "audit-to-sqlite", "from": "audit", "to": "sqlite", "label": "写+审计同事务", "labelDy": -14 },
+    { "id": "rest-to-sqlite-read", "from": "rest", "to": "sqlite", "label": "只读查询直查（不过闸）", "variant": "dashed", "fromSide": "bottom", "toSide": "bottom", "labelAt": [700, 552] },
+    { "id": "sqlite-to-outbox", "from": "sqlite", "to": "outbox", "label": "同事务落事件", "fromSide": "bottom", "toSide": "top", "labelDx": 40 },
+    { "id": "outbox-to-m3", "from": "outbox", "to": "m3", "label": "轮询·可换 Kafka", "variant": "dashed", "fromSide": "bottom", "toSide": "top", "labelDx": 20 }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "技术栈", "items": ["TypeScript + Fastify 5（六实体 REST：alerts/cases/tasks/observables/timeline/audit）", "better-sqlite3 同步 API（WAL 模式，单进程无竞态）；测试用内存 SQLite 打 seam", "无 LLM——状态机、审计拦截、归并查询全是确定性代码"] },
+    { "dot": "emerald", "title": "部署", "items": ["compose 服务 case-backend，单容器，端口 3002，健康检查 /healthz", "数据卷 ./data/case-backend:/data，单文件库 WAL；镜像 node:22-alpine", "纯叶子模块：不依赖任何其他服务，全系统依赖方向的起点"] },
+    { "dot": "rose", "title": "铁律", "items": ["审计在写入口统一拦截自动落 AuditEntry——记操作不记内容，diff 快照 + requestId 串联", "Case 关闭必填 verdict 否则 409（M7 知识沉淀只吃有结论的案子）", "事件只走 outbox 表同事务落库，不上消息队列（seam 处留换 Kafka 的口）"] }
+  ]
+}
