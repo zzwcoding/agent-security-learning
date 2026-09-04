@@ -1,27 +1,28 @@
-# 路线 5 方案：SOC 数字员工 demo
+# 路线 5 阶段 A：参考项目深析与需求制造
 
 Type: grilling
 Status: open
 Blocked by:
 
-## Question
+## 目标
 
-路线 5（最终面试 demo）的实施方案。已定前提：
+产出《SOC 数字员工 · 产品手册》——路线 5 的需求层文档。coding 之前的第一道工序。
 
-- **需求叙事**：SOC 告警分诊与响应助手（"安全运营数字员工"）。参照系——Tracecat（叙事与四件套对应）、agentic-soc-platform（多 agent 分工）、M507/ai-soc-agent（最小闭环）、TheHive+Cortex（案件数据模型、responder 模式）、Wazuh（告警格式）、HolmesGPT（只读+RBAC 叙事技巧）
-- **技术栈**：TS agent 端（LangChain.js + LangGraph.js supervisor）+ llm-guard/Presidio 微服务（FastAPI）+ 复用现有 Python 后端（ContextForge、OpenFGA、三 MCP server、microsandbox、Langfuse）；不引 Keycloak（教学版本地铸币，蓝图注释 STS）
-- **范围**：TS 实现 v3 已定案 6/6 + 多 agent 协同 + 带防护 RAG + Eval 回归 CI；自我迭代与端云路由已砍
-- **底牌分支**（并入验收）：子 agent 权限收窄、RAG 投毒演示、MCP 体检小工具（1-2 天独立 CLI）
+## 水位线（全程约束，继承自原票 17）
 
-待定议题（方案票要解决的）：
+这不是教学练习，是能拿去面试的小型产品。反玩具标准：① 真实数据（Wazuh 格式告警/TheHive 案件模型）② 真实攻击（路线 1-3 实测语料 + AgentDojo/garak）③ 实证数字 ④ 机制完整（令牌真签真验真焚）⑤ 一键可起 + README 即讲解稿 ⑥ 决策有据（参照系或实证）。**规模可小，每个组件必须是真的；宁砍组件，不降真实度。**
 
-1. **告警与案件数据模型**：照 Wazuh 告警格式造假数据？案件结构照 TheHive？规模多大（几条告警够演示）
-2. **supervisor 结构**：子 agent 拆几个、分工是什么（分诊/调查/响应？）、子 agent 权限收窄的具体形态（子 agent 只拿任务级最小 scope）
-3. **RAG 内容**：知识库装什么（runbook/历史案件/威胁情报样例）、投毒演示的 payload 设计
-4. **Eval 构件**：`evals/` 目录结构、标本集从路线 1 语料 + 缺口 4/5 种子怎么迁、CI 门槛怎么设
-5. **MCP 体检工具**：从 0038 流程到独立 CLI 的边界（输入什么、输出什么）
-6. **演示脚本**：面试现场演示的固定动作序列（正常分诊一条告警 / 注入被拦 / 越权 403 / 高级动作审批 / RAG 投毒被拦）
-7. **交付物清单与目录结构**：demo 代码放哪（新目录？`ts-demo/`？）、架构图 v4（加多 agent 层 + Eval 构件）、设计决策文档
-8. **实施顺序**：哪块先动（建议：TS 骨架 → 单 agent 全链路 → 拆多 agent → RAG → Eval → 体检工具）
+## 工序
 
-输入依赖：TS 架构图 v3（deliverables/review/消息流程图-TS架构设想.html）、路线图谱所有已决票。
+1. **参考项目深析**（research 子 agent 串行）：Tracecat、agentic-soc-platform、M507/ai-soc-agent、TheHive+Cortex、Wazuh 告警格式、HolmesGPT——每个读 README/文档/代码结构，提取：它解决什么需求、功能清单、数据模型、agent 分工、审批/安全设计、我们可借什么
+2. **制造需求**（grilling）：结合 JD 能力要求（三份 JD，见 research-jd与需求叙事.md），把" SOC 数字员工"展开成需求集——用户角色、使用场景、功能列表（每个功能标注：服务哪个 JD 能力点/哪张底牌）
+3. **产品手册成文**：愿景与叙事、角色与场景、功能规格（含演示脚本草案）、非功能规格（安全/审计/可观测）、参照系对照表、明确不做的（边界声明）
+
+## 产出
+
+`.scratch/agent-security-learning/issues/17-route5-plan/product-handbook.md`（或独立 deliverable，方案里定）
+
+## 输入
+
+- `issues/17-route5-plan/research-jd与需求叙事.md`（JD 分析+业务画像+底牌策略）
+- 路线图谱全部已决票；TS 架构图 v3（deliverables/review/消息流程图-TS架构设想.html）

@@ -11,7 +11,7 @@
 - 交付物位置：`.scratch/agent-security-learning/deliverables/`；起步 Agent 位于 `.scratch/agent-security-learning/starter-agent/`
 - 每次会话应参考：`CONTEXT.md`（术语）、图纸（`LLM-Agent安全学习路线规划.md`）、靶场（`Agent安全调研总结.md`）、练兵场（`../深入理解agent 实验/ai-agent-book/.local/security-scan/SECURITY-EXPERIMENTS.md`）、TS 架构图（`deliverables/review/消息流程图-TS架构设想.html`，v3 已定案 6/6）
 - 范围档位：路线 1/2/3 全量完成；路线 4 红队挂起；路线 5 demo 为收口主线
-- 当前状态（2026-09-04）：路线 4 红队执行（票 13）挂起第 2 天；复习期已收口（票 15/16）；路线 5 启动，方案票 17 在前沿
+- 当前状态（2026-09-04）：路线 4 红队执行（票 13）挂起第 2 天；复习期已收口（票 15/16）；路线 5 启动，三阶段票已开：17 阶段 A 参考项目深析与需求制造（前沿）→ 18 阶段 B 技术设计 → 19 阶段 C 开发实施
 
 ## Decisions so far
 
