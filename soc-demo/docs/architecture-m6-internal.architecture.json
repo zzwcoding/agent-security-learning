@@ -1,41 +1,240 @@
 {
-  "schema_version": 1,
-  "diagram_type": "architecture",
-  "meta": {
-    "title": "M6 富化 agent · 内部结构",
-    "output": "architecture-m6-internal.html",
-    "quality_profile": "showcase",
-    "locale": "zh-CN",
-    "viewBox": [1380, 640]
-  },
-  "components": [
-    { "id": "m2", "type": "external", "label": "M2 案件后端", "sublabel": "读 observables / 收 artifacts", "pos": [20, 250], "size": [180, 60], "tag": "数据地基" },
-    { "id": "intel", "type": "external", "label": "外部情报源", "sublabel": "VT 等（沙箱外）", "pos": [20, 440], "size": [180, 60], "tag": "投毒 analyzer 的靶子" },
-
-    { "id": "loop", "type": "backend", "label": "① enrich_loop", "sublabel": "遍历案件 observables", "pos": [250, 250], "size": [170, 64], "tag": "每个证物过一遍" },
-    { "id": "gate", "type": "security", "label": "② TLP/PAP 闸门", "sublabel": "工具包装层·确定性中间件", "pos": [450, 250], "size": [170, 64], "tag": "超限必拒·fail-closed" },
-    { "id": "runner", "type": "backend", "label": "③ runner", "sublabel": "选 analyzer + 拉起沙箱", "pos": [650, 250], "size": [170, 64], "tag": "默认 mock·演示切真跑" },
-    { "id": "normalize", "type": "backend", "label": "④ normalize", "sublabel": "Cortex taxonomy 归一", "pos": [850, 250], "size": [170, 64], "tag": "未知 dataType 拒绝" },
-    { "id": "writeback", "type": "backend", "label": "⑤ writeback", "sublabel": "artifacts 去重回写 M2", "pos": [1050, 250], "size": [170, 64], "tag": "dataType+data 去重" },
-
-    { "id": "analyzer", "type": "backend", "label": "analyzer 真脚本", "sublabel": "Cortex 契约子集", "pos": [650, 440], "size": [190, 64], "tag": "至少一个真跑" }
-  ],
-  "boundaries": [
-    { "kind": "region", "label": "services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）", "wraps": ["loop", "gate", "runner", "normalize", "writeback"] },
-    { "kind": "region", "label": "一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）", "wraps": ["analyzer"] }
-  ],
-  "connections": [
-    { "id": "m2-to-loop", "from": "m2", "to": "loop", "label": "" },
-    { "id": "loop-to-gate", "from": "loop", "to": "gate", "label": "" },
-    { "id": "gate-to-runner", "from": "gate", "to": "runner", "label": "放行" },
-    { "id": "runner-to-analyzer", "from": "runner", "to": "analyzer", "label": "拉起 microVM", "fromSide": "bottom", "toSide": "top" },
-    { "id": "analyzer-to-normalize", "from": "analyzer", "to": "normalize", "label": "化验结果", "fromSide": "right", "toSide": "bottom" },
-    { "id": "normalize-to-writeback", "from": "normalize", "to": "writeback", "label": "" },
-    { "id": "analyzer-to-intel", "from": "analyzer", "to": "intel", "label": "外联尝试 → 被拦", "variant": "dashed", "fromSide": "left", "toSide": "right", "labelAt": [400, 455] }
-  ],
-  "cards": [
-    { "dot": "cyan", "title": "技术栈", "items": ["analyzer 是 Cortex 契约子集的真脚本（v1.1 变更：至少一个沙箱内真跑，不再是纯 mock）", "TLP/PAP 闸门在工具包装层——确定性中间件，数据分密级（CLEAR/GREEN/AMBER/RED），不靠模型自觉", "结果按 Cortex taxonomy 归一，artifacts 进 M2 供后续分诊/调查提速"] },
-    { "dot": "emerald", "title": "部署", "items": ["microsandbox 非常驻服务：每次富化按需拉起一次性 microVM，用完即毁", "默认 mock（fixture 表，CI 快）；演示第四攻击面时切真跑", "结果能出沙箱（回 normalize），恶意外联不能出——方向不对称是设计本意"] },
-    { "dot": "rose", "title": "铁律", "items": ["TLP/PAP 超限 → 拒绝 + DENIED 审计；fail-closed，不降级不外发", "投毒 analyzer 尝试外联 / 读宿主 env → 沙箱拦截（attack/sandbox/01 验收）", "未知 dataType 拒绝；情报未命中 = no-record 不是错误；artifacts 按 dataType+data 去重合并"] }
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "M6 富化 agent · 内部结构",
+  "output": "architecture-m6-internal.html",
+  "quality_profile": "showcase",
+  "locale": "zh-CN",
+  "viewBox": [
+   1380,
+   642
   ]
+ },
+ "components": [
+  {
+   "id": "m2",
+   "type": "external",
+   "label": "M2 案件后端",
+   "sublabel": "读 observables / 收 artifacts",
+   "pos": [
+    20,
+    64.0
+   ],
+   "size": [
+    180,
+    60
+   ],
+   "tag": "数据地基"
+  },
+  {
+   "id": "intel",
+   "type": "external",
+   "label": "外部情报源",
+   "sublabel": "VT 等（沙箱外）",
+   "pos": [
+    20,
+    470.9
+   ],
+   "size": [
+    180,
+    60
+   ],
+   "tag": "投毒 analyzer 的靶子"
+  },
+  {
+   "id": "loop",
+   "type": "backend",
+   "label": "① enrich_loop",
+   "sublabel": "遍历案件 observables",
+   "pos": [
+    250,
+    64.0
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "每个证物过一遍"
+  },
+  {
+   "id": "tlpgate",
+   "type": "security",
+   "label": "② TLP/PAP 闸门",
+   "sublabel": "工具包装层·确定性中间件",
+   "pos": [
+    450,
+    64.0
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "超限必拒·fail-closed"
+  },
+  {
+   "id": "runner",
+   "type": "backend",
+   "label": "③ runner",
+   "sublabel": "选 analyzer + 拉起沙箱",
+   "pos": [
+    650,
+    64.0
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "默认 mock·演示切真跑"
+  },
+  {
+   "id": "normalize",
+   "type": "backend",
+   "label": "④ normalize",
+   "sublabel": "Cortex taxonomy 归一",
+   "pos": [
+    850,
+    64.0
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "未知 dataType 拒绝"
+  },
+  {
+   "id": "writeback",
+   "type": "backend",
+   "label": "⑤ writeback",
+   "sublabel": "artifacts 去重回写 M2",
+   "pos": [
+    1050,
+    64.0
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "dataType+data 去重"
+  },
+  {
+   "id": "analyzer",
+   "type": "backend",
+   "label": "analyzer 真脚本",
+   "sublabel": "Cortex 契约子集",
+   "pos": [
+    650,
+    470.9
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "tag": "至少一个真跑"
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）",
+   "wraps": [
+    "loop",
+    "tlpgate",
+    "runner",
+    "normalize",
+    "writeback"
+   ]
+  },
+  {
+   "kind": "region",
+   "label": "一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）",
+   "wraps": [
+    "analyzer"
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "m2-to-loop",
+   "from": "m2",
+   "to": "loop",
+   "label": ""
+  },
+  {
+   "id": "loop-to-gate",
+   "from": "loop",
+   "to": "tlpgate",
+   "label": ""
+  },
+  {
+   "id": "gate-to-runner",
+   "from": "tlpgate",
+   "to": "runner",
+   "label": "放行"
+  },
+  {
+   "id": "runner-to-analyzer",
+   "from": "runner",
+   "to": "analyzer",
+   "label": "拉起 microVM",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "analyzer-to-normalize",
+   "from": "analyzer",
+   "to": "normalize",
+   "label": "化验结果",
+   "fromSide": "right",
+   "toSide": "bottom"
+  },
+  {
+   "id": "normalize-to-writeback",
+   "from": "normalize",
+   "to": "writeback",
+   "label": ""
+  },
+  {
+   "id": "analyzer-to-intel",
+   "from": "analyzer",
+   "to": "intel",
+   "label": "外联尝试 → 被拦",
+   "variant": "dashed",
+   "fromSide": "left",
+   "toSide": "right",
+   "labelAt": [
+    400,
+    503.1
+   ]
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "技术栈",
+   "items": [
+    "analyzer 是 Cortex 契约子集的真脚本（v1.1 变更：至少一个沙箱内真跑，不再是纯 mock）",
+    "TLP/PAP 闸门在工具包装层——确定性中间件，数据分密级（CLEAR/GREEN/AMBER/RED），不靠模型自觉",
+    "结果按 Cortex taxonomy 归一，artifacts 进 M2 供后续分诊/调查提速"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "部署",
+   "items": [
+    "microsandbox 非常驻服务：每次富化按需拉起一次性 microVM，用完即毁",
+    "默认 mock（fixture 表，CI 快）；演示第四攻击面时切真跑",
+    "结果能出沙箱（回 normalize），恶意外联不能出——方向不对称是设计本意"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "铁律",
+   "items": [
+    "TLP/PAP 超限 → 拒绝 + DENIED 审计；fail-closed，不降级不外发",
+    "投毒 analyzer 尝试外联 / 读宿主 env → 沙箱拦截（attack/sandbox/01 验收）",
+    "未知 dataType 拒绝；情报未命中 = no-record 不是错误；artifacts 按 dataType+data 去重合并"
+   ]
+  }
+ ]
 }

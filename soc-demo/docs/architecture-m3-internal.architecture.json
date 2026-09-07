@@ -1,42 +1,453 @@
 {
-  "schema_version": 1,
-  "diagram_type": "architecture",
-  "meta": {
-    "title": "M3 编排 supervisor · 内部结构",
-    "output": "architecture-m3-internal.html",
-    "quality_profile": "showcase",
-    "locale": "zh-CN",
-    "viewBox": [1320, 660]
-  },
-  "components": [
-    { "id": "m2outbox", "type": "external", "label": "M2 outbox 表", "sublabel": "case-backend 内", "pos": [30, 140], "size": [150, 64], "tag": "alert.created 事件" },
-    { "id": "webui", "type": "external", "label": "M10 Web", "sublabel": "薄前端", "pos": [30, 300], "size": [150, 60], "tag": "SSE 订阅进度" },
-    { "id": "human", "type": "external", "label": "审批人", "sublabel": "危险动作把关", "pos": [30, 460], "size": [150, 60], "tag": "human-in-the-loop" },
-    { "id": "events", "type": "backend", "label": "① events 事件总线", "sublabel": "SSE + offset 重放", "pos": [270, 140], "size": [170, 64], "tag": "断线补发" },
-    { "id": "graph", "type": "backend", "label": "② graph 主图", "sublabel": "supervisor 调度", "pos": [530, 140], "size": [170, 64], "tag": "拉起子图·申领票据" },
-    { "id": "workers", "type": "backend", "label": "③ workers 子图", "sublabel": "M4 分诊→M5/M6→M7 沉淀", "pos": [790, 140], "size": [190, 64], "tag": "干活的是它们" },
-    { "id": "gate", "type": "security", "label": "④ 验票闸（M9-S2）", "sublabel": "一切工具调用先过闸", "pos": [1060, 140], "size": [180, 64], "tag": "无票/假票→拒" },
-    { "id": "tools", "type": "external", "label": "外部工具/服务", "sublabel": "guards·gateway·沙箱", "pos": [1060, 320], "size": [180, 60] },
-    { "id": "envelope", "type": "database", "label": "⑤ envelope 检查点", "sublabel": "SQLite + 信封 hash 链", "pos": [530, 380], "size": [170, 64], "tag": "杀进程可恢复" },
-    { "id": "budget", "type": "security", "label": "⑥ budget 资源兜底", "sublabel": "步数/超时/token", "pos": [790, 380], "size": [190, 64], "tag": "超限强杀+审计" }
-  ],
-  "boundaries": [
-    { "kind": "region", "label": "compose 服务 agent :3003（卷 ./data/agent:/data；M4-M7 是它的子模块，无独立 HTTP 面）", "wraps": ["events", "graph", "workers", "gate", "envelope", "budget"] }
-  ],
-  "connections": [
-    { "id": "m2-to-events", "from": "m2outbox", "to": "events", "label": "轮询", "labelDy": -14 },
-    { "id": "events-to-webui", "from": "events", "to": "webui", "label": "SSE 推进度", "fromSide": "left", "toSide": "top", "labelAt": [205, 240] },
-    { "id": "events-to-graph", "from": "events", "to": "graph", "label": "开工·新 run", "labelDy": -14 },
-    { "id": "graph-to-workers", "from": "graph", "to": "workers", "label": "拉起子图", "labelDy": -14 },
-    { "id": "workers-to-gate", "from": "workers", "to": "gate", "label": "先验票", "labelDy": -14 },
-    { "id": "gate-to-tools", "from": "gate", "to": "tools", "label": "放行出网", "labelAt": [1166, 218] },
-    { "id": "graph-to-envelope", "from": "graph", "to": "envelope", "label": "每步落检查点", "labelAt": [631, 218] },
-    { "id": "workers-to-budget", "from": "workers", "to": "budget", "label": "每步过秤", "labelAt": [901, 218] },
-    { "id": "graph-to-human", "from": "graph", "to": "human", "label": "interrupt 等审批·批复 resume", "variant": "dashed", "fromSide": "left", "toSide": "right", "labelAt": [345, 330] }
-  ],
-  "cards": [
-    { "dot": "cyan", "title": "技术栈", "items": ["TypeScript + LangGraph.js supervisor 模式（主图拉起 M4-M7 子图，interrupt/resume 原生支持）", "checkpointer = SQLite 信封 hash 链：每步状态指纹串成链，篡改即断链", "SSE 用 Last-Event-ID 断线补发；LLM 调用全走 gateway 凭证代理（S1）"] },
-    { "dot": "emerald", "title": "部署", "items": ["compose 服务 agent，单容器，端口 3003，健康检查 /healthz", "检查点落卷 ./data/agent:/data；镜像 node:22-alpine", "M4-M7 是它内部子模块、无独立 HTTP 面——主图上合为一个 agent-core 框的原因", "M8 对话 Copilot 也在本服务（chat_flow）：复用本图同一套 graph/events/验票闸/检查点机制，仅入口不同（用户问话而非告警事件）——到 M8 节点展开"] },
-    { "dot": "rose", "title": "铁律", "items": ["审批 interrupt 绑定 (run, tool_call)：杀进程重启后从检查点恢复，审批仍认原调用", "信封被篡改 resume 必拒（hash 链对不上）；超 max_steps 20 / 60s / 50k token 任一条→强杀 run + 落审计", "M3 只调度不干活——它不知道什么是 IP 信誉，只知道下一个该叫醒谁"] }
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "M3 编排 supervisor · 内部结构",
+  "output": "architecture-m3-internal.html",
+  "quality_profile": "showcase",
+  "locale": "zh-CN",
+  "viewBox": [
+   1380,
+   640
   ]
+ },
+ "components": [
+  {
+   "id": "m2",
+   "type": "external",
+   "label": "M2 案件后端",
+   "sublabel": "outbox · 案件 · 审计",
+   "pos": [
+    30,
+    120
+   ],
+   "size": [
+    170,
+    72
+   ],
+   "tag": "事件进·结果回写"
+  },
+  {
+   "id": "webui",
+   "type": "external",
+   "label": "M10 Web",
+   "sublabel": "薄前端",
+   "pos": [
+    30,
+    300
+   ],
+   "size": [
+    150,
+    60
+   ],
+   "tag": "SSE 订阅进度"
+  },
+  {
+   "id": "approver",
+   "type": "external",
+   "label": "审批人",
+   "sublabel": "值班长 · 危险动作把关",
+   "pos": [
+    30,
+    460
+   ],
+   "size": [
+    150,
+    60
+   ],
+   "tag": "human-in-the-loop"
+  },
+  {
+   "id": "runs",
+   "type": "backend",
+   "label": "runs 入口",
+   "sublabel": "POST /internal/runs → 202",
+   "pos": [
+    280,
+    60
+   ],
+   "size": [
+    170,
+    60
+   ],
+   "tag": "run 生命周期"
+  },
+  {
+   "id": "events",
+   "type": "backend",
+   "label": "① events 事件总线",
+   "sublabel": "事件自增 id 落盘",
+   "pos": [
+    280,
+    190
+   ],
+   "size": [
+    180,
+    70
+   ],
+   "tag": "Last-Event-ID 补发"
+  },
+  {
+   "id": "graph",
+   "type": "backend",
+   "label": "② graph 主图",
+   "sublabel": "supervisor 调度 · 路由",
+   "pos": [
+    540,
+    170
+   ],
+   "size": [
+    210,
+    96
+   ],
+   "tag": "interrupt / resume"
+  },
+  {
+   "id": "m4",
+   "type": "backend",
+   "label": "M4 分诊子图",
+   "sublabel": "四分类 verdict",
+   "pos": [
+    850,
+    60
+   ],
+   "size": [
+    140,
+    54
+   ],
+   "tag": "物理无 L2 票"
+  },
+  {
+   "id": "m5",
+   "type": "backend",
+   "label": "M5 调查子图",
+   "sublabel": "工具循环",
+   "pos": [
+    850,
+    135
+   ],
+   "size": [
+    140,
+    54
+   ],
+   "tag": "只建议不动手"
+  },
+  {
+   "id": "m6",
+   "type": "backend",
+   "label": "M6 富化子图",
+   "sublabel": "Cortex analyzer",
+   "pos": [
+    850,
+    210
+   ],
+   "size": [
+    140,
+    54
+   ],
+   "tag": "一次性 microVM"
+  },
+  {
+   "id": "m7",
+   "type": "backend",
+   "label": "M7 沉淀子图",
+   "sublabel": "提炼→提案",
+   "pos": [
+    850,
+    285
+   ],
+   "size": [
+    140,
+    54
+   ],
+   "tag": "案件关闭触发"
+  },
+  {
+   "id": "gate",
+   "type": "security",
+   "label": "③ 验票闸（M9-S2）",
+   "sublabel": "一切工具调用先过闸",
+   "pos": [
+    850,
+    385
+   ],
+   "size": [
+    190,
+    64
+   ],
+   "tag": "越权 403 + DENIED 审计"
+  },
+  {
+   "id": "tools",
+   "type": "external",
+   "label": "外部工具/服务",
+   "sublabel": "guards · SIEM · 沙箱",
+   "pos": [
+    1150,
+    180
+   ],
+   "size": [
+    180,
+    60
+   ]
+  },
+  {
+   "id": "checkpointer",
+   "type": "database",
+   "label": "④ checkpointer 检查点",
+   "sublabel": "SQLite · 信封 hash 链",
+   "pos": [
+    540,
+    330
+   ],
+   "size": [
+    210,
+    70
+   ],
+   "tag": "杀进程可恢复"
+  },
+  {
+   "id": "budget",
+   "type": "security",
+   "label": "⑤ budget 资源兜底",
+   "sublabel": "max_steps 20 · token 50k · 60s",
+   "pos": [
+    240,
+    440
+   ],
+   "size": [
+    210,
+    70
+   ],
+   "tag": "超限强杀 + 审计"
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）",
+   "wraps": [
+    "runs",
+    "events",
+    "graph",
+    "m4",
+    "m5",
+    "m6",
+    "m7",
+    "gate",
+    "checkpointer",
+    "budget"
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "m2-to-events",
+   "from": "m2",
+   "to": "events",
+   "label": "outbox 轮询·可换 Kafka",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    240,
+    274
+   ]
+  },
+  {
+   "id": "graph-to-m2",
+   "from": "graph",
+   "to": "m2",
+   "label": "读写案件·结果回写",
+   "fromSide": "left",
+   "toSide": "right",
+   "labelAt": [
+    300,
+    270
+   ]
+  },
+  {
+   "id": "runs-to-graph",
+   "from": "runs",
+   "to": "graph",
+   "label": "创建 run·开工",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "events-to-graph",
+   "from": "events",
+   "to": "graph",
+   "label": "新 run",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    500,
+    232
+   ]
+  },
+  {
+   "id": "graph-to-m4",
+   "from": "graph",
+   "to": "m4",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "graph-to-m5",
+   "from": "graph",
+   "to": "m5",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "graph-to-m6",
+   "from": "graph",
+   "to": "m6",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "graph-to-m7",
+   "from": "graph",
+   "to": "m7",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "m7-to-gate",
+   "from": "m7",
+   "to": "gate",
+   "label": "工具调用过闸（M4-M7 共用）",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "gate-to-tools",
+   "from": "gate",
+   "to": "tools",
+   "label": "放行出网·带票",
+   "fromSide": "right",
+   "toSide": "left"
+  },
+  {
+   "id": "graph-to-checkpointer",
+   "from": "graph",
+   "to": "checkpointer",
+   "label": "每步落检查点·信封 hash 链",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    652,
+    280
+   ]
+  },
+  {
+   "id": "checkpointer-to-graph",
+   "from": "checkpointer",
+   "to": "graph",
+   "label": "resume 恢复·篡改必拒",
+   "fromSide": "top",
+   "toSide": "right"
+  },
+  {
+   "id": "graph-to-budget",
+   "from": "graph",
+   "to": "budget",
+   "label": "每步过秤",
+   "fromSide": "right",
+   "toSide": "right",
+   "via": [
+    [
+     810,
+     218
+    ],
+    [
+     810,
+     475
+    ]
+   ],
+   "labelAt": [
+    810,
+    340
+   ]
+  },
+  {
+   "id": "graph-to-approver",
+   "from": "graph",
+   "to": "approver",
+   "label": "L2 interrupt·批复 resume",
+   "fromSide": "left",
+   "toSide": "right",
+   "via": [
+    [
+     500,
+     218
+    ],
+    [
+     470,
+     218
+    ],
+    [
+     470,
+     430
+    ],
+    [
+     230,
+     430
+    ],
+    [
+     230,
+     490
+    ]
+   ],
+   "labelAt": [
+    290,
+    422
+   ]
+  },
+  {
+   "id": "events-to-webui",
+   "from": "events",
+   "to": "webui",
+   "label": "SSE 推进度·断线补发",
+   "fromSide": "bottom",
+   "toSide": "right",
+   "via": [
+    [
+     370,
+     330
+    ]
+   ]
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "技术栈",
+   "items": [
+    "TypeScript + LangGraph.js supervisor 模式（主图拉起 M4-M7 子图，interrupt/resume 原生支持）",
+    "checkpointer = SQLite 信封 hash 链：每步状态指纹串成链，篡改即断链",
+    "SSE 用 Last-Event-ID 断线补发；LLM 调用全走 gateway 凭证代理（S1）"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "部署",
+   "items": [
+    "compose 服务 agent，单容器，端口 3003，健康检查 /healthz",
+    "检查点落卷 ./data/agent:/data；镜像 node:22-alpine",
+    "M4-M7 是它内部子模块、无独立 HTTP 面——各自流水线细节见对应子图，本图只画 M3 层",
+    "M8 对话 Copilot 也在本服务（chat_flow）：复用本图同一套 graph/events/验票闸/检查点机制，仅入口不同（用户问话而非告警事件）"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "铁律",
+   "items": [
+    "审批 interrupt 绑定 (run, tool_call)：杀进程重启后从检查点恢复，审批仍认原调用",
+    "信封被篡改 resume 必拒（hash 链对不上）；超 max_steps 20 / 60s / 50k token 任一条→强杀 run + 落审计",
+    "M3 只调度不干活——它不知道什么是 IP 信誉，只知道下一个该叫醒谁"
+   ]
+  }
+ ]
 }

@@ -5004,7 +5004,7 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1200 580" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+      <svg viewBox="-184.2025 -75.25 1562.405 726.7" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" preserveAspectRatio="none">
         <title id="archify-diagram-title">M1 告警接入 · 内部结构</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
@@ -5030,172 +5030,154 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="compose 服务 ingest :3001（镜像 node:22-alpine）" x="250" y="210" width="930" height="290" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="compose 服务 ingest :3001（镜像 node:22-alpine）" x="250" y="187.7" width="930" height="340.50000000000006" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="replay" data-edge-to="webhook" data-edge-label="POST /webhooks/alerts" data-edge-key="0" data-edge-id="replay-to-webhook" data-composition-points="200,150;240,150;240,272;280,272" d="M 200 150 L 232 150 Q 240 150 240 158 L 240 264 Q 240 272 248 272 L 280 272" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="wazuh-real" data-edge-to="webhook" data-edge-label="真实模式同一扇门" data-edge-key="1" data-edge-id="wazuh-to-webhook" data-composition-points="200,390;240,390;240,272;280,272" d="M 200 390 L 232 390 Q 240 390 240 382 L 240 280 Q 240 272 248 272 L 280 272" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
-        <path data-edge-from="webhook" data-edge-to="dedup" data-edge-label="解析通过" data-edge-key="2" data-edge-id="webhook-to-dedup" data-composition-points="440,272;510,272" d="M 440 272 L 510 272" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="dedup" data-edge-to="mapper" data-edge-label="新告警" data-edge-key="3" data-edge-id="dedup-to-mapper" data-composition-points="680,272;750,272" d="M 680 272 L 750 272" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="mapper" data-edge-to="marker" data-edge-key="4" data-edge-id="mapper-to-marker" data-composition-points="920,272;980,272" d="M 920 272 L 980 272" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="marker" data-edge-to="m2client" data-edge-key="5" data-edge-id="marker-to-m2client" data-composition-points="1065,304;1065,420" d="M 1065 304 L 1065 420" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="m2client" data-edge-to="m2" data-edge-label="upsert（唯一约束判重）" data-edge-key="6" data-edge-id="m2client-to-m2" data-composition-points="980,450;910,450" d="M 980 450 L 910 450" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="dedup" data-edge-to="webhook" data-edge-label="重复：返回既有 id，不触发流水线" data-edge-key="7" data-edge-id="dedup-dup-return" data-composition-points="595,304;595,400;360,400;360,304" d="M 595 304 L 595 392 Q 595 400 587 400 L 368 400 Q 360 400 360 392 L 360 304" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="replay" data-edge-to="webhook" data-edge-label="POST /webhooks/alerts" data-edge-key="0" data-edge-id="replay-to-webhook" data-composition-points="200,94;240,94;240,249.7;280,249.7" d="M 200 94 L 232 94 Q 240 94 240 102 L 240 241.7 Q 240 249.7 248 249.7 L 280 249.7" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="wazuh-real" data-edge-to="webhook" data-edge-label="真实模式同一扇门" data-edge-key="1" data-edge-id="wazuh-to-webhook" data-composition-points="200,401.3;240,401.3;240,249.7;280,249.7" d="M 200 401.3 L 232 401.3 Q 240 401.3 240 393.3 L 240 257.7 Q 240 249.7 248 249.7 L 280 249.7" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="webhook" data-edge-to="dedup" data-edge-label="解析通过" data-edge-key="2" data-edge-id="webhook-to-dedup" data-composition-points="440,249.7;510,249.7" d="M 440 249.7 L 510 249.7" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="dedup" data-edge-to="mapper" data-edge-label="新告警" data-edge-key="3" data-edge-id="dedup-to-mapper" data-composition-points="680,249.7;750,249.7" d="M 680 249.7 L 750 249.7" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="mapper" data-edge-to="marker" data-edge-key="4" data-edge-id="mapper-to-marker" data-composition-points="920,249.7;980,249.7" d="M 920 249.7 L 980 249.7" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="marker" data-edge-to="m2client" data-edge-key="5" data-edge-id="marker-to-m2client" data-composition-points="1065,281.7;1065,448.2" d="M 1065 281.7 L 1065 448.2" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="m2client" data-edge-to="m2" data-edge-label="upsert（唯一约束判重）" data-edge-key="6" data-edge-id="m2client-to-m2" data-composition-points="980,478.2;910,478.2" d="M 980 478.2 L 910 478.2" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="dedup" data-edge-to="webhook" data-edge-label="重复：返回既有 id，不触发流水线" data-edge-key="7" data-edge-id="dedup-dup-return" data-composition-points="595,281.7;595,422.6;360,422.6;360,281.7" d="M 595 281.7 L 595 414.6 Q 595 422.6 587 422.6 L 368 422.6 Q 360 422.6 360 414.6 L 360 281.7" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
         <g id="node-replay" data-node-id="replay" data-node-label="回放脚本" tabindex="0" role="button" aria-label="聚焦回放脚本，scripts/replay.ts, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="scripts/replay.ts" data-node-tag="演示触发·可配速率" data-node-context="架构组件">
           <title>回放脚本 · scripts/replay.ts · 架构组件 · 演示触发·可配速率</title>
-          <rect x="40" y="120" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="120" width="160" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 126) scale(0.6875)">
+          <rect x="40" y="64" width="160" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="64" width="160" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 70) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="120" y="148" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">回放脚本</text>
-        <text data-detail="context" x="120" y="164" class="t-muted" font-size="9" text-anchor="middle">scripts/replay.ts</text>
-        <text data-detail="fine" x="120" y="172" class="t-external" font-size="7" text-anchor="middle">演示触发·可配速率</text>
+          <text data-node-label="" data-detail-anchor="" x="120" y="92" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">回放脚本</text>
+        <text data-detail="context" x="120" y="108" class="t-muted" font-size="9" text-anchor="middle">scripts/replay.ts</text>
+        <text data-detail="fine" x="120" y="116" class="t-external" font-size="7" text-anchor="middle">演示触发·可配速率</text>
         </g>
 
         <g id="node-wazuh-real" data-node-id="wazuh-real" data-node-label="真实 Wazuh" tabindex="0" role="button" aria-label="聚焦真实 Wazuh，logtest 产告警, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="logtest 产告警" data-node-tag="可选 profile" data-node-context="架构组件">
           <title>真实 Wazuh · logtest 产告警 · 架构组件 · 可选 profile</title>
-          <rect x="40" y="360" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="40" y="360" width="160" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 366) scale(0.6875)">
+          <rect x="40" y="371.3" width="160" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="371.3" width="160" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 377.3) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="120" y="388" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">真实 Wazuh</text>
-        <text data-detail="context" x="120" y="404" class="t-muted" font-size="9" text-anchor="middle">logtest 产告警</text>
-        <text data-detail="fine" x="120" y="412" class="t-external" font-size="7" text-anchor="middle">可选 profile</text>
+          <text data-node-label="" data-detail-anchor="" x="120" y="399.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">真实 Wazuh</text>
+        <text data-detail="context" x="120" y="415.3" class="t-muted" font-size="9" text-anchor="middle">logtest 产告警</text>
+        <text data-detail="fine" x="120" y="423.3" class="t-external" font-size="7" text-anchor="middle">可选 profile</text>
         </g>
 
         <g id="node-webhook" data-node-id="webhook" data-node-label="① 接收校验" tabindex="0" role="button" aria-label="聚焦① 接收校验，Fastify 路由 + JSON Schema, compose 服务 ingest :3001（镜像 node:22-alpine）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Fastify 路由 + JSON Schema" data-node-tag="畸形→422" data-node-context="compose 服务 ingest :3001（镜像 node:22-alpine）">
           <title>① 接收校验 · Fastify 路由 + JSON Schema · compose 服务 ingest :3001（镜像 node:22-alpine） · 畸形→422</title>
-          <rect x="280" y="240" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="280" y="240" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 246) scale(0.6875)">
+          <rect x="280" y="217.7" width="160" height="64" rx="6" class="c-mask"/>
+          <rect x="280" y="217.7" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(286 223.7) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="360" y="270" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">① 接收校验</text>
-        <text data-detail="context" x="360" y="286" class="t-muted" font-size="9" text-anchor="middle">Fastify 路由 + JSON Schema</text>
-        <text data-detail="fine" x="360" y="296" class="t-backend" font-size="7" text-anchor="middle">畸形→422</text>
+          <text data-node-label="" data-detail-anchor="" x="360" y="247.7" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">① 接收校验</text>
+        <text data-detail="context" x="360" y="263.7" class="t-muted" font-size="9" text-anchor="middle">Fastify 路由 + JSON Schema</text>
+        <text data-detail="fine" x="360" y="273.7" class="t-backend" font-size="7" text-anchor="middle">畸形→422</text>
         </g>
 
         <g id="node-dedup" data-node-id="dedup" data-node-label="② 去重" tabindex="0" role="button" aria-label="聚焦② 去重，source+sourceRef 唯一约束, compose 服务 ingest :3001（镜像 node:22-alpine）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="source+sourceRef 唯一约束" data-node-tag="重复→occurrences+1" data-node-context="compose 服务 ingest :3001（镜像 node:22-alpine）">
           <title>② 去重 · source+sourceRef 唯一约束 · compose 服务 ingest :3001（镜像 node:22-alpine） · 重复→occurrences+1</title>
-          <rect x="510" y="240" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="510" y="240" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(516 246) scale(0.6875)">
+          <rect x="510" y="217.7" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="510" y="217.7" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(516 223.7) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="595" y="270" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② 去重</text>
-        <text data-detail="context" x="595" y="286" class="t-muted" font-size="9" text-anchor="middle">source+sourceRef 唯一约束</text>
-        <text data-detail="fine" x="595" y="296" class="t-backend" font-size="7" text-anchor="middle">重复→occurrences+1</text>
+          <text data-node-label="" data-detail-anchor="" x="595" y="247.7" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② 去重</text>
+        <text data-detail="context" x="595" y="263.7" class="t-muted" font-size="9" text-anchor="middle">source+sourceRef 唯一约束</text>
+        <text data-detail="fine" x="595" y="273.7" class="t-backend" font-size="7" text-anchor="middle">重复→occurrences+1</text>
         </g>
 
         <g id="node-mapper" data-node-id="mapper" data-node-label="③ 映射器" tabindex="0" role="button" aria-label="聚焦③ 映射器，Wazuh → TheHive 方言翻译, compose 服务 ingest :3001（镜像 node:22-alpine）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Wazuh → TheHive 方言翻译" data-node-tag="severity/tags/observables" data-node-context="compose 服务 ingest :3001（镜像 node:22-alpine）">
           <title>③ 映射器 · Wazuh → TheHive 方言翻译 · compose 服务 ingest :3001（镜像 node:22-alpine） · severity/tags/observables</title>
-          <rect x="750" y="240" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="750" y="240" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(756 246) scale(0.6875)">
+          <rect x="750" y="217.7" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="750" y="217.7" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(756 223.7) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="835" y="270" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">③ 映射器</text>
-        <text data-detail="context" x="835" y="286" class="t-muted" font-size="9" text-anchor="middle">Wazuh → TheHive 方言翻译</text>
-        <text data-detail="fine" x="835" y="296" class="t-backend" font-size="7" text-anchor="middle">severity/tags/observables</text>
+          <text data-node-label="" data-detail-anchor="" x="835" y="247.7" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">③ 映射器</text>
+        <text data-detail="context" x="835" y="263.7" class="t-muted" font-size="9" text-anchor="middle">Wazuh → TheHive 方言翻译</text>
+        <text data-detail="fine" x="835" y="273.7" class="t-backend" font-size="7" text-anchor="middle">severity/tags/observables</text>
         </g>
 
         <g id="node-marker" data-node-id="marker" data-node-label="④ 不可信标记" tabindex="0" role="button" aria-label="聚焦④ 不可信标记，full_log / data.* → untrusted, compose 服务 ingest :3001（镜像 node:22-alpine）" aria-pressed="false" data-node-kind="security" data-node-sublabel="full_log / data.* → untrusted" data-node-tag="数据不是指令" data-node-context="compose 服务 ingest :3001（镜像 node:22-alpine）">
           <title>④ 不可信标记 · full_log / data.* → untrusted · compose 服务 ingest :3001（镜像 node:22-alpine） · 数据不是指令</title>
-          <rect x="980" y="240" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="980" y="240" width="170" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(986 246) scale(0.6875)">
+          <rect x="980" y="217.7" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="980" y="217.7" width="170" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(986 223.7) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1065" y="270" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ 不可信标记</text>
-        <text data-detail="context" x="1065" y="286" class="t-muted" font-size="9" text-anchor="middle">full_log / data.* → untrusted</text>
-        <text data-detail="fine" x="1065" y="296" class="t-security" font-size="7" text-anchor="middle">数据不是指令</text>
+          <text data-node-label="" data-detail-anchor="" x="1065" y="247.7" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ 不可信标记</text>
+        <text data-detail="context" x="1065" y="263.7" class="t-muted" font-size="9" text-anchor="middle">full_log / data.* → untrusted</text>
+        <text data-detail="fine" x="1065" y="273.7" class="t-security" font-size="7" text-anchor="middle">数据不是指令</text>
         </g>
 
         <g id="node-m2client" data-node-id="m2client" data-node-label="⑤ M2 客户端" tabindex="0" role="button" aria-label="聚焦⑤ M2 客户端，REST 写 Alert / 拿 id, compose 服务 ingest :3001（镜像 node:22-alpine）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="REST 写 Alert / 拿 id" data-node-context="compose 服务 ingest :3001（镜像 node:22-alpine）">
           <title>⑤ M2 客户端 · REST 写 Alert / 拿 id · compose 服务 ingest :3001（镜像 node:22-alpine）</title>
-          <rect x="980" y="420" width="170" height="60" rx="6" class="c-mask"/>
-          <rect x="980" y="420" width="170" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(986 426) scale(0.6875)">
+          <rect x="980" y="448.2" width="170" height="60" rx="6" class="c-mask"/>
+          <rect x="980" y="448.2" width="170" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(986 454.2) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1065" y="448" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">⑤ M2 客户端</text>
-        <text data-detail="context" x="1065" y="464" class="t-muted" font-size="9" text-anchor="middle">REST 写 Alert / 拿 id</text>
+          <text data-node-label="" data-detail-anchor="" x="1065" y="476.2" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">⑤ M2 客户端</text>
+        <text data-detail="context" x="1065" y="492.2" class="t-muted" font-size="9" text-anchor="middle">REST 写 Alert / 拿 id</text>
         </g>
 
         <g id="node-m2" data-node-id="m2" data-node-label="M2 案件后端" tabindex="0" role="button" aria-label="聚焦M2 案件后端，SQLite 唯一索引兜底 + 发事件, 架构组件" aria-pressed="false" data-node-kind="database" data-node-sublabel="SQLite 唯一索引兜底 + 发事件" data-node-tag="外部依赖" data-node-context="架构组件">
           <title>M2 案件后端 · SQLite 唯一索引兜底 + 发事件 · 架构组件 · 外部依赖</title>
-          <rect x="720" y="420" width="190" height="60" rx="6" class="c-mask"/>
-          <rect x="720" y="420" width="190" height="60" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(726 426) scale(0.6875)">
+          <rect x="720" y="448.2" width="190" height="60" rx="6" class="c-mask"/>
+          <rect x="720" y="448.2" width="190" height="60" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(726 454.2) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="815" y="448" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
-        <text data-detail="context" x="815" y="464" class="t-muted" font-size="9" text-anchor="middle">SQLite 唯一索引兜底 + 发事件</text>
-        <text data-detail="fine" x="815" y="472" class="t-database" font-size="7" text-anchor="middle">外部依赖</text>
+          <text data-node-label="" data-detail-anchor="" x="815" y="476.2" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
+        <text data-detail="context" x="815" y="492.2" class="t-muted" font-size="9" text-anchor="middle">SQLite 唯一索引兜底 + 发事件</text>
+        <text data-detail="fine" x="815" y="500.2" class="t-database" font-size="7" text-anchor="middle">外部依赖</text>
         </g>
 
         <!-- Connection labels -->
         <g data-detail="context" data-edge-from="replay" data-edge-to="webhook" data-edge-label="POST /webhooks/alerts" data-edge-key="0" data-edge-id="replay-to-webhook">
-          <rect x="139.6" y="180" width="110.8" height="14" rx="3" class="c-mask"/>
-          <text x="195" y="190" class="t-backend" font-size="8" text-anchor="middle">POST /webhooks/alerts</text>
+          <rect x="139.6" y="143.6" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="195" y="153.6" class="t-backend" font-size="8" text-anchor="middle">POST /webhooks/alerts</text>
         </g>
         <g data-detail="context" data-edge-from="wazuh-real" data-edge-to="webhook" data-edge-label="真实模式同一扇门" data-edge-key="1" data-edge-id="wazuh-to-webhook">
-          <rect x="151.6" y="310" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="195" y="320" class="t-messagebus" font-size="8" text-anchor="middle">真实模式同一扇门</text>
+          <rect x="151.6" y="310.1" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="195" y="320.1" class="t-messagebus" font-size="8" text-anchor="middle">真实模式同一扇门</text>
         </g>
         <g data-detail="context" data-edge-from="webhook" data-edge-to="dedup" data-edge-label="解析通过" data-edge-key="2" data-edge-id="webhook-to-dedup">
-          <rect x="450.8" y="238" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="475" y="248" class="t-muted" font-size="8" text-anchor="middle">解析通过</text>
+          <rect x="450.8" y="215.7" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="475" y="225.7" class="t-muted" font-size="8" text-anchor="middle">解析通过</text>
         </g>
         <g data-detail="context" data-edge-from="dedup" data-edge-to="mapper" data-edge-label="新告警" data-edge-key="3" data-edge-id="dedup-to-mapper">
-          <rect x="695.6" y="238" width="38.8" height="14" rx="3" class="c-mask"/>
-          <text x="715" y="248" class="t-muted" font-size="8" text-anchor="middle">新告警</text>
+          <rect x="695.6" y="215.7" width="38.8" height="14" rx="3" class="c-mask"/>
+          <text x="715" y="225.7" class="t-muted" font-size="8" text-anchor="middle">新告警</text>
         </g>
 
 
         <g data-detail="context" data-edge-from="m2client" data-edge-to="m2" data-edge-label="upsert（唯一约束判重）" data-edge-key="6" data-edge-id="m2client-to-m2">
-          <rect x="887.2" y="486" width="115.6" height="14" rx="3" class="c-mask"/>
-          <text x="945" y="496" class="t-muted" font-size="8" text-anchor="middle">upsert（唯一约束判重）</text>
+          <rect x="887.2" y="535.5" width="115.6" height="14" rx="3" class="c-mask"/>
+          <text x="945" y="545.5" class="t-muted" font-size="8" text-anchor="middle">upsert（唯一约束判重）</text>
         </g>
         <g data-detail="context" data-edge-from="dedup" data-edge-to="webhook" data-edge-label="重复：返回既有 id，不触发流水线" data-edge-key="7" data-edge-id="dedup-dup-return">
-          <rect x="400.6" y="382" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
-          <text x="480" y="392" class="t-messagebus" font-size="8" text-anchor="middle">重复：返回既有 id，不触发流水线</text>
+          <rect x="400.6" y="402.3" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="480" y="412.3" class="t-messagebus" font-size="8" text-anchor="middle">重复：返回既有 id，不触发流水线</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
         <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="compose 服务 ingest :3001（镜像 node:22-alpine）">
-          <rect data-graph-role="structural-frame-label-mask" x="254" y="220" width="269.2" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="258" y="233" class="t-cloud" font-size="9" font-weight="600">compose 服务 ingest :3001（镜像 node:22-alpine）</text>
+          <rect data-graph-role="structural-frame-label-mask" x="254" y="197.7" width="269.2" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="258" y="210.7" class="t-cloud" font-size="9" font-weight="600">compose 服务 ingest :3001（镜像 node:22-alpine）</text>
         </g>
 
         <!-- Legend -->
-        <g data-legend="" data-legend-bridge="">
-          <text x="40" y="544" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="40" data-legend-baseline="564" data-legend-width="63">
-            <rect x="40" y="555" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="62" y="564" class="t-muted" font-size="10" font-weight="500">后端</text>
-          </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="125" data-legend-baseline="564" data-legend-width="73">
-            <rect x="125" y="555" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
-            <text x="147" y="564" class="t-muted" font-size="10" font-weight="500">数据库</text>
-          </g>
-          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="安全" data-legend-x="220" data-legend-baseline="564" data-legend-width="63">
-            <rect x="220" y="555" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
-            <text x="242" y="564" class="t-muted" font-size="10" font-weight="500">安全</text>
-          </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="305" data-legend-baseline="564" data-legend-width="83">
-            <rect x="305" y="555" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="327" y="564" class="t-muted" font-size="10" font-weight="500">外部系统</text>
-          </g>
-        </g>
+
       </svg>
       <p class="intent-trace-status no-print" id="intent-trace-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="share-chapter-cue no-print" id="share-chapter-cue" hidden role="status" aria-live="polite">
@@ -14823,5 +14805,229 @@
       }
     });
   </script>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<!-- arch-nodepop:begin -->
+<style>
+  [data-node-id]{cursor:pointer}
+  /* 节点内容卡：左上角无蒙层悬浮，按住标题栏可拖动 */
+  .arch-np{
+    position: fixed; top: 4.6rem; left: 1rem; z-index: 10000;
+    width: min(480px, calc(100vw - 2rem));
+    max-height: min(72vh, 760px); overflow: auto;
+    background: var(--panel, #101827); color: inherit;
+    border: 1px solid var(--panel-border, #334155); border-radius: 0.7rem;
+    padding: 0.6rem 0.8rem;
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+    font-family: system-ui, -apple-system, sans-serif;
+    font-size: 0.74rem; line-height: 1.5;
+    display: none;
+  }
+  .arch-np[data-open="true"]{ display: block; }
+  .arch-np-head{
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
+    margin: -0.1rem -0.2rem 0.35rem; padding: 0.1rem 0.15rem;
+    cursor: move; user-select: none;
+  }
+  .arch-np h2{ font-size: 0.82rem; margin: 0; }
+  .arch-np p{ margin: 0.35rem 0; }
+  .arch-np ul{ margin: 0.3rem 0; padding-left: 1.15em; }
+  .arch-np li{ margin: 0.12rem 0; }
+  .arch-np a{ color: var(--frontend-stroke, #6db3f2); text-decoration: none; }
+  .arch-np a:hover{ text-decoration: underline; }
+  .arch-np-close{
+    background: transparent; color: inherit; cursor: pointer;
+    border: 1px solid var(--panel-border, #334155); border-radius: 0.4rem;
+    padding: 0.1rem 0.4rem; font: inherit; font-size: 0.7rem; flex: none;
+  }
+</style>
+<script id="arch-node-notes" type="application/json">{"alert-src":{"title":"告警源 —— 数据从哪来","body":"\u003cp>\u003cb>真实世界对应物：\u003c/b>公司每台服务器上的 Wazuh 探针，24 小时产出告警 JSON。我们没有真实外部环境，所以用混合策略造数据：\u003c/p>\u003cul>\u003cli>\u003cb>现成采集\u003c/b>：Wazuh 官方仓库 ruleset 测试样本、官方文档样例、路线 1-3 实测语料\u003c/li>\u003cli>\u003cb>官方工具自产\u003c/b>：可选 real-wazuh profile 起容器，logtest 喂真实日志产出真告警\u003c/li>\u003cli>\u003cb>攻击变体人工改造\u003c/b>：把注入载荷植入 srcuser/full_log/url 等攻击者可控字段（独创资产，全网没有现成数据集）\u003c/li>\u003c/ul>\u003cp>\u003cb>进系统的方式（刻意设计）：\u003c/b>数据落盘在 fixtures/alerts/，但绝不直接塞数据库——由回放脚本扮演外部世界，HTTP POST 推进 webhook，走和真实 Wazuh 完全相同的门。推模式（有事就推），不做定时轮询。\u003c/p>\u003cp>\u003cb>回放载体\u003c/b>：scripts/replay.ts 几十行 CLI，可配速率；Web 告警列表页有同款回放按钮。不进 compose，是「非运行时件」。\u003c/p>"},"ingest":{"title":"M1 告警接入 —— 告警进系统的唯一入口","body":"\u003cp>\u003cb>干什么：\u003c/b>收 webhook → source+sourceRef 去重（重复时 occurrences+1，不新建不重复触发）→ Wazuh 字段映射成 Alert → full_log/data.* 打上不可信标记 → 发事件喊流水线开工。\u003c/p>\u003cp>\u003cb>本质定位：\u003c/b>门卫 + 翻译 + 打标——入口归一化。不管什么来源，过了这扇门都变成统一格式、统一去重身份、贴上\"这是数据不是指令\"标签。纯确定性代码，无 LLM。\u003c/p>\u003cul>\u003cli>\u003cb>接口\u003c/b>：POST /api/v1/webhooks/alerts；POST /internal/replay（fixture 回放）\u003c/li>\u003cli>\u003cb>Seam\u003c/b>：写库走 M2 REST（可换内存 stub 测试）；去重唯一约束在 M2 SQLite 兜底\u003c/li>\u003cli>\u003cb>验收\u003c/b>：同一 fixture 连推 3 次只建 1 条；7 类具名 fixture 映射全过\u003c/li>\u003cli>全是确定性代码，无 LLM\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（接收校验→去重→映射→标记→写 M2→发事件，含技术栈与部署说明）：同目录 architecture-m1-internal.html\u003c/p>"},"case-backend":{"title":"M2 案件后端 —— 全系统数据地基","body":"\u003cp>\u003cb>干什么：\u003c/b>Alert/Case/Task/Observable/Timeline/Audit 六类实体的 CRUD + 状态机 + alert→case 三结局；所有写操作自动落审计（记操作不记内容）。\u003c/p>\u003cp>\u003cb>本质定位：\u003c/b>带规矩的档案室 + 总台账本——存储读取是手段，保证数据全生命周期可追溯才是目的。纯确定性代码，一行 LLM 都没有；前面 M1/M2 把数据和台账做扎实，后面的 agent 才敢放开手脚。\u003c/p>\u003cul>\u003cli>\u003cb>接口\u003c/b>：/api/v1/alerts、/cases、/timeline、/audit 等 REST\u003c/li>\u003cli>\u003cb>Seam\u003c/b>：存储（SQLite/内存）；事件出口 EventBus = SQLite outbox（将来可换 Kafka，只换 adapter）\u003c/li>\u003cli>\u003cb>验收\u003c/b>：状态机非法转移 100% 409；关案必须填 verdict；任何写必产审计 diff\u003c/li>\u003cli>纯叶子模块，不依赖任何人\u003c/li>\u003c/ul>\u003cp>\u003cb>技术选型理由：\u003c/b>Fastify 5 ≈ TS 世界的 FastAPI（声明式 schema 校验内置，畸形请求自动 422——入口校验是防注入第一道铁丝网，内置=默认就有不靠自觉；性能为 Express 约 2 倍）。存储用 SQLite + better-sqlite3：① 同步 API 让\"写数据+审计 diff+outbox 事件\"三件套进同一事务，要么全成要么全滚；② 内存 SQLite 换一行连接串即测试 seam，单测不起容器；③ 零运维，考官 compose up 即跑。何时不选它：多实例水平扩展/多服务并发写——所以存储与 EventBus 都留了 seam，换 Postgres/Kafka 不动业务代码。\u003c/p>\u003cp>\u003cb>内部结构图\u003c/b>（REST 面→状态机→审计拦截→SQLite→outbox，含技术栈与部署说明）：同目录 architecture-m2-internal.html\u003c/p>"},"m3-supervisor":{"title":"M3 supervisor 编排 —— 系统的大脑","body":"\u003cp>\u003cb>干什么：\u003c/b>图编排与路由（LangGraph.js 主图拉起 M4-M7 子图）、checkpointer、票据申领、审批 interrupt、SSE 事件总线、资源兜底。\u003c/p>\u003cul>\u003cli>\u003cb>硬规矩\u003c/b>：自己不持工具、不做安全判断，只调度；worker 之间不直接对话，靠共享 Case 资源层协作\u003c/li>\u003cli>\u003cb>审批\u003c/b>：L2 高危动作在图里 interrupt() 挂起，等人点头才 resume\u003c/li>\u003cli>\u003cb>资源兜底\u003c/b>：LLM 超时 60s / max_steps 20 / token 50k per run，任一超限强杀 + 审计（决策 #4/#5/#12）\u003c/li>\u003cli>\u003cb>验收\u003c/b>：杀进程重启后审批状态可恢复；信封 hash 篡改必拒；5712 fixture 全链路无人干预跑完\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（调度主图 + 检查点恢复 + 审批挂起）：同目录 architecture-m3-internal.html\u003c/p>"},"m4-triage":{"title":"M4 分诊 agent —— 流水线第一棒","body":"\u003cp>\u003cb>干什么：\u003c/b>单条告警 → 四分类 verdict + 处置建议。子图六节点：load_alert → kb_check → merge_check → self_audit → verdict_llm → outcome。\u003c/p>\u003cul>\u003cli>\u003cb>物理无 L2 票\u003c/b>：分诊 agent 想越权也没有遏制工具的票（权限收窄是物理的）\u003c/li>\u003cli>\u003cb>不可信包装\u003c/b>：prompt 装配器 wrapUntrusted，告警字段是数据不是指令（D1 落点）\u003c/li>\u003cli>\u003cb>输出契约\u003c/b>：结构化输出 schema 是事实接口，不合 schema 重试 1 次 → uncertain + 人工待办\u003c/li>\u003cli>\u003cb>验收\u003c/b>：标注集宏准确率 ≥80%；同主机 24h 两条 TP 只建 1 案\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（六节点子图 + 不可信包装 + 结构化输出契约）：同目录 architecture-m4-internal.html\u003c/p>"},"m5-investigation":{"title":"M5 调查 agent —— 多步工具循环","body":"\u003cp>\u003cb>干什么：\u003c/b>TP 案件关联调查 → 结构化调查报告进 Timeline。子图工具循环：plan → 验票 → 执行 → 治理 → plan，直到 LLM 判定收工。\u003c/p>\u003cul>\u003cli>\u003cb>与 M4 的本质区别\u003c/b>：多步循环要三条缰绳——max_steps=20、防打转（同参数重复调用报错）、上下文治理（结果 &gt;10k 摘要 / &gt;50k 落盘留引用）\u003c/li>\u003cli>\u003cb>只提建议不动手\u003c/b>：报告进 Timeline，处置是人/审批的事\u003c/li>\u003cli>\u003cb>SIEM 是 seam\u003c/b>：fixture 告警集检索（演示）↔ 将来真 Wazuh，只换 adapter\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（调查工具循环 + 三条缰绳）：同目录 architecture-m5-internal.html\u003c/p>"},"m6-enrichment":{"title":"M6 富化 agent —— 证据送检实验室","body":"\u003cp>\u003cb>干什么：\u003c/b>observables 跑 analyzer（Cortex 契约子集）+ TLP/PAP 闸门 + artifacts 回写 M2。\u003c/p>\u003cul>\u003cli>\u003cb>TLP/PAP 闸门\u003c/b>：确定性中间件，数据分密级（CLEAR/GREEN/AMBER/RED），超限 fail-closed 拒绝，不靠模型自觉\u003c/li>\u003cli>\u003cb>一次性 microVM\u003c/b>：analyzer 每次在 microsandbox 按需拉起的沙箱里真跑，用完即毁——第四攻击面落点\u003c/li>\u003cli>\u003cb>方向不对称是设计\u003c/b>：结果能出沙箱（回 normalize），恶意外联不能出\u003c/li>\u003cli>\u003cb>验收\u003c/b>：enrich/02_tlp_red_blocked 超限必拒 + DENIED 审计；投毒 analyzer 外联被沙箱拦截\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（TLP/PAP 闸门 + 一次性 microVM 沙箱）：同目录 architecture-m6-internal.html\u003c/p>"},"m7-knowledge":{"title":"M7 知识沉淀 —— 闭环飞轮","body":"\u003cp>\u003cb>干什么：\u003c/b>案件关闭（有 verdict）→ 提炼 KBEntry 草稿 → 人审入库 chroma approved 区 → 检索注入提速下次分诊。\u003c/p>\u003cul>\u003cli>\u003cb>人审是入库唯一通道\u003c/b>（D8）：agent 提炼的草稿必须人审通过才进检索面——RAG 投毒的第一道防线；驳回即终态不重试\u003c/li>\u003cli>\u003cb>检索注入同样过 wrapUntrusted\u003c/b>：KB 条目对 LLM 是参考信息不是指令\u003c/li>\u003cli>\u003cb>REST 面挂 M2\u003c/b>：proposals 数据归案件后端，agent 侧只出提炼子图\u003c/li>\u003cli>\u003cb>飞轮验证\u003c/b>：同批告警 replay 第二次，结论一致且工具调用数下降\u003c/li>\u003c/ul>\u003cp>\u003cb>内部结构图\u003c/b>（提炼→人审→入库 + 检索面）：同目录 architecture-m7-internal.html\u003c/p>"},"m8-copilot":{"title":"M8 对话 Copilot —— 值班员的自然语言入口","body":"\u003cp>\u003cb>干什么：\u003c/b>登录角色会话 → RBAC 可见工具 → 输入预检 → 意图闸 → 执行 → SSE 流式回答。复用 M3 的 chat_flow。\u003c/p>\u003cul>\u003cli>\u003cb>可见性由角色决定\u003c/b>：什么身份看得见什么工具（ContextForge RBAC），soc1 发起 L2 意图 100% deny\u003c/li>\u003cli>\u003cb>注入拒答\u003c/b>：命中注入拒答 + 审计；置信度低澄清反问\u003c/li>\u003cli>\u003cb>接口\u003c/b>：POST /api/v1/chat（SSE）；4 预置身份登录\u003c/li>\u003c/ul>"},"web":{"title":"M10 Web 演示窗 —— 薄客户端","body":"\u003cp>\u003cb>干什么：\u003c/b>六个页面：告警列表 / 流水线实时视图 / 审批卡 / 案件时间线 / 审计流 / Eval 结果。\u003c/p>\u003cul>\u003cli>\u003cb>零特权\u003c/b>：所有数据走公开 REST + SSE，没有任何 Web 专属后门接口——curl 能演全剧本\u003c/li>\u003cli>\u003cb>告警列表页有回放按钮\u003c/b>：演示布景入口（背后是 replay 脚本）\u003c/li>\u003cli>SSE 断线自动重连 + Last-Event-ID 补发\u003c/li>\u003c/ul>"},"gateway":{"title":"C5 网关三容器 —— 身份与铸币","body":"\u003cp>\u003cb>干什么：\u003c/b>ContextForge（RBAC 工具可见性：什么角色看得见什么工具）+ OpenFGA（FGA 裁决：这个身份能不能用）+ 自写小服务（铸任务票/审批票 + 凭证代理）。\u003c/p>\u003cul>\u003cli>\u003cb>拆件复用\u003c/b>：proxy.py / task_token.py 票型 / fga_check 插件来自路线 3 实测代码（ADR 0001）\u003c/li>\u003cli>\u003cb>凭证代理\u003c/b>：LLM 上下文里只有占位符，真 key 在这里注入，全链路金丝雀断言防泄露\u003c/li>\u003cli>汇报金句：LLM 不能给自己授权、不能批准自己、不能解析凭证\u003c/li>\u003c/ul>"},"guards":{"title":"C4 防护微服务 —— 文本防线","body":"\u003cp>\u003cb>干什么：\u003c/b>llm-guard 注入扫描（告警字段/用户输入/KB 内容/工具输出四通道）+ Presidio PII 脱敏（出域前，内网 IP 豁免）。\u003c/p>\u003cul>\u003cli>\u003cb>fail-closed\u003c/b>：扫描服务挂了 = 不可信内容不进 prompt，转人工\u003c/li>\u003cli>文本防线只是第一层；就算穿透，越权动作还会被验票闸行为兜底（纵深两层）\u003c/li>\u003cli>复用路线 1-3 管线\u003c/li>\u003c/ul>"},"llm-provider":{"title":"LLM Provider —— 被防备的对象","body":"\u003cp>\u003cb>定位：\u003c/b>模型是不可信的决策者——它可能是被注入劫持的。所有纪律都围绕这个假设建。\u003c/p>\u003cul>\u003cli>默认 MiniMax-M2，LLM_MODEL/JUDGE_MODEL 走 env 可换\u003c/li>\u003cli>它从头到尾只见占位符，不见真 key（凭证代理注入）\u003c/li>\u003cli>超时 60s、token 预算 50k/run，超限挂起转人工\u003c/li>\u003c/ul>"},"chroma":{"title":"Chroma 知识库 —— 人审后的经验","body":"\u003cp>\u003cb>干什么：\u003c/b>存知识沉淀条目（FP 模式/处置 runbook），分诊和调查时检索注入提速。\u003c/p>\u003cul>\u003cli>\u003cb>硬闸\u003c/b>：agent 提炼的草稿必须人审通过才进检索面——RAG 投毒的第一道防线\u003c/li>\u003cli>检索进 prompt 的内容同样打不可信标记（知识对 LLM 是数据不是指令）\u003c/li>\u003cli>验收：毒 runbook 被驳回后，检索面确定性查不到\u003c/li>\u003c/ul>"},"sandbox":{"title":"microsandbox —— 第四攻击面","body":"\u003cp>\u003cb>干什么：\u003c/b>M6 富化的 analyzer 按 Cortex 真实架构是可执行脚本，每次在一次性 microVM 里真跑。\u003c/p>\u003cul>\u003cli>\u003cb>攻击面是刻意布置的教学场景\u003c/b>：投毒/被污染的 analyzer 企图外联 C2 或读宿主凭证 → 沙箱拦截 + 审计\u003c/li>\u003cli>路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此\u003c/li>\u003cli>不是常驻服务，按需拉起一次性 VM\u003c/li>\u003c/ul>"},"eval":{"title":"M11 Eval 体系 —— 实证数字生产线","body":"\u003cp>\u003cb>干什么：\u003c/b>三维评估：分诊准确率 / 防线拦截率（四攻击面）/ 成本口径（token+耗时）。\u003c/p>\u003cul>\u003cli>fixture 目录制，vitest 驱动；judge 只评分不进门槛\u003c/li>\u003cli>CI 快慢两道：PR 门禁跑单测级（\u003c5min），每日+手动跑全栈 compose\u003c/li>\u003cli>用例 ≥30；幕 6 的演示数字从这儿出\u003c/li>\u003c/ul>"},"replay":{"title":"回放脚本 —— 扮演外部世界的发令枪","body":"\u003cp>\u003cb>业务：\u003c/b>把 fixtures/alerts 里标注好的告警按可配速率 HTTP POST 推进 webhook，驱动演示与评测——没有它就没有可重复的剧本。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>scripts/replay.ts 几十行 CLI，刻意不进 compose（非运行时件）；与真实 Wazuh 走完全相同的门，切换数据源不改代码。\u003c/p>"},"wazuh-real":{"title":"真实 Wazuh —— 兼容性证明","body":"\u003cp>\u003cb>业务：\u003c/b>可选 real-wazuh profile：用官方 logtest 喂真实日志产出真告警，证明接入层对真实生态兼容，不是只会玩 fixture。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>复用 Wazuh 官方 ruleset 与 logtest；产出的告警和回放走同一扇 webhook 门——数据源可换，入口唯一。\u003c/p>"},"webhook":{"title":"① 接收校验 —— 唯一入口","body":"\u003cp>\u003cb>业务：\u003c/b>所有告警（回放/真实）统一从这里进系统，谁来的都一视同仁。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>Fastify 路由 + JSON Schema 声明式校验——畸形请求自动 422。选 Fastify 不选 Express：校验内置=默认安全不靠自觉，性能还高约 2 倍；入口校验是防注入的第一道铁丝网。\u003c/p>"},"dedup":{"title":"② 去重 —— 省钱的闸门","body":"\u003cp>\u003cb>业务：\u003c/b>同一告警只处理一次：重复推送返回既有 id、不触发流水线——省的是真金白银的 LLM 调用。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>source+sourceRef 唯一约束，判重下沉到 M2 SQLite 兜底——应用层判重不可靠，数据库约束才是铁的。\u003c/p>"},"mapper":{"title":"③ 映射器 —— 方言翻译","body":"\u003cp>\u003cb>业务：\u003c/b>把 Wazuh 方言翻译成统一 Alert 模型，下游从此不关心告警来自哪家探针。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>纯确定性映射代码，零 LLM；字段语义参考 Wazuh→TheHive 的成熟翻译，少造轮子。\u003c/p>"},"marker":{"title":"④ 不可信标记 —— D1 防线起点","body":"\u003cp>\u003cb>业务：\u003c/b>full_log/data.* 是攻击者可控的\u003cb>数据\u003c/b>不是指令——打上不可信标记，后续进 prompt 必须走 wrapUntrusted 包装，注入防御从数据入口就开始。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>深度遍历字段打标；下游取值必须经由标记通道，类型层面强制。\u003c/p>"},"m2client":{"title":"⑤ M2 客户端 —— 唯一出口","body":"\u003cp>\u003cb>业务：\u003c/b>把统一 Alert 写进 M2，告警接入到此结束。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>REST 调用 + 依赖注入 seam（单测可换内存 stub 不起容器）；判重唯一约束由 M2 侧兜底——应用层+数据库层双保险。\u003c/p>"},"rest":{"title":"① REST 面 —— 统一门户","body":"\u003cp>\u003cb>业务：\u003c/b>六实体的增删改查全走这：M1 写入、agent 读写三结局、Web 只读查询——curl 能演全剧本。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>Fastify + JSON Schema；只读查询直查 SQLite 不过状态机闸——读不产生审计，写才要过闸。\u003c/p>"},"statemachine":{"title":"② 状态机 —— 生命周期的规矩","body":"\u003cp>\u003cb>业务：\u003c/b>alert→case 三结局、任务流转的状态规则；非法迁移 100% 409——案子怎么流转是规矩说了算，不许随手改。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>迁移表集中定义（数据密集型设计）：规则是表数据不是散落的 if，新增状态改表不改代码。\u003c/p>"},"audit":{"title":"③ audit-signal 拦截器 —— 记操作不记内容","body":"\u003cp>\u003cb>业务：\u003c/b>所有写操作自动落审计，可追溯是 SOC 的硬要求而非可选项。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>拦截器夹在状态机与存储之间，业务代码零侵入；审计 diff 与业务写同一事务——要么全成要么全滚，审计永远不会缺账。\u003c/p>"},"sqlite":{"title":"④ SQLite（WAL） —— 数据地基","body":"\u003cp>\u003cb>业务：\u003c/b>六实体存储 + 唯一索引兜底判重。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>better-sqlite3 同步 API——\"写数据+审计 diff+outbox 事件\"三件套进同一事务；WAL 模式单进程无锁竞争。何时不选它：多实例水平扩展——存储留了 seam，换 Postgres 不动业务代码。\u003c/p>"},"outbox":{"title":"⑤ outbox 表 —— 事件出口","body":"\u003cp>\u003cb>业务：\u003c/b>alert.created 事件从这里唤醒 M3，事件与业务写强一致。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>transactional outbox 模式——事件与业务写同事务落盘，绝不丢事件；消费走轮询，将来换 Kafka 只换 adapter（刻意不上 Kafka，留 seam）。\u003c/p>"},"runs":{"title":"runs 入口 —— 一次处置的开端","body":"\u003cp>\u003cb>业务：\u003c/b>POST /internal/runs 创建一次告警处置，返回 run_id 异步执行；run 有完整生命周期（created/running/interrupted/failed/done）。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>202 异步化不阻塞调用方；这是 M3 唯一的 HTTP 写入口——M4-M7 无独立 HTTP 面。\u003c/p>"},"events":{"title":"① events 事件总线 —— 进度广播站","body":"\u003cp>\u003cb>业务：\u003c/b>消费 M2 outbox 唤醒主图开工；把每步进度实时推给前端。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>事件自增 id 落盘 + SSE Last-Event-ID 断线补发（决策 9）——刷新页面、断网重连都不丢进度。\u003c/p>"},"graph":{"title":"② graph 主图 —— supervisor 调度","body":"\u003cp>\u003cb>业务：\u003c/b>按 run 类型路由 worker 子图（分诊→调查→富化，案件关闭拉起沉淀）；L2 高危动作挂起等人点头。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>LangGraph.js——选它因为 interrupt/resume 与 checkpointer 原生支持，自研状态机等于重造轮子；LLM 超时重试 1 次后 run 置 Failed。\u003c/p>"},"m4":{"title":"M4 分诊子图 —— 流水线第一棒","body":"\u003cp>\u003cb>业务：\u003c/b>单条告警四分类 verdict + 处置建议，决定要不要建案调查。\u003c/p>\u003cp>完整六节点流水线看 M4 子图；模块弹窗（主图 M4 分诊）有验收口径。\u003c/p>"},"m5":{"title":"M5 调查子图 —— 第二棒","body":"\u003cp>\u003cb>业务：\u003c/b>TP 案件关联调查，产出结构化报告进 Timeline，只提建议不动手。\u003c/p>\u003cp>工具循环与三条缰绳看 M5 子图。\u003c/p>"},"m6":{"title":"M6 富化子图 —— 证据送检","body":"\u003cp>\u003cb>业务：\u003c/b>observables 送 analyzer 化验，artifacts 回写 M2。\u003c/p>\u003cp>TLP/PAP 闸门与第四攻击面看 M6 子图。\u003c/p>"},"m7":{"title":"M7 沉淀子图 —— 闭环飞轮","body":"\u003cp>\u003cb>业务：\u003c/b>案件关闭提炼经验，人审后入库反哺分诊。\u003c/p>\u003cp>提炼→人审→入库→检索看 M7 子图。\u003c/p>"},"gate":{"title":"③ 验票闸（M9-S2） —— 工具调用的闸","body":"\u003cp>\u003cb>业务：\u003c/b>M4-M7 每次工具调用先验票：无票/过期票/越权一律 403 + DENIED 审计——子 agent 物理上拿不到遏制工具的票。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>TS 中间件跑在 agent 进程内，验的是 gateway 铸的任务票（L0 免验 / L1 任务票 / L2 审批票）。\u003c/p>"},"tools":{"title":"外部工具/服务 —— 放行出网的落点","body":"\u003cp>\u003cb>业务：\u003c/b>验票放行后真正干活的地方：guards 注入扫描、SIEM 查询、沙箱执行。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>全部带票出网；LLM 凭证由 gateway 代理注入，key 永不进 agent 进程。\u003c/p>"},"checkpointer":{"title":"④ checkpointer 检查点 —— 断点续跑","body":"\u003cp>\u003cb>业务：\u003c/b>每步落检查点，杀进程重启后 run 从断点恢复，连审批挂起态都原样还原。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>SQLite + 信封 hash 链——每步状态指纹串成链，篡改后 resume 必拒；它是 LangGraph checkpointer 的存储 seam，可换实现。\u003c/p>"},"budget":{"title":"⑤ budget 资源兜底 —— 三条缰绳","body":"\u003cp>\u003cb>业务：\u003c/b>agent 失控的代价是真金白银：步数 20、token 50k/run、LLM 超时 60s，任一超限强杀 run + 审计。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>每步过秤的确定性中间件——不靠模型自觉（决策 #4/#5/#12）。\u003c/p>"},"approver":{"title":"审批人 —— 值班长","body":"\u003cp>\u003cb>业务：\u003c/b>L2 高危动作的把关人：M3 interrupt 挂起等批复、M7 知识入库等人审——机器永不自治处置。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>审批票一次性、绑定 (run, tool_call)，批复后原调用才 resume。\u003c/p>"},"load":{"title":"① load_alert —— 装料","body":"\u003cp>\u003cb>业务：\u003c/b>从 M2 装载告警与不可信字段，子图流水线起点。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>确定性读取；字段保持不可信标记不洗白，后续进 prompt 必须包装。\u003c/p>"},"kbcheck":{"title":"② kb_check —— 查经验","body":"\u003cp>\u003cb>业务：\u003c/b>检索历史相似案例（FP 模式/处置 runbook），命中则提速甚至直接给结论——知识沉淀的回报点。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>只读 M7 approved 区，top-k=5（决策 6）；检索内容过 wrapUntrusted：知识是参考不是指令。\u003c/p>"},"mergecheck":{"title":"③ merge_check —— 合并判定","body":"\u003cp>\u003cb>业务：\u003c/b>同主机/同实体的重复告警合并：24h 内两条 TP 只建 1 案，防重复告警烧成本。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>L0 免查只读合并键，确定性规则不花 LLM 钱。\u003c/p>"},"selfaudit":{"title":"④ self_audit —— 先复述再判","body":"\u003cp>\u003cb>业务：\u003c/b>让模型在判决前复述输入与依据，产出自查 artifact——为幻觉溯源留证据链。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>artifact 落 M2 供审计，结构固定可机器验收。\u003c/p>"},"verdict":{"title":"⑤ verdict_llm —— 出判决","body":"\u003cp>\u003cb>业务：\u003c/b>四分类 verdict + 处置建议，结构化输出。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>输出 schema 是事实接口，不合 schema 重试 1 次 → uncertain + 人工待办；不可信段 wrapUntrusted 包装（D1）；LLM 经 gateway 凭证代理，key 不落地。\u003c/p>"},"outcome":{"title":"⑥ outcome —— 收尾","body":"\u003cp>\u003cb>业务：\u003c/b>三结局动词（建案/合并/忽略）回写 M2，触发后续调查或关单。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>确定性分发；分诊物理无 L2 票——永远不需要危险动作，权限收窄是物理层面的。\u003c/p>"},"plan":{"title":"① plan_step —— 下一步查什么","body":"\u003cp>\u003cb>业务：\u003c/b>LLM 根据案件现状决策下一个调查动作，循环规划直到收工。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>LangGraph 循环 + 工具签名契约：siem_query 强制 time_window，防\"查全库\"式又贵又慢的查询。\u003c/p>"},"ticketgate":{"title":"② 验票闸 —— 先票后查","body":"\u003cp>\u003cb>业务：\u003c/b>每次工具调用前验票：无票/过期票一律 403 + DENIED 审计。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>M9-S2 中间件（与 M3 图同一道闸，出网必验）。\u003c/p>"},"toolexec":{"title":"③ tool_exec —— 动手查","body":"\u003cp>\u003cb>业务：\u003c/b>执行 siem_query / kb_read，调查只读两件套——只查证，不动手处置。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>工具后端是 seam：fixture 告警集检索（演示/CI）↔ 将来真 Wazuh，换 adapter 不换代码。\u003c/p>"},"govern":{"title":"④ govern_result —— 治理结果","body":"\u003cp>\u003cb>业务：\u003c/b>工具结果治理：>10k 字符小模型摘要、>50k 落盘留引用，防上下文爆炸；同参数重复调用报错，防打转。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>摘要走小模型 + 凭证代理；max_steps 20 由 budget 兜底。\u003c/p>"},"report":{"title":"⑤ report —— 出报告","body":"\u003cp>\u003cb>业务：\u003c/b>固定 schema 调查报告写进 M2 Timeline，只提建议不动手处置。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>固定 schema = 可机器验收；findings 必须引用真实工具输出，防编造。\u003c/p>"},"loop":{"title":"① enrich_loop —— 遍历送检","body":"\u003cp>\u003cb>业务：\u003c/b>遍历案件 observables，逐个送 analyzer 化验。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>确定性循环；输入从 M2 读，结果回 M2——富化不产生新案件。\u003c/p>"},"tlpgate":{"title":"② TLP/PAP 闸门 —— 密级哨兵","body":"\u003cp>\u003cb>业务：\u003c/b>给数据分密级（CLEAR/GREEN/AMBER/RED），超密的 observable 不许出网送检——情报源不能看到客户敏感数据。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>确定性中间件在工具包装层，fail-closed 超限拒绝 + DENIED 审计——不靠模型自觉。\u003c/p>"},"runner":{"title":"③ runner —— 拉起沙箱","body":"\u003cp>\u003cb>业务：\u003c/b>把 analyzer 放进一次性 microVM 执行，带超时，用完即毁。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>microsandbox 按需拉起；默认 fixture mock（CI 快），演示第四攻击面时切真跑。\u003c/p>"},"analyzer":{"title":"analyzer 真脚本 —— 会咬人的钩子","body":"\u003cp>\u003cb>业务：\u003c/b>Cortex 契约子集的真脚本（如 VT 查询）；它是刻意布置的第四攻击面：被投毒的 analyzer 会尝试外联 C2 / 读宿主凭证。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>至少一个真脚本；外联被沙箱 egress 拦截 + 审计——方向不对称：化验结果能出沙箱，恶意流量不能出。\u003c/p>"},"normalize":{"title":"④ normalize —— 化验单归一","body":"\u003cp>\u003cb>业务：\u003c/b>analyzer 结果按 Cortex taxonomy 归一成标准 artifacts。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>确定性归一，供回写与下游检索复用。\u003c/p>"},"writeback":{"title":"⑤ writeback —— 回写存档","body":"\u003cp>\u003cb>业务：\u003c/b>artifacts 带密级回写 M2，供后续分诊/调查复用——下次不用重复送检。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>TLP 密级随行，下游闸门据此再判。\u003c/p>"},"intel":{"title":"外部情报源 —— 沙箱外的世界","body":"\u003cp>\u003cb>业务：\u003c/b>VT 等外部情报服务，真实场景中 analyzer 要出网查询它们。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>\"外联尝试→被拦\"这条被拦的虚线就是第四攻击面的演示本体：投毒 analyzer 想外联 C2，同样出不去。\u003c/p>"},"distill":{"title":"① distill 提炼 —— 经验萃取","body":"\u003cp>\u003cb>业务：\u003c/b>案件关闭（必须有 verdict）后，把本案学到的 FP 模式/处置经验提炼成 KBEntry 草稿。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>提炼子图走 LLM（经凭证代理）；无 verdict 时 M2 后端 409，源头就不触发。\u003c/p>"},"proposal":{"title":"② proposal —— 待审草稿","body":"\u003cp>\u003cb>业务：\u003c/b>草稿挂 proposed 状态等人审，此时检索面确定性查不到——没过人审的知识不存在。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>proposals REST 面挂在 M2：知识数据归案件后端，agent 侧只出提炼子图。\u003c/p>"},"review":{"title":"③ 人审闸 —— D8 唯一通道","body":"\u003cp>\u003cb>业务：\u003c/b>人审是入库唯一通道：approve → 进 chroma approved 区，reject 即终态不重试——RAG 投毒的第一道防线。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>审批端点在 M2；毒 runbook 被驳回后检索面确定性查不到，可写进验收。\u003c/p>"},"query":{"title":"④ 检索面 —— 只读 approved","body":"\u003cp>\u003cb>业务：\u003c/b>分诊/调查时检索注入历史经验，只读 approved 区，提速下次处置。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>top-k=5（决策 6）；检索内容过 wrapUntrusted——知识对 LLM 是参考信息不是指令。\u003c/p>"},"retrievers":{"title":"M4/M5 检索方 —— 经验的读者","body":"\u003cp>\u003cb>业务：\u003c/b>分诊（M4）与调查（M5）在决策时检索 approved 区的历史经验：FP 模式直接提速，处置 runbook 给建议。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>检索内容打不可信标记后注入——知识是参考不是指令。\u003c/p>"},"toolsrc":{"title":"工具后端 —— 调查的弹药库","body":"\u003cp>\u003cb>业务：\u003c/b>mock SIEM 告警集 + KB approved 区，调查的两件只读工具（siem_query/kb_read）的落点。\u003c/p>\u003cp>\u003cb>技术选型：\u003c/b>它是 seam：fixture 检索（演示/CI 快）↔ 将来真 Wazuh/chroma，换 adapter 不换代码——M5 的「可换后端」承诺就落在这。\u003c/p>"}}</script>
+<script>
+(function(){
+  var LINKS = {"ingest":[{"href":"architecture-m1-internal.html","text":"M1 内部结构图（五步流水线 + 技术栈 + 部署）"}],"case-backend":[{"href":"architecture-m2-internal.html","text":"M2 内部结构图（写路径过闸 + 只读直查 + 事件出口）"}],"m3-supervisor":[{"href":"architecture-m3-internal.html","text":"M3 内部结构图（调度主图 + 检查点恢复 + 审批挂起）"}],"m4-triage":[{"href":"architecture-m4-internal.html","text":"M4 内部结构图（分诊子图六节点 + 不可信包装 + 结构化输出契约）"}],"m5-investigation":[{"href":"architecture-m5-internal.html","text":"M5 内部结构图（调查工具循环 + 三条缰绳）"}],"m6-enrichment":[{"href":"architecture-m6-internal.html","text":"M6 内部结构图（TLP/PAP 闸门 + microVM 沙箱）"}],"m7-knowledge":[{"href":"architecture-m7-internal.html","text":"M7 内部结构图（提炼→人审→入库 + 检索面）"}]};
+  var ALIAS = {"m2":"case-backend","webui":"web","m1":"ingest","m3":"m3-supervisor","workers":"m3-supervisor","human":"approver","m4":"m4-triage","kb":"m7-knowledge","ticketgate":"gate"};
+  var card, body;
+  function ensure(){
+    if (card) return;
+    card = document.createElement("div");
+    card.className = "arch-np"; card.dataset.open = "false";
+    card.innerHTML = '<div class="arch-np-head">'
+      + '<h2 class="arch-np-title"></h2>'
+      + '<button type="button" class="arch-np-close">关闭 ✕</button></div>'
+      + '<div class="arch-np-body"></div>';
+    document.body.appendChild(card);
+    body = card.querySelector(".arch-np-body");
+    card.querySelector(".arch-np-close").addEventListener("click", function(){ setOpen(false); });
+    document.addEventListener("keydown", function(ev){
+      if (ev.key === "Escape" && card.dataset.open === "true") setOpen(false);
+    });
+    // 标题栏拖动
+    var head = card.querySelector(".arch-np-head");
+    head.addEventListener("pointerdown", function(e){
+      if (e.target.closest(".arch-np-close")) return;
+      e.preventDefault();
+      var sx = e.clientX, sy = e.clientY;
+      var r = card.getBoundingClientRect();
+      var ol = r.left, ot = r.top;
+      function move(ev){
+        var nl = Math.max(8, Math.min(window.innerWidth - 60, ol + ev.clientX - sx));
+        var nt = Math.max(8, Math.min(window.innerHeight - 40, ot + ev.clientY - sy));
+        card.style.left = nl + "px"; card.style.top = nt + "px";
+      }
+      function up(){
+        document.removeEventListener("pointermove", move);
+        document.removeEventListener("pointerup", up);
+      }
+      document.addEventListener("pointermove", move);
+      document.addEventListener("pointerup", up);
+    });
+  }
+  function setOpen(v){ card.dataset.open = v ? "true" : "false"; }
+  function open(id){
+    var data;
+    try { data = JSON.parse(document.getElementById("arch-node-notes").textContent); }
+    catch (e) { return false; }
+    var key = ALIAS[id] || id;
+    var n = data[key];
+    if (!n) return false;
+    ensure();
+    var links = (LINKS[key] || []).map(function(l){
+      return '<div style="margin-top:0.45rem;padding-top:0.4rem;border-top:1px dashed var(--panel-border,#334155);font-size:0.72rem">📎 <a href="' + l.href + '">' + l.text + '</a></div>';
+    }).join("");
+    body.innerHTML = '<h2>' + n.title + '</h2>' + n.body + links;
+    card.scrollTop = 0;
+    setOpen(true);
+    return true;
+  }
+  // 捕获最早阶段接管节点点击：拦掉查看器内置语义护照；有内容弹卡，没内容不反应
+  window.addEventListener("click", function(ev){
+    var el = ev.target && ev.target.closest && ev.target.closest("[data-node-id]");
+    if (!el) return;
+    ev.stopPropagation(); ev.preventDefault();
+    open(el.getAttribute("data-node-id"));
+  }, true);
+})();
+</script>
+<!-- arch-nodepop:end -->
+<!-- arch-cards:begin -->
+<style>
+  .cards { display: none !important; }
+  .cards-modal-overlay {
+    position: fixed; inset: 0; z-index: 9999;
+    background: rgba(2, 6, 16, 0.55);
+    backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center;
+    padding: 1.5rem;
+  }
+  .cards-modal-overlay[data-open="true"] { display: flex; }
+  .cards-modal {
+    background: var(--panel, #101827);
+    color: inherit;
+    border: 1px solid var(--panel-border, #334155);
+    border-radius: 1rem;
+    max-width: 960px; width: 100%;
+    max-height: min(78vh, 720px);
+    overflow: auto;
+    padding: 1.25rem 1.25rem 1.5rem;
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  }
+  .cards-modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 0.9rem;
+  }
+  .cards-modal-title { font-size: 0.95rem; font-weight: 600; letter-spacing: 0.02em; }
+  .cards-modal-close {
+    background: transparent; color: inherit; cursor: pointer;
+    border: 1px solid var(--panel-border, #334155);
+    border-radius: 0.5rem; padding: 0.25rem 0.55rem;
+    font: inherit; font-size: 0.8rem; line-height: 1.4;
+  }
+  .cards-modal-close:hover {
+    border-color: color-mix(in srgb, currentColor 40%, var(--panel-border, #334155));
+  }
+  .cards-modal .cards { display: grid !important; margin-top: 0; }
+</style>
+<script>
+(function(){
+  function setup(){
+    var cards = document.querySelector(".cards");
+    var toolbar = document.querySelector(".toolbar");
+    if (!cards || !toolbar || document.getElementById("btn-cards")) return;
+    var btn = document.createElement("button");
+    btn.id = "btn-cards"; btn.type = "button"; btn.textContent = "要点";
+    btn.title = "要点速览";
+    btn.setAttribute("aria-expanded", "false");
+    btn.setAttribute("aria-controls", "cards-modal");
+    var themeBtn = toolbar.querySelector("#btn-theme");
+    if (themeBtn) themeBtn.insertAdjacentElement("afterend", btn);
+    else toolbar.insertBefore(btn, toolbar.firstChild);
+    var overlay = document.createElement("div");
+    overlay.className = "cards-modal-overlay"; overlay.id = "cards-modal";
+    overlay.dataset.open = "false";
+    overlay.innerHTML = '<div class="cards-modal" role="dialog" aria-modal="true" aria-label="要点速览">'
+      + '<div class="cards-modal-head"><span class="cards-modal-title">要点速览</span>'
+      + '<button type="button" class="cards-modal-close">关闭 ✕</button></div>';
+    // 原 .cards 节点整体搬进弹窗，类名不动，样式原样带走
+    overlay.querySelector(".cards-modal").appendChild(cards);
+    document.body.appendChild(overlay);
+    function setOpen(open){
+      overlay.dataset.open = open ? "true" : "false";
+      btn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    btn.addEventListener("click", function(){ setOpen(overlay.dataset.open !== "true"); });
+    overlay.addEventListener("click", function(ev){ if (ev.target === overlay) setOpen(false); });
+    overlay.querySelector(".cards-modal-close").addEventListener("click", function(){ setOpen(false); });
+    document.addEventListener("keydown", function(ev){
+      if (ev.key === "Escape" && overlay.dataset.open === "true") setOpen(false);
+    });
+  }
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", setup);
+  else setup();
+})();
+</script>
+<!-- arch-cards:end -->
+<!-- arch-view:begin -->
+<style>
+  /* 去掉 SVG 内的图例组 */
+  svg [data-legend] { display: none !important; }
+  /* 右下导航条 → 顶部工具栏（fixed, top:1rem, right:1rem）左侧 */
+  .diagram-nav {
+    position: fixed !important;
+    top: 1.05rem !important;
+    right: 26.5rem !important;
+    bottom: auto !important;
+  }
+  @media (max-width: 1280px) {
+    .diagram-nav { top: 4.4rem !important; right: 1rem !important; }
+  }
+  /* 导航条不再占底部预留高度 */
+  .diagram-container { --archify-nav-reserve: 0px !important; }
+  /* 画布 = 窗口（去掉顶部工具行后全部给图），svg 铺满画布非等比拉伸 */
+  html { --archify-reader-width: 100vw !important; }
+  .diagram-container {
+    height: calc(100vh - 6.5rem) !important;
+    box-sizing: border-box !important;
+  }
+  .diagram-container svg { width: 100% !important; height: 100% !important; }
+  body { padding: 1rem 1.25rem 0.75rem !important; }
+  .header { margin-bottom: 0.75rem !important; }
+</style>
+<!-- arch-view:end -->
 </body>
 </html>
