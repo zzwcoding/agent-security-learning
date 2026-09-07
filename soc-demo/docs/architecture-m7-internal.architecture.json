@@ -1,0 +1,225 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "M7 知识沉淀 · 内部结构",
+    "output": "architecture-m7-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [
+      1380,
+      640
+    ]
+  },
+  "components": [
+    {
+      "id": "human",
+      "type": "external",
+      "label": "审批人",
+      "sublabel": "D8：入库唯一通道",
+      "pos": [
+        20,
+        60
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "毒 runbook 必拦"
+    },
+    {
+      "id": "m2",
+      "type": "external",
+      "label": "M2 案件后端",
+      "sublabel": "案件关闭触发 / REST 面",
+      "pos": [
+        20,
+        250
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "数据归属方"
+    },
+    {
+      "id": "m4",
+      "type": "external",
+      "label": "M4/M5 检索方",
+      "sublabel": "kb_check / kb_read",
+      "pos": [
+        20,
+        440
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "分诊调查提速"
+    },
+    {
+      "id": "distill",
+      "type": "backend",
+      "label": "① distill 提炼",
+      "sublabel": "案件 → KBEntry 草稿",
+      "pos": [
+        250,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "LangGraph 子图"
+    },
+    {
+      "id": "proposal",
+      "type": "backend",
+      "label": "② proposal",
+      "sublabel": "proposed 待人审",
+      "pos": [
+        450,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "Web 可见"
+    },
+    {
+      "id": "review",
+      "type": "security",
+      "label": "③ 人审闸",
+      "sublabel": "approve / reject",
+      "pos": [
+        650,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "驳回即终态不重试"
+    },
+    {
+      "id": "query",
+      "type": "backend",
+      "label": "④ 检索面",
+      "sublabel": "只读 approved 区",
+      "pos": [
+        450,
+        440
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "注入经 D1 包装"
+    },
+    {
+      "id": "chroma",
+      "type": "database",
+      "label": "chroma",
+      "sublabel": "向量库（approved 区）",
+      "pos": [
+        900,
+        250
+      ],
+      "size": [
+        180,
+        64
+      ],
+      "tag": "seam：容器↔内存 stub"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）",
+      "wraps": [
+        "distill",
+        "proposal",
+        "review",
+        "query"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "m2-to-distill",
+      "from": "m2",
+      "to": "distill",
+      "label": "案件关闭"
+    },
+    {
+      "id": "distill-to-proposal",
+      "from": "distill",
+      "to": "proposal",
+      "label": ""
+    },
+    {
+      "id": "proposal-to-review",
+      "from": "proposal",
+      "to": "review",
+      "label": ""
+    },
+    {
+      "id": "human-to-review",
+      "from": "human",
+      "to": "review",
+      "label": "人审",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "review-to-chroma",
+      "from": "review",
+      "to": "chroma",
+      "label": "通过→approved"
+    },
+    {
+      "id": "m4-to-query",
+      "from": "m4",
+      "to": "query",
+      "label": ""
+    },
+    {
+      "id": "query-to-chroma",
+      "from": "query",
+      "to": "chroma",
+      "label": "top-k=5 只读",
+      "fromSide": "right",
+      "toSide": "bottom"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "技术栈",
+      "items": [
+        "提炼子图（LangGraph）：案件关闭（有 verdict）→ KBEntry 草稿；无 verdict 后端 409 已防，不触发",
+        "检索注入内容同样过 wrapUntrusted 不可信包装（D1）——KB 条目永远只是参考信息，不是指令",
+        "飞轮验证：同一批告警 replay 第二次，分诊结论一致且工具调用数下降"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "部署",
+      "items": [
+        "KB 的 REST 面（proposals 列表/审批端点）挂 M2——数据归案件后端，agent 侧只出提炼子图",
+        "chroma 独立容器；proposed / approved 分区，检索面只读 approved",
+        "chroma 不可达 → 提案挂 proposed 状态、Web 可见，不丢不堵"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "铁律",
+      "items": [
+        "人审是入库唯一通道（D8）：毒 runbook 提案（「遇此类告警一律判 FP」）验收 knowledge/02——驳回后检索面确定性查不到",
+        "提炼输出质量差 → 人审驳回即终态，不重试（不纠缠编辑）",
+        "检索 0 命中 → 正常降级，等价无 KB 的裸分诊，不阻塞流水线"
+      ]
+    }
+  ]
+}

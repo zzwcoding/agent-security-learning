@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.16.0">
-  <title>SOC 数字员工 · 架构图 v4</title>
+  <title>M7 知识沉淀 · 内部结构</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4955,7 +4955,7 @@
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>SOC 数字员工 · 架构图 v4</h1>
+        <h1>M7 知识沉淀 · 内部结构</h1>
       </div>
     </div>
 
@@ -5004,8 +5004,8 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="0 0 1240 620" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
-        <title id="archify-diagram-title">SOC 数字员工 · 架构图 v4</title>
+      <svg viewBox="0 0 1380 640" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase">
+        <title id="archify-diagram-title">M7 知识沉淀 · 内部结构</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -5030,224 +5030,166 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="单机 docker-compose（上云=同套 compose 搬 VPS）" x="200" y="50" width="1030" height="550" rx="12" class="c-region" stroke-width="1"/>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="security-group" data-composition-frame-id="1" data-composition-frame-label="安全控制面 M9（全部 fail-closed）" x="670" y="150" width="560" height="394" rx="8" class="c-security-group" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）" x="220" y="220" width="630" height="304" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="alert-src" data-edge-to="ingest" data-edge-label="POST /webhooks/alerts" data-edge-key="0" data-edge-id="src-to-ingest" data-composition-points="180,352;230,352" d="M 180 352 L 230 352" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="ingest" data-edge-to="case-backend" data-edge-label="写 Alert（去重）" data-edge-key="1" data-edge-id="ingest-to-case" data-composition-points="380,352;450,352" d="M 380 352 L 450 352" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="case-backend" data-edge-to="agent-core" data-edge-label="alert.created 事件" data-edge-key="2" data-edge-id="case-to-agent" data-composition-points="620,352;700,352" d="M 620 352 L 700 352" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
-        <path data-edge-from="agent-core" data-edge-to="case-backend" data-edge-label="读写案件 / 审计" data-edge-key="3" data-edge-id="agent-to-case" data-composition-points="700,352;620,352" d="M 700 352 L 620 352" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="agent-core" data-edge-to="gateway" data-edge-label="申领任务票 · LLM 占位符调用" data-edge-key="4" data-edge-id="agent-to-gateway" data-composition-points="900,352;940,352;940,218;980,218" d="M 900 352 L 932 352 Q 940 352 940 344 L 940 226 Q 940 218 948 218 L 980 218" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="gateway" data-edge-to="llm-provider" data-edge-label="注入真 key 转发" data-edge-key="5" data-edge-id="gateway-to-llm" data-composition-points="1090,180;1090,110" d="M 1090 180 L 1090 110" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="agent-core" data-edge-to="guards" data-edge-label="不可信段扫描 / 出域脱敏" data-edge-key="6" data-edge-id="agent-to-guards" data-composition-points="900,352;940,352;940,492;980,492" d="M 900 352 L 932 352 Q 940 352 940 360 L 940 484 Q 940 492 948 492 L 980 492" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
-        <path data-edge-from="agent-core" data-edge-to="chroma" data-edge-label="KB 检索（仅 approved）" data-edge-key="7" data-edge-id="agent-to-chroma" data-composition-points="800,394;800,418;816,418;816,496;795,496;795,520" d="M 800 394 L 800 410 Q 800 418 808 418 L 808 418 Q 816 418 816 426 L 816 488 Q 816 496 808 496 L 803 496 Q 795 496 795 504 L 795 520" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="agent-core" data-edge-to="sandbox" data-edge-label="analyzer 沙箱执行" data-edge-key="8" data-edge-id="agent-to-sandbox" data-composition-points="800,394;800,457;560,457;560,520" d="M 800 394 L 800 449 Q 800 457 792 457 L 568 457 Q 560 457 560 465 L 560 520" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="web" data-edge-to="agent-core" data-edge-label="REST + SSE 全量消费" data-edge-key="9" data-edge-id="web-to-agent" data-composition-points="620,112;800,112;800,310" d="M 620 112 L 792 112 Q 800 112 800 120 L 800 310" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="eval" data-edge-to="agent-core" data-edge-label="fixture 评测驱动" data-edge-key="10" data-edge-id="eval-to-agent" data-composition-points="310,520;310,457;800,457;800,394" d="M 310 520 L 310 465 Q 310 457 318 457 L 792 457 Q 800 457 800 449 L 800 394" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="m2" data-edge-to="distill" data-edge-label="案件关闭" data-edge-key="0" data-edge-id="m2-to-distill" data-composition-points="200,280;250,280" d="M 200 280 L 250 280" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="distill" data-edge-to="proposal" data-edge-key="1" data-edge-id="distill-to-proposal" data-composition-points="420,282;450,282" d="M 420 282 L 450 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="proposal" data-edge-to="review" data-edge-key="2" data-edge-id="proposal-to-review" data-composition-points="620,282;650,282" d="M 620 282 L 650 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="human" data-edge-to="review" data-edge-label="人审" data-edge-key="3" data-edge-id="human-to-review" data-composition-points="200,90;735,90;735,250" d="M 200 90 L 727 90 Q 735 90 735 98 L 735 250" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="review" data-edge-to="chroma" data-edge-label="通过→approved" data-edge-key="4" data-edge-id="review-to-chroma" data-composition-points="820,282;900,282" d="M 820 282 L 900 282" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="m4" data-edge-to="query" data-edge-key="5" data-edge-id="m4-to-query" data-composition-points="200,470;450,470" d="M 200 470 L 450 470" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="query" data-edge-to="chroma" data-edge-label="top-k=5 只读" data-edge-key="6" data-edge-id="query-to-chroma" data-composition-points="620,472;990,472;990,314" d="M 620 472 L 982 472 Q 990 472 990 464 L 990 314" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
-        <g id="node-alert-src" data-node-id="alert-src" data-node-label="告警源" tabindex="0" role="button" aria-label="聚焦告警源，Wazuh 格式 / fixture 回放, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="Wazuh 格式 / fixture 回放" data-node-tag="真实数据" data-node-context="架构组件">
-          <title>告警源 · Wazuh 格式 / fixture 回放 · 架构组件 · 真实数据</title>
-          <rect x="30" y="320" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="30" y="320" width="150" height="64" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(36 326) scale(0.6875)">
+        <g id="node-human" data-node-id="human" data-node-label="审批人" tabindex="0" role="button" aria-label="聚焦审批人，D8：入库唯一通道, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="D8：入库唯一通道" data-node-tag="毒 runbook 必拦" data-node-context="架构组件">
+          <title>审批人 · D8：入库唯一通道 · 架构组件 · 毒 runbook 必拦</title>
+          <rect x="20" y="60" width="180" height="60" rx="6" class="c-mask"/>
+          <rect x="20" y="60" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 66) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="105" y="350" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">告警源</text>
-        <text data-detail="context" x="105" y="366" class="t-muted" font-size="9" text-anchor="middle">Wazuh 格式 / fixture 回放</text>
-        <text data-detail="fine" x="105" y="376" class="t-external" font-size="7" text-anchor="middle">真实数据</text>
+          <text data-node-label="" data-detail-anchor="" x="110" y="88" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">审批人</text>
+        <text data-detail="context" x="110" y="104" class="t-muted" font-size="9" text-anchor="middle">D8：入库唯一通道</text>
+        <text data-detail="fine" x="110" y="112" class="t-external" font-size="7" text-anchor="middle">毒 runbook 必拦</text>
         </g>
 
-        <g id="node-ingest" data-node-id="ingest" data-node-label="M1 告警接入" tabindex="0" role="button" aria-label="聚焦M1 告警接入，Fastify :3001, 单机 docker-compose（上云=同套 compose 搬 VPS）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Fastify :3001" data-node-tag="去重+不可信标记" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS）">
-          <title>M1 告警接入 · Fastify :3001 · 单机 docker-compose（上云=同套 compose 搬 VPS） · 去重+不可信标记</title>
-          <rect x="230" y="320" width="150" height="64" rx="6" class="c-mask"/>
-          <rect x="230" y="320" width="150" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 326) scale(0.6875)">
+        <g id="node-m2" data-node-id="m2" data-node-label="M2 案件后端" tabindex="0" role="button" aria-label="聚焦M2 案件后端，案件关闭触发 / REST 面, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="案件关闭触发 / REST 面" data-node-tag="数据归属方" data-node-context="架构组件">
+          <title>M2 案件后端 · 案件关闭触发 / REST 面 · 架构组件 · 数据归属方</title>
+          <rect x="20" y="250" width="180" height="60" rx="6" class="c-mask"/>
+          <rect x="20" y="250" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 256) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="110" y="278" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
+        <text data-detail="context" x="110" y="294" class="t-muted" font-size="9" text-anchor="middle">案件关闭触发 / REST 面</text>
+        <text data-detail="fine" x="110" y="302" class="t-external" font-size="7" text-anchor="middle">数据归属方</text>
+        </g>
+
+        <g id="node-m4" data-node-id="m4" data-node-label="M4/M5 检索方" tabindex="0" role="button" aria-label="聚焦M4/M5 检索方，kb_check / kb_read, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="kb_check / kb_read" data-node-tag="分诊调查提速" data-node-context="架构组件">
+          <title>M4/M5 检索方 · kb_check / kb_read · 架构组件 · 分诊调查提速</title>
+          <rect x="20" y="440" width="180" height="60" rx="6" class="c-mask"/>
+          <rect x="20" y="440" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 446) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="110" y="468" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M4/M5 检索方</text>
+        <text data-detail="context" x="110" y="484" class="t-muted" font-size="9" text-anchor="middle">kb_check / kb_read</text>
+        <text data-detail="fine" x="110" y="492" class="t-external" font-size="7" text-anchor="middle">分诊调查提速</text>
+        </g>
+
+        <g id="node-distill" data-node-id="distill" data-node-label="① distill 提炼" tabindex="0" role="button" aria-label="聚焦① distill 提炼，案件 → KBEntry 草稿, services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="案件 → KBEntry 草稿" data-node-tag="LangGraph 子图" data-node-context="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）">
+          <title>① distill 提炼 · 案件 → KBEntry 草稿 · services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2） · LangGraph 子图</title>
+          <rect x="250" y="250" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="250" y="250" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 256) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="305" y="350" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M1 告警接入</text>
-        <text data-detail="context" x="305" y="366" class="t-muted" font-size="9" text-anchor="middle">Fastify :3001</text>
-        <text data-detail="fine" x="305" y="376" class="t-backend" font-size="7" text-anchor="middle">去重+不可信标记</text>
+          <text data-node-label="" data-detail-anchor="" x="335" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">① distill 提炼</text>
+        <text data-detail="context" x="335" y="296" class="t-muted" font-size="9" text-anchor="middle">案件 → KBEntry 草稿</text>
+        <text data-detail="fine" x="335" y="306" class="t-backend" font-size="7" text-anchor="middle">LangGraph 子图</text>
         </g>
 
-        <g id="node-case-backend" data-node-id="case-backend" data-node-label="M2 案件后端" tabindex="0" role="button" aria-label="聚焦M2 案件后端，Fastify + SQLite :3002, 单机 docker-compose（上云=同套 compose 搬 VPS）" aria-pressed="false" data-node-kind="database" data-node-sublabel="Fastify + SQLite :3002" data-node-tag="六实体+审计" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS）">
-          <title>M2 案件后端 · Fastify + SQLite :3002 · 单机 docker-compose（上云=同套 compose 搬 VPS） · 六实体+审计</title>
-          <rect x="450" y="320" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="450" y="320" width="170" height="64" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(456 326) scale(0.6875)">
+        <g id="node-proposal" data-node-id="proposal" data-node-label="② proposal" tabindex="0" role="button" aria-label="聚焦② proposal，proposed 待人审, services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="proposed 待人审" data-node-tag="Web 可见" data-node-context="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）">
+          <title>② proposal · proposed 待人审 · services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2） · Web 可见</title>
+          <rect x="450" y="250" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="450" y="250" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(456 256) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="535" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② proposal</text>
+        <text data-detail="context" x="535" y="296" class="t-muted" font-size="9" text-anchor="middle">proposed 待人审</text>
+        <text data-detail="fine" x="535" y="306" class="t-backend" font-size="7" text-anchor="middle">Web 可见</text>
+        </g>
+
+        <g id="node-review" data-node-id="review" data-node-label="③ 人审闸" tabindex="0" role="button" aria-label="聚焦③ 人审闸，approve / reject, services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）" aria-pressed="false" data-node-kind="security" data-node-sublabel="approve / reject" data-node-tag="驳回即终态不重试" data-node-context="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）">
+          <title>③ 人审闸 · approve / reject · services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2） · 驳回即终态不重试</title>
+          <rect x="650" y="250" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="650" y="250" width="170" height="64" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(656 256) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="735" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">③ 人审闸</text>
+        <text data-detail="context" x="735" y="296" class="t-muted" font-size="9" text-anchor="middle">approve / reject</text>
+        <text data-detail="fine" x="735" y="306" class="t-security" font-size="7" text-anchor="middle">驳回即终态不重试</text>
+        </g>
+
+        <g id="node-query" data-node-id="query" data-node-label="④ 检索面" tabindex="0" role="button" aria-label="聚焦④ 检索面，只读 approved 区, services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="只读 approved 区" data-node-tag="注入经 D1 包装" data-node-context="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）">
+          <title>④ 检索面 · 只读 approved 区 · services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2） · 注入经 D1 包装</title>
+          <rect x="450" y="440" width="170" height="64" rx="6" class="c-mask"/>
+          <rect x="450" y="440" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(456 446) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="535" y="470" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ 检索面</text>
+        <text data-detail="context" x="535" y="486" class="t-muted" font-size="9" text-anchor="middle">只读 approved 区</text>
+        <text data-detail="fine" x="535" y="496" class="t-backend" font-size="7" text-anchor="middle">注入经 D1 包装</text>
+        </g>
+
+        <g id="node-chroma" data-node-id="chroma" data-node-label="chroma" tabindex="0" role="button" aria-label="聚焦chroma，向量库（approved 区）, 架构组件" aria-pressed="false" data-node-kind="database" data-node-sublabel="向量库（approved 区）" data-node-tag="seam：容器↔内存 stub" data-node-context="架构组件">
+          <title>chroma · 向量库（approved 区） · 架构组件 · seam：容器↔内存 stub</title>
+          <rect x="900" y="250" width="180" height="64" rx="6" class="c-mask"/>
+          <rect x="900" y="250" width="180" height="64" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(906 256) scale(0.6875)">
             <ellipse cx="8" cy="4" rx="5" ry="2"/>
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="535" y="350" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
-        <text data-detail="context" x="535" y="366" class="t-muted" font-size="9" text-anchor="middle">Fastify + SQLite :3002</text>
-        <text data-detail="fine" x="535" y="376" class="t-database" font-size="7" text-anchor="middle">六实体+审计</text>
-        </g>
-
-        <g id="node-agent-core" data-node-id="agent-core" data-node-label="M3-M8 编排与 workers" tabindex="0" role="button" aria-label="聚焦M3-M8 编排与 workers，LangGraph.js :3003, 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="LangGraph.js :3003" data-node-tag="supervisor+4worker" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）">
-          <title>M3-M8 编排与 workers · LangGraph.js :3003 · 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed） · supervisor+4worker</title>
-          <rect x="700" y="310" width="200" height="84" rx="6" class="c-mask"/>
-          <rect x="700" y="310" width="200" height="84" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(706 316) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="800" y="350" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M3-M8 编排与 workers</text>
-        <text data-detail="context" x="800" y="366" class="t-muted" font-size="9" text-anchor="middle">LangGraph.js :3003</text>
-        <text data-detail="fine" x="800" y="386" class="t-backend" font-size="7" text-anchor="middle">supervisor+4worker</text>
-        </g>
-
-        <g id="node-web" data-node-id="web" data-node-label="M10 Web 演示窗" tabindex="0" role="button" aria-label="聚焦M10 Web 演示窗，Vite+React :5173, 单机 docker-compose（上云=同套 compose 搬 VPS）" aria-pressed="false" data-node-kind="frontend" data-node-sublabel="Vite+React :5173" data-node-tag="六页面薄客户端" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS）">
-          <title>M10 Web 演示窗 · Vite+React :5173 · 单机 docker-compose（上云=同套 compose 搬 VPS） · 六页面薄客户端</title>
-          <rect x="450" y="80" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="450" y="80" width="170" height="64" rx="6" class="c-frontend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="frontend" class="semantic-sigil s-frontend" transform="translate(456 86) scale(0.6875)">
-            <rect x="2" y="3" width="12" height="10" rx="2"/>
-            <path d="M2 6.5h12"/>
-            <circle cx="4.1" cy="4.8" r=".7" class="sigil-fill"/>
-            <circle cx="6.3" cy="4.8" r=".7" class="sigil-fill"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="535" y="110" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M10 Web 演示窗</text>
-        <text data-detail="context" x="535" y="126" class="t-muted" font-size="9" text-anchor="middle">Vite+React :5173</text>
-        <text data-detail="fine" x="535" y="136" class="t-frontend" font-size="7" text-anchor="middle">六页面薄客户端</text>
-        </g>
-
-        <g id="node-gateway" data-node-id="gateway" data-node-label="C5 网关三容器" tabindex="0" role="button" aria-label="聚焦C5 网关三容器，ContextForge+OpenFGA+自写铸币/凭证代理, 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）" aria-pressed="false" data-node-kind="security" data-node-sublabel="ContextForge+OpenFGA+自写铸币/凭证代理" data-node-tag="RBAC·FGA·铸票" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）">
-          <title>C5 网关三容器 · ContextForge+OpenFGA+自写铸币/凭证代理 · 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed） · RBAC·FGA·铸票</title>
-          <rect x="980" y="180" width="220" height="76" rx="6" class="c-mask"/>
-          <rect x="980" y="180" width="220" height="76" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(986 186) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1090" y="216" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">C5 网关三容器</text>
-        <text data-detail="context" x="1090" y="232" class="t-muted" font-size="9" text-anchor="middle">ContextForge+OpenFGA+自写铸币/凭证代理</text>
-        <text data-detail="fine" x="1090" y="248" class="t-security" font-size="7" text-anchor="middle">RBAC·FGA·铸票</text>
-        </g>
-
-        <g id="node-guards" data-node-id="guards" data-node-label="C4 防护微服务" tabindex="0" role="button" aria-label="聚焦C4 防护微服务，llm-guard + Presidio :8001, 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）" aria-pressed="false" data-node-kind="security" data-node-sublabel="llm-guard + Presidio :8001" data-node-tag="注入扫描·PII" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed）">
-          <title>C4 防护微服务 · llm-guard + Presidio :8001 · 单机 docker-compose（上云=同套 compose 搬 VPS） › 安全控制面 M9（全部 fail-closed） · 注入扫描·PII</title>
-          <rect x="980" y="460" width="200" height="64" rx="6" class="c-mask"/>
-          <rect x="980" y="460" width="200" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(986 466) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1080" y="490" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">C4 防护微服务</text>
-        <text data-detail="context" x="1080" y="506" class="t-muted" font-size="9" text-anchor="middle">llm-guard + Presidio :8001</text>
-        <text data-detail="fine" x="1080" y="516" class="t-security" font-size="7" text-anchor="middle">注入扫描·PII</text>
-        </g>
-
-        <g id="node-llm-provider" data-node-id="llm-provider" data-node-label="LLM Provider" tabindex="0" role="button" aria-label="聚焦LLM Provider，MiniMax-M2, 架构组件" aria-pressed="false" data-node-kind="cloud" data-node-sublabel="MiniMax-M2" data-node-tag="永不见真 key" data-node-context="架构组件">
-          <title>LLM Provider · MiniMax-M2 · 架构组件 · 永不见真 key</title>
-          <rect x="1015" y="50" width="150" height="60" rx="6" class="c-mask"/>
-          <rect x="1015" y="50" width="150" height="60" rx="6" class="c-cloud" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="cloud" class="semantic-sigil s-cloud" transform="translate(1021 56) scale(0.6875)">
-            <path d="M4.3 12.5h7.3a2.4 2.4 0 0 0 .2-4.8 4 4 0 0 0-7.5-1.3A3.1 3.1 0 0 0 4.3 12.5Z"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1090" y="78" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LLM Provider</text>
-        <text data-detail="context" x="1090" y="94" class="t-muted" font-size="9" text-anchor="middle">MiniMax-M2</text>
-        <text data-detail="fine" x="1090" y="102" class="t-cloud" font-size="7" text-anchor="middle">永不见真 key</text>
-        </g>
-
-        <g id="node-chroma" data-node-id="chroma" data-node-label="Chroma 知识库" tabindex="0" role="button" aria-label="聚焦Chroma 知识库，向量检索 :8000, 单机 docker-compose（上云=同套 compose 搬 VPS）" aria-pressed="false" data-node-kind="database" data-node-sublabel="向量检索 :8000" data-node-tag="人审后才入库" data-node-context="单机 docker-compose（上云=同套 compose 搬 VPS）">
-          <title>Chroma 知识库 · 向量检索 :8000 · 单机 docker-compose（上云=同套 compose 搬 VPS） · 人审后才入库</title>
-          <rect x="710" y="520" width="170" height="60" rx="6" class="c-mask"/>
-          <rect x="710" y="520" width="170" height="60" rx="6" class="c-database" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(716 526) scale(0.6875)">
-            <ellipse cx="8" cy="4" rx="5" ry="2"/>
-            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="795" y="548" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Chroma 知识库</text>
-        <text data-detail="context" x="795" y="564" class="t-muted" font-size="9" text-anchor="middle">向量检索 :8000</text>
-        <text data-detail="fine" x="795" y="572" class="t-database" font-size="7" text-anchor="middle">人审后才入库</text>
-        </g>
-
-        <g id="node-sandbox" data-node-id="sandbox" data-node-label="microsandbox" tabindex="0" role="button" aria-label="聚焦microsandbox，analyzer 一次性 microVM, 架构组件" aria-pressed="false" data-node-kind="security" data-node-sublabel="analyzer 一次性 microVM" data-node-tag="第四攻击面" data-node-context="架构组件">
-          <title>microsandbox · analyzer 一次性 microVM · 架构组件 · 第四攻击面</title>
-          <rect x="470" y="520" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="470" y="520" width="180" height="60" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(476 526) scale(0.6875)">
-            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
-            <path d="m5.8 8 1.5 1.5 3-3"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="560" y="548" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">microsandbox</text>
-        <text data-detail="context" x="560" y="564" class="t-muted" font-size="9" text-anchor="middle">analyzer 一次性 microVM</text>
-        <text data-detail="fine" x="560" y="572" class="t-security" font-size="7" text-anchor="middle">第四攻击面</text>
-        </g>
-
-        <g id="node-eval" data-node-id="eval" data-node-label="M11 Eval 体系" tabindex="0" role="button" aria-label="聚焦M11 Eval 体系，vitest fixture 驱动, 架构组件" aria-pressed="false" data-node-kind="backend" data-node-sublabel="vitest fixture 驱动" data-node-tag="三维评估" data-node-context="架构组件">
-          <title>M11 Eval 体系 · vitest fixture 驱动 · 架构组件 · 三维评估</title>
-          <rect x="230" y="520" width="160" height="60" rx="6" class="c-mask"/>
-          <rect x="230" y="520" width="160" height="60" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 526) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="310" y="548" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M11 Eval 体系</text>
-        <text data-detail="context" x="310" y="564" class="t-muted" font-size="9" text-anchor="middle">vitest fixture 驱动</text>
-        <text data-detail="fine" x="310" y="572" class="t-backend" font-size="7" text-anchor="middle">三维评估</text>
+          <text data-node-label="" data-detail-anchor="" x="990" y="280" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">chroma</text>
+        <text data-detail="context" x="990" y="296" class="t-muted" font-size="9" text-anchor="middle">向量库（approved 区）</text>
+        <text data-detail="fine" x="990" y="306" class="t-database" font-size="7" text-anchor="middle">seam：容器↔内存 stub</text>
         </g>
 
         <!-- Connection labels -->
-        <g data-detail="context" data-edge-from="alert-src" data-edge-to="ingest" data-edge-label="POST /webhooks/alerts" data-edge-key="0" data-edge-id="src-to-ingest">
-          <rect x="149.6" y="288" width="110.8" height="14" rx="3" class="c-mask"/>
-          <text x="205" y="298" class="t-backend" font-size="8" text-anchor="middle">POST /webhooks/alerts</text>
+        <g data-detail="context" data-edge-from="m2" data-edge-to="distill" data-edge-label="案件关闭" data-edge-key="0" data-edge-id="m2-to-distill">
+          <rect x="200.8" y="260" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="225" y="270" class="t-muted" font-size="8" text-anchor="middle">案件关闭</text>
         </g>
-        <g data-detail="context" data-edge-from="ingest" data-edge-to="case-backend" data-edge-label="写 Alert（去重）" data-edge-key="1" data-edge-id="ingest-to-case">
-          <rect x="371.6" y="288" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="415" y="298" class="t-backend" font-size="8" text-anchor="middle">写 Alert（去重）</text>
+
+
+        <g data-detail="context" data-edge-from="human" data-edge-to="review" data-edge-label="人审" data-edge-key="3" data-edge-id="human-to-review">
+          <rect x="720" y="150" width="30" height="14" rx="3" class="c-mask"/>
+          <text x="735" y="160" class="t-muted" font-size="8" text-anchor="middle">人审</text>
         </g>
-        <g data-detail="context" data-edge-from="case-backend" data-edge-to="agent-core" data-edge-label="alert.created 事件" data-edge-key="2" data-edge-id="case-to-agent">
-          <rect x="611.8" y="288" width="96.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="660" y="298" class="t-backend" font-size="8" text-anchor="middle">alert.created 事件</text>
+        <g data-detail="context" data-edge-from="review" data-edge-to="chroma" data-edge-label="通过→approved" data-edge-key="4" data-edge-id="review-to-chroma">
+          <rect x="823.8" y="262" width="72.4" height="14" rx="3" class="c-mask"/>
+          <text x="860" y="272" class="t-muted" font-size="8" text-anchor="middle">通过→approved</text>
         </g>
-        <g data-detail="context" data-edge-from="agent-core" data-edge-to="case-backend" data-edge-label="读写案件 / 审计" data-edge-key="3" data-edge-id="agent-to-case">
-          <rect x="569" y="386" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="610" y="396" class="t-muted" font-size="8" text-anchor="middle">读写案件 / 审计</text>
-        </g>
-        <g data-detail="context" data-edge-from="agent-core" data-edge-to="gateway" data-edge-label="申领任务票 · LLM 占位符调用" data-edge-key="4" data-edge-id="agent-to-gateway">
-          <rect x="875.2" y="272" width="139.6" height="14" rx="3" class="c-mask"/>
-          <text x="945" y="282" class="t-security" font-size="8" text-anchor="middle">申领任务票 · LLM 占位符调用</text>
-        </g>
-        <g data-detail="context" data-edge-from="gateway" data-edge-to="llm-provider" data-edge-label="注入真 key 转发" data-edge-key="5" data-edge-id="gateway-to-llm">
-          <rect x="1049" y="146" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="1090" y="156" class="t-security" font-size="8" text-anchor="middle">注入真 key 转发</text>
-        </g>
-        <g data-detail="context" data-edge-from="agent-core" data-edge-to="guards" data-edge-label="不可信段扫描 / 出域脱敏" data-edge-key="6" data-edge-id="agent-to-guards">
-          <rect x="884.8" y="414" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="945" y="424" class="t-security" font-size="8" text-anchor="middle">不可信段扫描 / 出域脱敏</text>
-        </g>
-        <g data-detail="context" data-edge-from="agent-core" data-edge-to="chroma" data-edge-label="KB 检索（仅 approved）" data-edge-key="7" data-edge-id="agent-to-chroma">
-          <rect x="677.2" y="464" width="115.6" height="14" rx="3" class="c-mask"/>
-          <text x="735" y="474" class="t-muted" font-size="8" text-anchor="middle">KB 检索（仅 approved）</text>
-        </g>
-        <g data-detail="context" data-edge-from="agent-core" data-edge-to="sandbox" data-edge-label="analyzer 沙箱执行" data-edge-key="8" data-edge-id="agent-to-sandbox">
-          <rect x="454.2" y="464" width="91.6" height="14" rx="3" class="c-mask"/>
-          <text x="500" y="474" class="t-muted" font-size="8" text-anchor="middle">analyzer 沙箱执行</text>
-        </g>
-        <g data-detail="context" data-edge-from="web" data-edge-to="agent-core" data-edge-label="REST + SSE 全量消费" data-edge-key="9" data-edge-id="web-to-agent">
-          <rect x="549.4" y="148" width="101.2" height="14" rx="3" class="c-mask"/>
-          <text x="600" y="158" class="t-muted" font-size="8" text-anchor="middle">REST + SSE 全量消费</text>
-        </g>
-        <g data-detail="context" data-edge-from="eval" data-edge-to="agent-core" data-edge-label="fixture 评测驱动" data-edge-key="10" data-edge-id="eval-to-agent">
-          <rect x="396.6" y="474" width="86.8" height="14" rx="3" class="c-mask"/>
-          <text x="440" y="484" class="t-messagebus" font-size="8" text-anchor="middle">fixture 评测驱动</text>
+
+        <g data-detail="context" data-edge-from="query" data-edge-to="chroma" data-edge-label="top-k=5 只读" data-edge-key="6" data-edge-id="query-to-chroma">
+          <rect x="956.2" y="373" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="990" y="383" class="t-muted" font-size="8" text-anchor="middle">top-k=5 只读</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="单机 docker-compose（上云=同套 compose 搬 VPS）">
-          <rect data-graph-role="structural-frame-label-mask" x="204" y="60" width="263.79999999999995" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="208" y="73" class="t-cloud" font-size="9" font-weight="600">单机 docker-compose（上云=同套 compose 搬 VPS）</text>
-        </g>
-
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="security-group" data-composition-frame-label="安全控制面 M9（全部 fail-closed）">
-          <rect data-graph-role="structural-frame-label-mask" x="674" y="160" width="188.2" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="678" y="173" class="t-security" font-size="9" font-weight="600">安全控制面 M9（全部 fail-closed）</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）">
+          <rect data-graph-role="structural-frame-label-mask" x="224" y="230" width="501.4" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="228" y="243" class="t-cloud" font-size="9" font-weight="600">services/agent 内子模块 workers/knowledge（无独立 HTTP 面，由 M3 拉起；KB 的 REST 面挂 M2）</text>
         </g>
 
         <!-- Legend -->
-
+        <g data-legend="" data-legend-bridge="">
+          <text x="40" y="604" class="t-primary" font-size="12" font-weight="650">图例</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="40" data-legend-baseline="624" data-legend-width="63">
+            <rect x="40" y="615" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
+            <text x="62" y="624" class="t-muted" font-size="10" font-weight="500">后端</text>
+          </g>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="数据库" data-legend-x="125" data-legend-baseline="624" data-legend-width="73">
+            <rect x="125" y="615" width="16" height="10" rx="2.5" class="c-database" stroke-width="1"/>
+            <text x="147" y="624" class="t-muted" font-size="10" font-weight="500">数据库</text>
+          </g>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="安全" data-legend-x="220" data-legend-baseline="624" data-legend-width="63">
+            <rect x="220" y="615" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
+            <text x="242" y="624" class="t-muted" font-size="10" font-weight="500">安全</text>
+          </g>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="305" data-legend-baseline="624" data-legend-width="83">
+            <rect x="305" y="615" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
+            <text x="327" y="624" class="t-muted" font-size="10" font-weight="500">外部系统</text>
+          </g>
+        </g>
       </svg>
       <p class="intent-trace-status no-print" id="intent-trace-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="share-chapter-cue no-print" id="share-chapter-cue" hidden role="status" aria-live="polite">
@@ -5437,37 +5379,36 @@
       <div class="card">
         <div class="card-header">
           <div class="card-dot cyan"></div>
-          <h3>告警主流水线</h3>
+          <h3>技术栈</h3>
         </div>
         <ul>
-          <li>&bull; M1 接入去重 → M2 落库发事件 → M3 编排拉起 M4 分诊 → M5 调查 → M6 富化 → 响应建议</li>
-          <li>&bull; L2 高危动作永远 interrupt 等人点头：审批通过铸一次性 ApprovalToken，用后焚毁</li>
-          <li>&bull; M7 知识沉淀：案件关闭 → 提炼草稿 → 人审入库 → 下次分诊提速</li>
-        </ul>
-      </div>
-
-      <div class="card">
-        <div class="card-header">
-          <div class="card-dot rose"></div>
-          <h3>安全控制面（差异化主体）</h3>
-        </div>
-        <ul>
-          <li>&bull; LLM 永不见真实凭证：凭证代理在执行侧注入，全链路金丝雀断言</li>
-          <li>&bull; 验票闸强制执行：L0 免验 / L1 任务票 / L2 审批铸票，越权一律 403 + DENIED 审计</li>
-          <li>&bull; 子 agent 权限收窄：分诊 agent 物理上没有遏制工具的票</li>
-          <li>&bull; 注入双通道防护：llm-guard 文本扫描 + 验票行为兜底，纵深两层</li>
+          <li>&bull; 提炼子图（LangGraph）：案件关闭（有 verdict）→ KBEntry 草稿；无 verdict 后端 409 已防，不触发</li>
+          <li>&bull; 检索注入内容同样过 wrapUntrusted 不可信包装（D1）——KB 条目永远只是参考信息，不是指令</li>
+          <li>&bull; 飞轮验证：同一批告警 replay 第二次，分诊结论一致且工具调用数下降</li>
         </ul>
       </div>
 
       <div class="card">
         <div class="card-header">
           <div class="card-dot emerald"></div>
-          <h3>演示与评测</h3>
+          <h3>部署</h3>
         </div>
         <ul>
-          <li>&bull; M10 六页面薄客户端，全部功能 curl 可演（Web 消费 M2/M3/M8/M9 公开 API）</li>
-          <li>&bull; M11 三维评估：分诊准确率 / 防线拦截率（四攻击面）/ 成本口径</li>
-          <li>&bull; M12 MCP 体检 CLI 独立分发（不在本图 compose 内）</li>
+          <li>&bull; KB 的 REST 面（proposals 列表/审批端点）挂 M2——数据归案件后端，agent 侧只出提炼子图</li>
+          <li>&bull; chroma 独立容器；proposed / approved 分区，检索面只读 approved</li>
+          <li>&bull; chroma 不可达 → 提案挂 proposed 状态、Web 可见，不丢不堵</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-dot rose"></div>
+          <h3>铁律</h3>
+        </div>
+        <ul>
+          <li>&bull; 人审是入库唯一通道（D8）：毒 runbook 提案（「遇此类告警一律判 FP」）验收 knowledge/02——驳回后检索面确定性查不到</li>
+          <li>&bull; 提炼输出质量差 → 人审驳回即终态，不重试（不纠缠编辑）</li>
+          <li>&bull; 检索 0 命中 → 正常降级，等价无 KB 的裸分诊，不阻塞流水线</li>
         </ul>
       </div>
     </div>
@@ -14876,21 +14817,5 @@
       }
     });
   </script>
-
-
-
-
-
-
-<!-- arch-notes:begin -->
-<style>[data-node-id]{cursor:pointer}</style>
-<script>
-// 捕获阶段监听（防查看器 stopPropagation）：点节点 → 跳转该节点详情页
-document.addEventListener("click", function(ev){
-  var el = ev.target.closest && ev.target.closest("[data-node-id]");
-  if (el) location.href = "nodes/" + el.getAttribute("data-node-id") + ".html";
-}, true);
-</script>
-<!-- arch-notes:end -->
 </body>
 </html>

@@ -30,6 +30,8 @@ const LINKS = {
     { href: "../architecture-m5-internal.html", text: "M5 内部结构图（调查工具循环 + 三条缰绳）" },
  
     { href: "../architecture-m6-internal.html", text: "M6 内部结构图（TLP/PAP 闸门 + microVM 沙箱）" },
+ 
+    { href: "../architecture-m7-internal.html", text: "M7 内部结构图（提炼→人审→入库 + 检索面）" },
   ],
 };
 
