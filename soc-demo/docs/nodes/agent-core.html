@@ -23,8 +23,8 @@
 <a class="back" href="../architecture-v4.html">← 返回架构图 v4</a>
 <div class="card">
 <h1>M3-M8 编排与 workers —— 系统的大脑</h1>
-<p><b>干什么：</b>supervisor 图编排（LangGraph.js）拉起四个 worker 子图：分诊 M4 → 调查 M5 → 富化 M6 → 沉淀 M7；对话 Copilot M8 也在这里。</p><ul><li><b>硬规矩</b>：supervisor 自己不持工具、不做安全判断，只调度；worker 之间不直接对话，靠共享 Case 资源层协作</li><li><b>审批</b>：L2 高危动作在图里 interrupt() 挂起，等人点头才 resume</li><li><b>验收</b>：杀进程重启后审批状态可恢复；信封 hash 篡改必拒；超 token 预算强杀</li><li><b>权限</b>：每个 worker 只持任务级最小 scope 票，分诊 agent 物理上没有遏制工具的票</li></ul><p><b>内部结构图</b>（events→graph→workers→验票闸，检查点+预算兜底，含技术栈与部署说明）：同目录 architecture-m3-internal.html</p><p><b>内部结构图</b>（M4 分诊子图六节点：load→kb_check→merge_check→self_audit→verdict→outcome，含技术栈与部署说明）：同目录 architecture-m4-internal.html</p>
-<div class="links">📎 <a href="../architecture-m3-internal.html">M3 内部结构图（调度主图 + 检查点恢复 + 审批挂起）</a></div><div class="links">📎 <a href="../architecture-m4-internal.html">M4 内部结构图（分诊子图六节点 + 不可信包装 + 结构化输出契约）</a></div>
+<p><b>干什么：</b>supervisor 图编排（LangGraph.js）拉起四个 worker 子图：分诊 M4 → 调查 M5 → 富化 M6 → 沉淀 M7；对话 Copilot M8 也在这里。</p><ul><li><b>硬规矩</b>：supervisor 自己不持工具、不做安全判断，只调度；worker 之间不直接对话，靠共享 Case 资源层协作</li><li><b>审批</b>：L2 高危动作在图里 interrupt() 挂起，等人点头才 resume</li><li><b>验收</b>：杀进程重启后审批状态可恢复；信封 hash 篡改必拒；超 token 预算强杀</li><li><b>权限</b>：每个 worker 只持任务级最小 scope 票，分诊 agent 物理上没有遏制工具的票</li></ul><p><b>内部结构图</b>（events→graph→workers→验票闸，检查点+预算兜底，含技术栈与部署说明）：同目录 architecture-m3-internal.html</p><p><b>内部结构图</b>（M4 分诊子图六节点：load→kb_check→merge_check→self_audit→verdict→outcome，含技术栈与部署说明）：同目录 architecture-m4-internal.html</p><p><b>内部结构图</b>（M5 调查子图工具循环：plan→验票→执行→治理→plan，三条缰绳=步数/防打转/上下文治理）：同目录 architecture-m5-internal.html</p>
+<div class="links">📎 <a href="../architecture-m3-internal.html">M3 内部结构图（调度主图 + 检查点恢复 + 审批挂起）</a></div><div class="links">📎 <a href="../architecture-m4-internal.html">M4 内部结构图（分诊子图六节点 + 不可信包装 + 结构化输出契约）</a></div><div class="links">📎 <a href="../architecture-m5-internal.html">M5 内部结构图（调查工具循环 + 三条缰绳）</a></div>
 </div>
 </body>
 </html>

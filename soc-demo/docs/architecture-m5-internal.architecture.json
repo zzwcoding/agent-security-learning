@@ -1,0 +1,295 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "M5 调查 agent · 内部结构",
+    "output": "architecture-m5-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [
+      1380,
+      640
+    ]
+  },
+  "components": [
+    {
+      "id": "toolsrc",
+      "type": "external",
+      "label": "工具后端",
+      "sublabel": "mock SIEM + KB approved 区",
+      "pos": [
+        20,
+        440
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "seam：fixture↔真 Wazuh"
+    },
+    {
+      "id": "m2",
+      "type": "external",
+      "label": "M2 案件后端",
+      "sublabel": "读案件 / 写 Timeline",
+      "pos": [
+        20,
+        250
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "数据地基"
+    },
+    {
+      "id": "gateway",
+      "type": "external",
+      "label": "gateway 凭证代理",
+      "sublabel": "S1：LLM 钥匙不落地",
+      "pos": [
+        1120,
+        40
+      ],
+      "size": [
+        190,
+        60
+      ],
+      "tag": "/proxy/llm/*"
+    },
+    {
+      "id": "plan",
+      "type": "backend",
+      "label": "① plan_step",
+      "sublabel": "LLM 决策下一步",
+      "pos": [
+        250,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "循环入口"
+    },
+    {
+      "id": "gate",
+      "type": "security",
+      "label": "② 验票闸",
+      "sublabel": "M9-S2 中间件",
+      "pos": [
+        450,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "L1 任务票"
+    },
+    {
+      "id": "tools",
+      "type": "backend",
+      "label": "③ tool_exec",
+      "sublabel": "siem_query / kb_read",
+      "pos": [
+        650,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "强制 time_window"
+    },
+    {
+      "id": "govern",
+      "type": "security",
+      "label": "④ govern_result",
+      "sublabel": "摘要 / 落盘 / 防打转",
+      "pos": [
+        850,
+        250
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "上下文不超窗"
+    },
+    {
+      "id": "report",
+      "type": "backend",
+      "label": "⑤ report",
+      "sublabel": "固定 schema 调查报告",
+      "pos": [
+        240,
+        440
+      ],
+      "size": [
+        170,
+        64
+      ],
+      "tag": "不合→降级自由文本"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "services/agent 内子模块 workers/investigation（无独立 HTTP 面，由 M3 拉起，输入 {case_id, ticket}）",
+      "wraps": [
+        "plan",
+        "gate",
+        "tools",
+        "govern",
+        "report"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "m2-to-plan",
+      "from": "m2",
+      "to": "plan",
+      "label": ""
+    },
+    {
+      "id": "plan-to-gate",
+      "from": "plan",
+      "to": "gate",
+      "label": ""
+    },
+    {
+      "id": "gate-to-tools",
+      "from": "gate",
+      "to": "tools",
+      "label": ""
+    },
+    {
+      "id": "tools-to-govern",
+      "from": "tools",
+      "to": "govern",
+      "label": ""
+    },
+    {
+      "id": "govern-to-plan",
+      "from": "govern",
+      "to": "plan",
+      "label": "下一步，未集齐继续",
+      "variant": "dashed",
+      "fromSide": "top",
+      "toSide": "top",
+      "via": [
+        [
+          935,
+          130
+        ],
+        [
+          335,
+          130
+        ]
+      ],
+      "labelAt": [
+        620,
+        116
+      ]
+    },
+    {
+      "id": "plan-to-report",
+      "from": "plan",
+      "to": "report",
+      "label": "集齐/步数尽→出报告",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [
+        360,
+        420
+      ]
+    },
+    {
+      "id": "report-to-m2",
+      "from": "report",
+      "to": "m2",
+      "label": "写 Timeline",
+      "fromSide": "left",
+      "toSide": "bottom",
+      "labelAt": [
+        60,
+        335
+      ]
+    },
+    {
+      "id": "tools-to-toolsrc",
+      "from": "tools",
+      "to": "toolsrc",
+      "label": "siem_query / kb_read",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [
+        [
+          735,
+          545
+        ],
+        [
+          110,
+          545
+        ]
+      ],
+      "labelAt": [
+        420,
+        533
+      ]
+    },
+    {
+      "id": "govern-to-gateway",
+      "from": "govern",
+      "to": "gateway",
+      "label": "LLM 调用走代理（S1）",
+      "fromSide": "right",
+      "toSide": "left",
+      "via": [
+        [
+          1080,
+          282
+        ],
+        [
+          1080,
+          70
+        ]
+      ],
+      "labelAt": [
+        1030,
+        58
+      ]
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "技术栈",
+      "items": [
+        "LangGraph 子图工具循环：plan → 验票 → 执行 → 治理 → plan，直到 LLM 判定收工（PRD §6-M5）",
+        "siem_query 强制 time_window——工具签名契约的一部分，防\"查全库\"式又贵又慢的查询",
+        "上下文治理：结果 >10k 字符给 llm_summarize 小模型摘要，>50k 落盘留引用；小模型同样走凭证代理"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "部署",
+      "items": [
+        "services/agent 内子模块 workers/investigation，无独立 HTTP 面",
+        "SIEM 是 seam：fixture 告警集检索（演示）↔ 将来真 Wazuh，只换 adapter",
+        "报告进 M2 Timeline，机读负载供 eval 评分与后续检索"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "铁律",
+      "items": [
+        "max_steps=20 用尽 → 输出部分报告并标注「调查不完整」——不装完整",
+        "同参数重复调用同一工具 → 直接报错（防打转）；SIEM 0 命中 → 如实写「无关联事件」，不编造",
+        "工具报错 → 计入 evidence 缺口继续（把拒绝当信息不当故障）；报告不合 schema → 重试 1 次 → 降级自由文本 + 标记"
+      ]
+    }
+  ]
+}
