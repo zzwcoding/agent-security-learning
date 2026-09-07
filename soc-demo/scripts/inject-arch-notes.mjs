@@ -28,6 +28,8 @@ const LINKS = {
     { href: "../architecture-m4-internal.html", text: "M4 内部结构图（分诊子图六节点 + 不可信包装 + 结构化输出契约）" },
  
     { href: "../architecture-m5-internal.html", text: "M5 内部结构图（调查工具循环 + 三条缰绳）" },
+ 
+    { href: "../architecture-m6-internal.html", text: "M6 内部结构图（TLP/PAP 闸门 + microVM 沙箱）" },
   ],
 };
 
