@@ -25,7 +25,6 @@
 <h1>M2 案件后端 —— 全系统数据地基</h1>
 <p><b>干什么：</b>Alert/Case/Task/Observable/Timeline/Audit 六类实体的 CRUD + 状态机 + alert→case 三结局；所有写操作自动落审计（记操作不记内容）。</p><p><b>本质定位：</b>带规矩的档案室 + 总台账本——存储读取是手段，保证数据全生命周期可追溯才是目的。纯确定性代码，一行 LLM 都没有；前面 M1/M2 把数据和台账做扎实，后面的 agent 才敢放开手脚。</p><ul><li><b>接口</b>：/api/v1/alerts、/cases、/timeline、/audit 等 REST</li><li><b>Seam</b>：存储（SQLite/内存）；事件出口 EventBus = SQLite outbox（将来可换 Kafka，只换 adapter）</li><li><b>验收</b>：状态机非法转移 100% 409；关案必须填 verdict；任何写必产审计 diff</li><li>纯叶子模块，不依赖任何人</li></ul><p><b>技术选型理由：</b>Fastify 5 ≈ TS 世界的 FastAPI（声明式 schema 校验内置，畸形请求自动 422——入口校验是防注入第一道铁丝网，内置=默认就有不靠自觉；性能为 Express 约 2 倍）。存储用 SQLite + better-sqlite3：① 同步 API 让"写数据+审计 diff+outbox 事件"三件套进同一事务，要么全成要么全滚；② 内存 SQLite 换一行连接串即测试 seam，单测不起容器；③ 零运维，考官 compose up 即跑。何时不选它：多实例水平扩展/多服务并发写——所以存储与 EventBus 都留了 seam，换 Postgres/Kafka 不动业务代码。</p><p><b>内部结构图</b>（REST 面→状态机→审计拦截→SQLite→outbox，含技术栈与部署说明）：同目录 architecture-m2-internal.html</p>
 <div class="links">📎 <a href="../architecture-m2-internal.html">M2 内部结构图（写路径过闸 + 只读直查 + 事件出口）</a></div>
-
 </div>
 </body>
 </html>

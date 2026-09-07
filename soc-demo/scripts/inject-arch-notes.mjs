@@ -22,6 +22,11 @@ const notes = JSON.parse(readFileSync(notesPath, "utf8"));
 // 节点的延伸阅读（内部结构图等），没有就不显示
 const LINKS = {
   ingest: [{ href: "../architecture-m1-internal.html", text: "M1 内部结构图（五步流水线 + 技术栈 + 部署）" }],
+  "case-backend": [{ href: "../architecture-m2-internal.html", text: "M2 内部结构图（写路径过闸 + 只读直查 + 事件出口）" }],
+  "agent-core": [
+    { href: "../architecture-m3-internal.html", text: "M3 内部结构图（调度主图 + 检查点恢复 + 审批挂起）" },
+    { href: "../architecture-m4-internal.html", text: "M4 内部结构图（分诊子图六节点 + 不可信包装 + 结构化输出契约）" },
+  ],
 };
 
 // ── 1. 生成详情页 ──────────────────────────────────────────────

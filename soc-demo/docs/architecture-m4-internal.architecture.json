@@ -1,0 +1,269 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "M4 分诊 agent · 内部结构",
+    "output": "architecture-m4-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [
+      1380,
+      640
+    ]
+  },
+  "components": [
+    {
+      "id": "guards",
+      "type": "external",
+      "label": "guards 注入扫描",
+      "sublabel": "llm-guard（C4）",
+      "pos": [
+        20,
+        120
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "不可信段过滤"
+    },
+    {
+      "id": "m2",
+      "type": "external",
+      "label": "M2 案件后端",
+      "sublabel": "读 Alert / 写 verdict",
+      "pos": [
+        20,
+        250
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "数据地基"
+    },
+    {
+      "id": "kb",
+      "type": "external",
+      "label": "M7 KB approved 区",
+      "sublabel": "chroma 检索面",
+      "pos": [
+        20,
+        440
+      ],
+      "size": [
+        180,
+        60
+      ],
+      "tag": "top-k=5"
+    },
+    {
+      "id": "gateway",
+      "type": "external",
+      "label": "gateway 凭证代理",
+      "sublabel": "S1：LLM 钥匙不落地",
+      "pos": [
+        1155,
+        40
+      ],
+      "size": [
+        190,
+        60
+      ],
+      "tag": "/proxy/llm/*"
+    },
+    {
+      "id": "load",
+      "type": "backend",
+      "label": "① load_alert",
+      "sublabel": "读告警+不可信字段",
+      "pos": [
+        230,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "full_log=数据非指令"
+    },
+    {
+      "id": "kbcheck",
+      "type": "backend",
+      "label": "② kb_check",
+      "sublabel": "L0 免验只读",
+      "pos": [
+        415,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "历史模式提速"
+    },
+    {
+      "id": "mergecheck",
+      "type": "backend",
+      "label": "③ merge_check",
+      "sublabel": "L0 查重（FR-M2.4）",
+      "pos": [
+        600,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "同主机 24h 归并"
+    },
+    {
+      "id": "selfaudit",
+      "type": "security",
+      "label": "④ self_audit",
+      "sublabel": "产出声明 artifact",
+      "pos": [
+        785,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "声明≠实际→降级"
+    },
+    {
+      "id": "verdict",
+      "type": "backend",
+      "label": "⑤ verdict_llm",
+      "sublabel": "结构化输出四分类",
+      "pos": [
+        970,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "不合 schema→重试"
+    },
+    {
+      "id": "outcome",
+      "type": "backend",
+      "label": "⑥ outcome",
+      "sublabel": "建案 / 合并 / 关单 → 写回 M2",
+      "pos": [
+        1155,
+        250
+      ],
+      "size": [
+        160,
+        64
+      ],
+      "tag": "三结局动词"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）",
+      "wraps": [
+        "load",
+        "kbcheck",
+        "mergecheck",
+        "selfaudit",
+        "verdict",
+        "outcome"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "m2-to-load",
+      "from": "m2",
+      "to": "load",
+      "label": ""
+    },
+    {
+      "id": "kb-to-kbcheck",
+      "from": "kb",
+      "to": "kbcheck",
+      "label": "检索 approved",
+      "fromSide": "right",
+      "toSide": "bottom"
+    },
+    {
+      "id": "load-to-kb",
+      "from": "load",
+      "to": "kbcheck",
+      "label": ""
+    },
+    {
+      "id": "kb-to-merge",
+      "from": "kbcheck",
+      "to": "mergecheck",
+      "label": ""
+    },
+    {
+      "id": "merge-to-audit",
+      "from": "mergecheck",
+      "to": "selfaudit",
+      "label": ""
+    },
+    {
+      "id": "audit-to-verdict",
+      "from": "selfaudit",
+      "to": "verdict",
+      "label": ""
+    },
+    {
+      "id": "verdict-to-outcome",
+      "from": "verdict",
+      "to": "outcome",
+      "label": ""
+    },
+    {
+      "id": "guards-to-verdict",
+      "from": "guards",
+      "to": "verdict",
+      "label": "不可信段扫描+包装（D1）",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "id": "verdict-to-gateway",
+      "from": "verdict",
+      "to": "gateway",
+      "label": "LLM 调用走代理"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "技术栈",
+      "items": [
+        "LangGraph 子图：load_alert → kb_check → merge_check → self_audit → verdict_llm → outcome（PRD §6-M4）",
+        "结构化输出 schema 照 M507 runbook 的 GLOBAL OUTPUT VARIABLES 改造——prompt 契约是事实接口，改动视同接口变更",
+        "prompt 装配器 wrapUntrusted：不可信段包装后进 prompt（D1 落点）；LLM 调用全走 gateway 凭证代理（S1），本模块摸不到 key"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "部署",
+      "items": [
+        "services/agent 内子模块 workers/triage，无独立 HTTP 面——由 M3 主图拉起，输入 {alert_id, ticket}",
+        "KB 检索面只读 approved 区；检索注入内容同样过不可信包装",
+        "KB 不可达 → 降级为无 KB 分诊并在 rationale 标注，不阻塞流水线；eval 用伪 LLM fixture 可脱离真模型跑"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "铁律",
+      "items": [
+        "LLM 输出不合 schema → 重试 1 次，仍失败置 uncertain + 人工待办——宁可升级人工不可猜",
+        "self_audit 声明与 merge_check 实际结果矛盾 → verdict 强制降级 uncertain（eval 可测）",
+        "物理无 L2 票：分诊 agent 没有任何高危工具的票，永远不会触发审批"
+      ]
+    }
+  ]
+}
