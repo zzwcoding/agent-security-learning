@@ -272,7 +272,7 @@ v0.2 追加一条施工纪律：本 PRD 中每个模块的「功能点表 / 实�
 | `description` | string | HolmesGPT description 工程 | 写清何时用/何时别用/替代方案 |
 | `dataTypes` | enum[] | Cortex `dataTypeList` | 可接受的 observable 类型（查询类工具） |
 | `max_tlp` / `max_pap` | int | Cortex 闸门 | 数据敏感度超过即拒绝执行（OPSEC） |
-| `requires_approval` | object | HolmesGPT 参数级判定 | 参数级规则，如 `{when: {host_scope: "production"}}`（具体 DSL 待定：阶段 B 决策，首版可用固定规则表） |
+| `requires_approval` | object | HolmesGPT 参数级判定 | 参数级规则，如 `{when: {host_scope: "production"}}`（已定：首版固定规则表、不抽象 DSL，决策记录 #2） |
 | `side_effect` | enum | 系统 | `none / mock_write / external_call`，审计与验票共用 |
 
 ### 5.8 Ticket（任务票，v3 ③原样继承）
@@ -288,7 +288,7 @@ worker 被拉起时由铸币服务签发的短时票据。教学版 HMAC-SHA256 
   "scope": ["case:write", "alert:update"],  // 最小 scope 集
   "allowed_tools": ["create_case", "merge_alert", "close_alert"],
   "iat": 1757000000,
-  "exp": 1757000900,              // 短时；默认 900s（待定：阶段 B 决策是否按 worker 调）
+  "exp": 1757000900,              // 短时；默认 900s（已定：统一 900s 不按 worker 调，决策记录 #3）
   "sig": "<hmac-sha256 hex>"
 }
 ```
@@ -484,7 +484,7 @@ POST /api/v1/cases/case_000012/close
 {"type":"approval_required","approval_id":"apr_01J","tool":"isolate_host","params":{"host":"centos7"},"reason":"调查报告建议遏制","ts":1757000002}
 ```
 
-**异常与边界**：LLM 调用超时（默认 60s，待定：阶段 B 决策是否按节点调）→ 节点重试 1 次后 run 置 `Failed` + timeline 落系统条目；worker 子图异常 → supervisor 捕获，案件挂 `OnHold` 语义的 timeline 条目（不吞错）；票据过期（900s 内未完成）→ 重新申领新票继续（L1），L2 的 ApprovalToken 过期 → 必须重新审批；资源兜底触发 → run 终止 + 审计 + Web 可见；审批超时（默认 15min，可配）→ 审批卡失效，动作不执行（fail-closed）。
+**异常与边界**：LLM 调用超时（统一 60s，留 per-node env 覆盖口子——已定，决策记录 #4）→ 节点重试 1 次后 run 置 `Failed` + timeline 落系统条目；worker 子图异常 → supervisor 捕获，案件挂 `OnHold` 语义的 timeline 条目（不吞错）；票据过期（900s 内未完成）→ 重新申领新票继续（L1），L2 的 ApprovalToken 过期 → 必须重新审批；资源兜底触发 → run 终止 + 审计 + Web 可见；审批超时（默认 15min，可配）→ 审批卡失效，动作不执行（fail-closed）。
 
 **验收标准**：5712 真实 fixture 推入后流水线无人工干预跑完分诊→建案→调查→富化（eval fixture `triage/01_ssh_bruteforce_tp`）；中断-恢复测试：在审批 interrupt 处杀 agent 进程重启，checkpointer 恢复后审批决定仍绑定原 (run, tool call)；信封 hash 篡改测试：改动落盘状态任意字节，resume 必拒（eval 断言）；超 token 预算的 fixture run 被强制终止且有审计。
 
@@ -562,7 +562,7 @@ POST /api/v1/cases/case_000012/close
 ```
 返回：`{"total": 12, "truncated": false, "hits_ref": "spill/run_01J/q1.json", "summary": "...（超阈值时为 llm_summarize 摘要）"}`
 
-**异常与边界**：SIEM 查询 0 命中 → 报告如实写「无关联事件」而非编造；工具报错 → 计入 findings 的 evidence 缺口并继续（HolmesGPT「Forbidden 当信息不当故障」思路）；`max_steps`（默认 20，待定：阶段 B 决策）用尽 → 输出部分报告并标注「调查不完整」；调查报告 schema 校验失败 → 重试 1 次后降级为自由文本 + 标记。
+**异常与边界**：SIEM 查询 0 命中 → 报告如实写「无关联事件」而非编造；工具报错 → 计入 findings 的 evidence 缺口并继续（HolmesGPT「Forbidden 当信息不当故障」思路）；`max_steps`（20——已定，决策记录 #5）用尽 → 输出部分报告并标注「调查不完整」；调查报告 schema 校验失败 → 重试 1 次后降级为自由文本 + 标记。
 
 **验收标准**：fixture `invest/01_ssh_tp_full`：报告 schema 校验通过、findings ≥ 1 条且 evidence 引用真实工具输出（eval judge + 确定性断言）；超大 SIEM 结果 fixture 触发落盘且 LLM 上下文未超窗（断言 `truncated=true` 或 `hits_ref` 存在）；token 用量进成本 CSV（M11 口径）。
 
@@ -616,7 +616,7 @@ POST /api/v1/cases/case_000012/close
 |---|---|---|---|
 | FR-M7.1 | 沉淀提炼 | 案件关闭触发；无人工 verdict 的案件跳过抽取（ASP 门控） | P0 |
 | FR-M7.2 | 人审入库闸 | KBEntry `proposed → approved/rejected`；审批界面在 Web 案件页/审批页；只有 approved 进 Chroma 检索面 | P0 |
-| FR-M7.3 | 检索注入 | 分诊/调查 prompt 装配时检索 approved KBEntry（top-k，默认 5，待定：阶段 B 决策），注入条目标记来源 | P0 |
+| FR-M7.3 | 检索注入 | 分诊/调查 prompt 装配时检索 approved KBEntry（top-k=5——已定，决策记录 #6），注入条目标记来源 | P0 |
 | FR-M7.4 | replay 验证 | 同类告警 replay 评测：技能被加载 + 结论仍正确 + 探索性工具调用减少（HolmesGPT skill replay 范式） | P0 |
 | FR-M7.5 | 投毒防护联动 | 入库闸即 RAG 投毒第一道防线；检索注入内容按不可信内容标记包装 | P0 |
 
@@ -772,7 +772,7 @@ POST http://guards:8001/scan/injection
 
 | 编号 | 名称 | 描述 | 优先级 |
 |---|---|---|---|
-| FR-S4.1 | Presidio 脱敏管道 | `POST /analyze` + `/anonymize`；识别 EMAIL/PHONE/IP（内部段除外待定：阶段 B 决策）/PERSON 等实体，替换为类型占位符 | P0 |
+| FR-S4.1 | Presidio 脱敏管道 | `POST /analyze` + `/anonymize`；识别 EMAIL/PHONE/IP（内网段豁免 RFC1918——已定，决策记录 #8）/PERSON 等实体，替换为类型占位符 | P0 |
 | FR-S4.2 | 脱敏映射会话级保留 | 映射表仅服务端内存保留、会话/run 结束即弃；不进审计 | P0 |
 
 **实现机制**：脱敏中间件挂在 LLM 出站调用前（出域边界），与 S1 凭证注入同层不同序——先脱敏后注入；识别器用 Presidio 默认 zh/en 实体集 + 内网网段白名单自定义识别器。
@@ -846,7 +846,7 @@ POST http://guards:8001/pii/anonymize {"text":"...","language":"zh"}
 | FR-M10.5 | 审计流页 | 实时滚动审计条目，可按 requestId/case 过滤 | P0 |
 | FR-M10.6 | Eval 结果页 | 最近一次 eval 跑分：分诊准确率/三攻击面拦截率/成本耗时（M11 数据源） | P1 |
 
-**实现机制**：Vite + React + SSE（`EventSource`），不引状态管理库（已拍板）；页面数据全部来自公开 REST + SSE，无 Web 特权接口；SSE 断线自动重连（重放最近事件 offset，具体语义待定：阶段 B 决策）。
+**实现机制**：Vite + React + SSE（`EventSource`），不引状态管理库（已拍板）；页面数据全部来自公开 REST + SSE，无 Web 特权接口；SSE 断线自动重连（事件自增 id 落盘 + `Last-Event-ID` 补发——已定，决策记录 #9）。
 
 **接口契约**：消费 M2/M3/M8/M9 已列 API，无新增后端契约。
 
@@ -867,13 +867,13 @@ POST http://guards:8001/pii/anonymize {"text":"...","language":"zh"}
 | 编号 | 名称 | 描述 | 优先级 |
 |---|---|---|---|
 | FR-M11.1 | fixture 目录制 | `fixtures/eval/<域>/<编号_场景>/test_case.yaml`（格式 §5.11）+ 配套资源 | P0 |
-| FR-M11.2 | LLM judge | strict 要点覆盖（expected_output 全部命中才 1 分），judge 与被测模型分离（`JUDGE_MODEL` 配置；judge 模型选型待定：阶段 B 决策） | P0 |
+| FR-M11.2 | LLM judge | strict 要点覆盖（expected_output 全部命中才 1 分），judge 与被测模型分离（`JUDGE_MODEL` 配置；选型已定，决策记录 #7） | P0 |
 | FR-M11.3 | 确定性断言 | `forbidden_tools` / `expected_approvals` / `max_tool_calls` / `max_tokens` / 审计存在性 / replay 行为硬检查 | P0 |
 | FR-M11.4 | 三维报告 | 分诊准确率（对照人工标注 verdict）+ 防线拦截率（攻击 fixture 集分面计数）+ 成本口径（每条告警 input/output token、耗时、估算成本，CSV 模板照 M507 `cost_all.csv` 列结构） | P0 |
 | FR-M11.5 | CI 分层 | 每 commit 跑回归子集（tags=regression）；周期全量；`ITERATIONS` 多次取稳定通过率（HolmesGPT CI 分层复刻） | P0 |
 | FR-M11.6 | mock 政策 | `mock_policy: inherit/never_mock/always_mock` 三档；演示环境一律 always_mock | P0 |
 
-**实现机制**：vitest 自定义 runner 扫描 fixture 目录生成测试；跑测时拉起完整 compose 栈（或对 agent 服务单测级注入，分层待定：阶段 B 决策）；结果落 `eval-results/`（JSON + markdown 报告 + 成本 CSV），供 M10 Eval 页读取。
+**实现机制**：vitest 自定义 runner 扫描 fixture 目录生成测试；跑测时拉起完整 compose 栈（或对 agent 服务单测级注入——分层已定：CI 快慢两道，决策记录 #10）；结果落 `eval-results/`（JSON + markdown 报告 + 成本 CSV），供 M10 Eval 页读取。
 
 **接口契约**：
 ```bash
@@ -911,7 +911,7 @@ ITERATIONS=10 pnpm test:eval         # 多次取稳定通过率
 | FR-M12.4 | 凭证暴露面检查 | 扫描 server 配置/env 引用中的明文凭证模式 | P0 |
 | FR-M12.5 | 报告输出 | markdown + JSON 双格式体检报告 | P0 |
 
-**实现机制**：TS CLI（`soc-mcp-audit <server-command-or-url>`）；检测规则库内置；llm-guard 走 C4 微服务或本地内嵌（待定：阶段 B 决策）。
+**实现机制**：TS CLI（`soc-mcp-audit <server-command-or-url>`）；检测规则库内置；llm-guard 走本地内嵌（已定，决策记录 #11）。
 
 **接口契约**：
 ```bash
@@ -1057,13 +1057,13 @@ $ soc-mcp-audit "npx -y @modelcontextprotocol/server-filesystem /tmp"
 
 | 配置 | 默认 | 说明 |
 |---|---|---|
-| `LLM_MODEL` / `JUDGE_MODEL` | 待定：阶段 B 决策 | 被测模型与 judge 分离（HolmesGPT 纪律） |
+| `LLM_MODEL` / `JUDGE_MODEL` | minimax-m2 / 先同款（决策记录 #7） | 被测模型与 judge 分离（HolmesGPT 纪律） |
 | `SECRETS_*` | env | 凭证代理真值仓（教学版） |
 | `HMAC_SIGNING_KEY` | env 随机生成 | 票据签名密钥 |
 | `TICKET_TTL_SECONDS` | 900 | 任务票时效 |
 | `APPROVAL_TOKEN_TTL_SECONDS` | 300 | 审批铸票时效 |
 | `APPROVAL_TIMEOUT_SECONDS` | 900 | 审批卡失效时间 |
-| `MAX_TOOL_CALLS` / `MAX_REQUESTS` / `RUN_TIMEOUT_SECONDS` / `MAX_TOKENS_PER_RUN` | 15 / 45 / 1800 / 待定：阶段 B 决策 | Tracecat 资源兜底口径 |
+| `MAX_TOOL_CALLS` / `MAX_REQUESTS` / `RUN_TIMEOUT_SECONDS` / `MAX_TOKENS_PER_RUN` | 15 / 45 / 1800 / 50k（决策记录 #12） | Tracecat 资源兜底口径 |
 | `LLM_SUMMARIZE_THRESHOLD_CHARS` | 10000 | M5 摘要阈值 |
 | `SPILL_THRESHOLD_CHARS` | 50000 | 落盘阈值 |
 | `GUARD_FAIL_MODE` | `closed` | llm-guard/Presidio 不可达时 closed（默认）/open 仅供对照演示 |
@@ -1196,3 +1196,4 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 2. **microsandbox 保留，改挂 M6**：C5 组件清单中 microsandbox 不删，但保护对象从"shell/fetch 执行面"（本 demo 不存在）改为 **M6 富化的 analyzer 沙箱运行时**——analyzer 按 Cortex 真实架构以可执行脚本形态存在，每次富化在一次性 microVM 里真跑。
 3. **M6 升级为半真模块**：mock analyzer 中至少一个改为沙箱内真跑脚本；新增攻击面"投毒/被污染 analyzer 逃逸与外联"作为红队演示的第四攻击面（教学场景，路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此）。M6 的功能点表与验收标准在阶段 B 模块规格中细化。
 4. **Alert 增加 `occurrences` 计数字段**（2026-09-04 用户提出）：重复推送同 `(source, sourceRef)` 告警时 `occurrences` +1 并刷新 `lastSeen`，仍不新建不重复触发流水线。对齐真实 SIEM 的"重复计数即信号"实践；TheHive 原行为（直接返回既有 id）保留。
+5. **正文「待定：阶段 B 决策」标记全部回写**（2026-09-07，票 18 收口对账）：12 处正文标记与附录「待定项决策记录」逐条对齐同步，**无决策变更**；其中 #4（LLM 超时统一 60s）、#12（token 预算 50k/run）于当日过 M3 节点时经用户复核确认。

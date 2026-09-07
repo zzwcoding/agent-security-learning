@@ -78,6 +78,7 @@
 - **依赖**：M2（读写案件）、M9-S2（验票）、gateway（铸票申领）、workers（子图）
 - **Seam**：checkpointer 存储 = SQLite（信封 hash 链）；LLM 调用 = 经凭证代理（S1）
 - **测试计划**：5712 fixture 全链路无人干预跑完；审批 interrupt 杀进程重启后状态可恢复且绑定原 (run, tool_call)；信封篡改 resume 必拒；超 token 预算 run 被强杀 + 审计
+- **资源兜底口径**（PRD 决策记录 #4/#5/#12，2026-09-07 过 M3 节点用户复核确认）：LLM 超时统一 60s（留 per-node env 口子）、max_steps 20、token 50k/run——任一超限强杀 + 审计
 - **内部模块**：`graph`（图定义）、`events`（SSE 总线 + offset 重放）、`envelope`（信封 hash）、`budget`（资源兜底计数）
 
 ### M4 分诊 agent → services/agent 内子模块 `workers/triage`
