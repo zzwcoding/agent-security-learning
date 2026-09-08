@@ -101,7 +101,7 @@ v0.2 追加一条施工纪律：本 PRD 中每个模块的「功能点表 / 实�
 | C4 | llm-guard / Presidio 微服务 | Python + FastAPI（复用路线 1-3 管线） | 注入扫描（llm-guard）与 PII 识别/脱敏（Presidio），可同服务多端点 | docker-compose 服务 `guards` |
 | C5 | 已有 Python 后端（复用） | Python（ContextForge 网关 / OpenFGA / microsandbox / Langfuse） | RBAC 工具可见性、FGA 裁决、铸币（票签签）、trace 收集 | docker-compose 服务 `gateway`（复用现有镜像/代码） |
 | C6 | Chroma 向量库 | Chroma（独立容器） | 知识沉淀条目（KBEntry）的向量存储与检索 | docker-compose 服务 `chroma` |
-| C7 | Web 演示窗 | Vite + React + SSE，不引状态管理库 | 六个页面的薄演示窗（§M10） | docker-compose 服务 `web`（dev 模式 vite，演示用静态构建 + 静态服务均可） |
+| C7 | Web 演示窗 | Vite + React + Ant Design 5 + SSE，不引状态管理库 | 六个页面的薄演示窗（§M10） | docker-compose 服务 `web`（dev 模式 vite，演示用静态构建 + 静态服务均可） |
 | C8 | Eval 体系 | vitest + fixture 目录 + LLM judge | 回归评测（分诊准确率/防线拦截率/成本口径） | 非运行时组件，CI 与本地 `pnpm test:eval` |
 | C9 | MCP 体检 CLI | TypeScript CLI | 对接入的 MCP server 做体检（工具描述投毒/权限范围/凭证暴露面） | 独立 npm bin，不进 compose |
 | C10 | 告警 fixture 数据集 | JSON 文件 | 7+ 类真实 Wazuh 告警落盘 + 注入变体 | 仓库内目录 `fixtures/alerts/` |
@@ -846,7 +846,7 @@ POST http://guards:8001/pii/anonymize {"text":"...","language":"zh"}
 | FR-M10.5 | 审计流页 | 实时滚动审计条目，可按 requestId/case 过滤 | P0 |
 | FR-M10.6 | Eval 结果页 | 最近一次 eval 跑分：分诊准确率/三攻击面拦截率/成本耗时（M11 数据源） | P1 |
 
-**实现机制**：Vite + React + SSE（`EventSource`），不引状态管理库（已拍板）；页面数据全部来自公开 REST + SSE，无 Web 特权接口；SSE 断线自动重连（事件自增 id 落盘 + `Last-Event-ID` 补发——已定，决策记录 #9）。
+**实现机制**：Vite + React + Ant Design 5（组件库：表格/抽屉/Tag/Steps——基础组件不自己撸；2026-09-08 拍板）+ SSE（`EventSource`），不引状态管理库（已拍板）；页面数据全部来自公开 REST + SSE，无 Web 特权接口；SSE 断线自动重连（事件自增 id 落盘 + `Last-Event-ID` 补发——已定，决策记录 #9）。
 
 **接口契约**：消费 M2/M3/M8/M9 已列 API，无新增后端契约。
 
@@ -1197,3 +1197,4 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 3. **M6 升级为半真模块**：mock analyzer 中至少一个改为沙箱内真跑脚本；新增攻击面"投毒/被污染 analyzer 逃逸与外联"作为红队演示的第四攻击面（教学场景，路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此）。M6 的功能点表与验收标准在阶段 B 模块规格中细化。
 4. **Alert 增加 `occurrences` 计数字段**（2026-09-04 用户提出）：重复推送同 `(source, sourceRef)` 告警时 `occurrences` +1 并刷新 `lastSeen`，仍不新建不重复触发流水线。对齐真实 SIEM 的"重复计数即信号"实践；TheHive 原行为（直接返回既有 id）保留。
 5. **正文「待定：阶段 B 决策」标记全部回写**（2026-09-07，票 18 收口对账）：12 处正文标记与附录「待定项决策记录」逐条对齐同步，**无决策变更**；其中 #4（LLM 超时统一 60s）、#12（token 预算 50k/run）于当日过 M3 节点时经用户复核确认。
+6. **M10 Web UI 组件库采用 Ant Design 5**（2026-09-08，票 18 导览过 M10 节点时用户拍板）：告警列表/时间线/审批卡等页面的表格、抽屉、Tag、Steps 用 antd 开箱组件，不自己撸基础组件；不改变「不引状态管理库」与「六页面之外无路由」的范围锁死。

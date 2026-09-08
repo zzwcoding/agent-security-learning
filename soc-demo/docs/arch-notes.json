@@ -37,15 +37,15 @@
  },
  "web": {
   "title": "M10 Web 演示窗 —— 薄客户端",
-  "body": "<p><b>干什么：</b>六个页面：告警列表 / 流水线实时视图 / 审批卡 / 案件时间线 / 审计流 / Eval 结果。</p><ul><li><b>零特权</b>：所有数据走公开 REST + SSE，没有任何 Web 专属后门接口——curl 能演全剧本</li><li><b>告警列表页有回放按钮</b>：演示布景入口（背后是 replay 脚本）</li><li>SSE 断线自动重连 + Last-Event-ID 补发</li></ul>"
+  "body": "<p><b>干什么：</b>六页面观察窗，背后是同一套系统：告警列表（回放按钮=演示布景入口）/ 流水线实时视图（SSE 推 run 节点图高亮，M3 事件总线消费端）/ 审批卡（值班长批 L2）/ 案件时间线（含 M8 对话追问入口）/ 审计流（DENIED 红队条目实时滚动）/ Eval 结果（latest.json 铺出）。</p><p><b>零特权原则：</b>全部数据走公开 REST+SSE，无 Web 专属后门接口——六幕剧本每幕同步有 curl 等价脚本（Web 与 curl 渠道平权）；路由快照锁死六页面之外无任何路由（决策 #6）。</p><ul><li><b>技术选型：</b>Vite + React + <b>Ant Design 5</b>（2026-09-08 拍板：表格/抽屉/Tag/Steps 用 antd 开箱组件，不自己撸基础组件）；不引状态管理库（已拍板）；SSE 原生 EventSource；数据源 adapter（真后端/MSW 打桩供前端单测）</li><li><b>边界行为：</b>SSE 断线自动重连+Last-Event-ID 补发（决策 #9 消费端落地）；浏览器刷新→run 状态从 checkpointer 重建；审批并发后到者 409（M2 状态机仲裁）</li><li>目标场景 对位：多渠道网关——Web 只是第一个渠道，curl 是第二个，渠道可插拔</li></ul>"
  },
  "gateway": {
   "title": "C5 网关三容器 —— 身份与铸币",
-  "body": "<p><b>干什么：</b>ContextForge（RBAC 工具可见性：什么角色看得见什么工具）+ OpenFGA（FGA 裁决：这个身份能不能用）+ 自写小服务（铸任务票/审批票 + 凭证代理）。</p><ul><li><b>拆件复用</b>：proxy.py / task_token.py 票型 / fga_check 插件来自路线 3 实测代码（ADR 0001）</li><li><b>凭证代理</b>：LLM 上下文里只有占位符，真 key 在这里注入，全链路金丝雀断言防泄露</li><li>汇报金句：LLM 不能给自己授权、不能批准自己、不能解析凭证</li></ul>"
+  "body": "<p><b>干什么：</b>全系统的门禁+发卡中心，三容器各管一件事：ContextForge 管 RBAC 工具可见性（什么角色看得见什么工具）；OpenFGA 管 FGA 三态裁决（这个身份用得了没有：allow/deny/require_approval）；自写小 FastAPI 管铸币（POST /internal/mint 签 HMAC 票据）+ 凭证代理（/proxy/llm/*，LLM base_url 指这里）。</p><p><b>上下游：</b>调用方=agent（M3 拉起 worker 铸任务票、M8 可见性+意图裁决+审批铸 ApprovalToken、全部 LLM 出站经代理换真 key）；验票闸不在网关——TS 验票长在 agent 本体，网关只签不验。</p><ul><li><b>技术选型：</b>ContextForge/OpenFGA 官方镜像只部署+精读不自写（重资产原则）；自写件 task_token.py 63 行纯标准库 HMAC-SHA256 + proxy.py 74 行 fastapi+httpx——路线 3 攻击实测件参数化搬入（ADR 0001 拆件复用）；三容器并排，自写件不动镜像内部</li><li><b>铸币时刻①②：</b>登录签长期身份门票；L2 审批通过签一次性 ApprovalToken（用后焚毁，登记 M2 used_tokens）</li><li><b>刻意不做：</b>KMS/密钥轮换（教学版 env 存密钥，蓝图注释 STS/Keycloak）；动态策略引擎（固定规则表起步）</li><li>汇报金句：LLM 不能给自己授权、不能批准自己、不能解析凭证、不能改策略；py 签票与 TS 验票跨语言共享 fixtures/tickets/ 票面契约</li></ul>"
  },
  "guards": {
   "title": "C4 防护微服务 —— 文本防线",
-  "body": "<p><b>干什么：</b>llm-guard 注入扫描（告警字段/用户输入/KB 内容/工具输出四通道）+ Presidio PII 脱敏（出域前，内网 IP 豁免）。</p><ul><li><b>fail-closed</b>：扫描服务挂了 = 不可信内容不进 prompt，转人工</li><li>文本防线只是第一层；就算穿透，越权动作还会被验票闸行为兜底（纵深两层）</li><li>复用路线 1-3 管线</li></ul>"
+  "body": "<p><b>干什么：</b>所有「外部来的文字」进 LLM 前的安检门 + 出域前的脱敏室。双管道：llm-guard 注入扫描（四通道 alert_field/user_input/kb/tool_output，按通道配 block/剔除/仅标记）+ Presidio PII 脱敏（EMAIL/PHONE/IP/PERSON → 类型占位符，只做出域边界）。</p><p><b>上下游：</b>调用方=agent（M4/M5 prompt 装配前扫描、M8 输入预检、LLM 出域前脱敏）+ M12 CLI（决策 #11 可降级本地规则）；扫描结果与处置进审计（M2 AuditEntry），脱敏文本发给 LLM。</p><ul><li><b>技术选型：</b>Python + FastAPI :8001 单容器无状态；llm-guard（路线 1-3 实测管线复用，超时 2s）；Microsoft Presidio（zh/en 实体集 + RFC1918 内网豁免自定义识别器，决策 #8——内网 IP 是分析线索不是隐私）；映射表仅内存、run 结束即弃、不进审计</li><li><b>铁律 fail-closed：</b>不可达/超时一律不放行（不可信段不进 prompt + 转人工，由调用方兜底；可配置切「仅标记」降级，演示默认 fail-closed）</li><li><b>纵深两层：</b>文本防线被编码/变体绕过时，越权动作还有 agent 验票闸行为兜底——「六家全无，我们的主场」</li><li><b>标定流程：</b>正例=毒种家族、负例=善意句式/高熵串/中文短语；0.1–0.9 阈值阶梯误/漏率表选定工作阈值，标本集入 CI 不得劣化</li></ul>"
  },
  "llm-provider": {
   "title": "LLM Provider —— 被防备的对象",
@@ -53,15 +53,15 @@
  },
  "chroma": {
   "title": "Chroma 知识库 —— 人审后的经验",
-  "body": "<p><b>干什么：</b>存知识沉淀条目（FP 模式/处置 runbook），分诊和调查时检索注入提速。</p><ul><li><b>硬闸</b>：agent 提炼的草稿必须人审通过才进检索面——RAG 投毒的第一道防线</li><li>检索进 prompt 的内容同样打不可信标记（知识对 LLM 是数据不是指令）</li><li>验收：毒 runbook 被驳回后，检索面确定性查不到</li></ul>"
+  "body": "<p><b>干什么：</b>团队经验库——存 KBEntry（FP 模式/处置 runbook，kind/title/body/tags），M4 分诊与 M5 调查检索注入提速（top-k=5，决策 #6）。与 M2 分工：SQLite 存案件事实（精确查询），Chroma 存经验（语义查询「以前见过类似的吗」）。</p><p><b>上下游：</b>写=只有 M7，且人审 approved 才进检索面（kb_write 登记为 L2 工具，人审闸复用 M9-S2 审批卡机制）；读=M4/M5 检索只读（主图 M7→M4「KB 检索注入」边即此）。</p><ul><li><b>技术选型：</b>Chroma 开源向量库 compose 单容器 :8000——教学规模够用、SDK 齐全、零运维；向量库是 adapter seam（chroma 容器/内存 stub 供单测），换实现不换接口</li><li><b>RAG 投毒双层防线：</b>①人审是入库唯一通道（D8），毒 runbook 驳回后检索面确定性查不到；②检索内容打不可信标记 + guards kb 通道扫描（知识对 LLM 是数据不是指令）</li><li><b>飞轮：</b>案件关闭→提炼→人审→入库→下次检索命中→处置更快；replay 验证沉淀提速</li><li><b>刻意不做：</b>混合检索/重排——库里几十条没有可解的排序问题；SOC 知识多精确标识符（CVE/IP/哈希），库上规模后 SQLite FTS5+RRF 半天可加（seam 已留好）</li></ul>"
  },
  "sandbox": {
   "title": "microsandbox —— 第四攻击面",
-  "body": "<p><b>干什么：</b>M6 富化的 analyzer 按 Cortex 真实架构是可执行脚本，每次在一次性 microVM 里真跑。</p><ul><li><b>攻击面是刻意布置的教学场景</b>：投毒/被污染的 analyzer 企图外联 C2 或读宿主凭证 → 沙箱拦截 + 审计</li><li>路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此</li><li>不是常驻服务，按需拉起一次性 VM</li></ul>"
+  "body": "<p><b>干什么：</b>M6 富化 analyzer（Cortex 真实架构=可执行代码，不是 prompt）的一次性执行环境：每次调用创建 microVM、跑完即毁。</p><p><b>威胁假设：</b>前三攻击面（告警字段/KB/工具输出）骗 LLM，第四攻击面假设攻击者已拿到代码执行权（analyzer 被投毒/污染）——纵深的最内层。</p><ul><li><b>技术选型：</b>microsandbox 按需拉起一次性 microVM，非 compose 常驻容器；无状态残留=上一次的恶意产物污染不到下一次</li><li><b>拦截剧本：</b>外联 C2→egress 拦；读宿主凭证→VM 内无凭证（密钥不可见）；逃逸→microVM 边界；拦截+DENIED 审计进 Web 审计流</li><li><b>验收迁移：</b>路线 2 亲手打过的逃逸/egress/密钥不可见三类攻击用例直接搬来做 fixture</li><li><b>刻意不做：</b>不跑真实恶意软件（教学场景，投毒 analyzer 是自写 fixture）；不做预热池/多租户强隔离</li></ul>"
  },
  "eval": {
   "title": "M11 Eval 体系 —— 实证数字生产线",
-  "body": "<p><b>干什么：</b>三维评估：分诊准确率 / 防线拦截率（四攻击面）/ 成本口径（token+耗时）。</p><ul><li>fixture 目录制，vitest 驱动；judge 只评分不进门槛</li><li>CI 快慢两道：PR 门禁跑单测级（<5min），每日+手动跑全栈 compose</li><li>用例 ≥30；幕 6 的演示数字从这儿出</li></ul>"
+  "body": "<p><b>干什么：</b>三维评估：分诊准确率（对照人工标注 verdict）/ 防线拦截率（四攻击面分面计数，拦截=扫描拦或行为兜底 403 分别计）/ 成本口径（每条告警 token+耗时+估算成本，CSV 照 M507 cost_all.csv 列结构）。全项目唯一允许俯视全局的件（依赖全部模块），但不在运行时链路上——旁路质检。</p><p><b>断言两层，地位不同：</b>确定性断言=硬门槛（forbidden_tools/expected_approvals/max_tool_calls/max_tokens/审计存在性/replay 行为，代码断言不达标即红）；LLM judge=只评分不进门槛（judge 本身是不可信 LLM——strict 要点覆盖、与被测模型分离，分数进报告不进门禁）。</p><ul><li><b>技术选型：</b>vitest 驱动 + fixture 目录制（fixtures/eval/&lt;域&gt;/&lt;编号_场景&gt;/test_case.yaml）；用例 ≥30（分诊 ≥10/攻击 ≥10 四面/审批 ≥3/replay ≥2/对话 ≥3）；CI 快慢两道（决策 #10：PR 快道单测级 &lt;5min，每日+手动全栈 compose 慢道——被测栈是 adapter）；产出 eval-results/latest.json + cost_all.csv</li><li><b>喂饱谁：</b>演示幕 6 全部实证数字、guards 阈值标定（阶梯误/漏率表）、M7 replay 提速验证</li><li><b>刻意不做：</b>线上流量评估、自动调参（调 prompt/阈值必须人做——AI 自我迭代是硬边界）</li></ul>"
  },
  "replay": {
   "title": "回放脚本 —— 扮演外部世界的发令枪",

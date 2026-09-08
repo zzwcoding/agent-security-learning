@@ -139,6 +139,7 @@
 ### M10 Web 演示窗 → services/web
 
 - **职责**：六页面薄客户端，全部数据走公开 REST+SSE，无特权接口
+- **技术选型**：Vite + React + Ant Design 5（2026-09-08 拍板：表格/抽屉/Tag/Steps 用 antd，不自己撸基础组件）；不引状态管理库；SSE 原生 EventSource
 - **公开接口**：六个路由（告警列表/流水线视图/审批卡/案件时间线/审计流/Eval 结果），之外无任何路由
 - **依赖**：M2/M3/M8/M9 的公开 API
 - **Seam**：数据源（adapter：真后端 / MSW 或 fixture 打桩供前端单测）
