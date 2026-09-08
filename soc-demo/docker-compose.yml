@@ -27,6 +27,14 @@ services:
     depends_on:
       case-backend: { condition: service_healthy }
       guards: { condition: service_healthy }
+      gateway: { condition: service_healthy } # 票 27：real adapter 的 LLM 出站经 gateway /proxy/llm/*
+    environment:
+      # 票 27（ADR 0002 框架红线）：生产装配默认 real adapter——真 LLM 经 gateway 凭证代理
+      # 出站，真凭证只活在网关进程（SECRETS_* 挂 gateway 不挂 agent）；本机离线开发显式
+      # AGENT_LLM=fake 切回伪 LLM。上游病了 → worker 降级 uncertain + 人工（fail-closed）。
+      AGENT_LLM: ${AGENT_LLM:-real}
+      LLM_MODEL: ${LLM_MODEL:-minimax-m2} # PRD 决策 #7
+      SOC_LLM_PROXY_URL: ${SOC_LLM_PROXY_URL:-http://gateway:8002/proxy/llm}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/healthz"]
       interval: 5s

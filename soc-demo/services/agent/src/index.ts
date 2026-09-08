@@ -8,6 +8,8 @@ import { makeTriageFlow } from "../workers/triage/flow.js";
 import { HttpTriageM2 } from "../workers/triage/m2.js";
 import { MemoryKb } from "../workers/triage/kb.js";
 import { FakeTriageLlm } from "../workers/triage/llm.js";
+import { RealTriageLlm } from "../workers/triage/llm-real.js";
+import { GatewayLlmClient } from "./llm-client.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 // 编排侧自己的库（runs/run_events/checkpoints/approvals）落 soc-demo/data；
@@ -21,8 +23,15 @@ const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite"
 //   AGENT_FLOW=approval_demo → 带 L2 动作的演示图（curl 走通审批回路，票 11）
 //   其余 → triage 子图。makeNodes 在每个 run 拉起时被调：app.ts 先向 gateway 铸
 //   任务票（allowed_tools=分诊六件套，无 L2），票交进来组图。
-// KB 现为内存 stub（m4 卡依赖；真 chroma 检索 = 票 17）；LLM 为 fixture 伪 LLM
-// （m4 卡 adapter：minimax-m2 经凭证代理接真件时只换 llm adapter）。
+// KB 现为内存 stub（m4 卡依赖；真 chroma 检索 = 票 17）。
+//
+// LLM 装配（票 27·ADR 0002 框架红线）：生产默认 real adapter——minimax-m2 经 gateway
+// /proxy/llm/* 凭证代理出站（占位符换真凭证 + 金丝雀断言在代理层，票 08 契约；真凭证只活
+// 在网关进程）。AGENT_LLM=fake 切回 fixture 伪 LLM（测试确定性依赖 fake——vitest 各 rig
+// 显式注入 FakeTriageLlm，不经此开关；本机离线开发也可用它）。上游病了 worker 降级为
+// uncertain + 人工（fail-closed，见 workers/triage/llm-real.ts）。
+const LLM_MODE = process.env.AGENT_LLM ?? "real";
+
 const audit = new ConsoleAuditSink();
 // approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
 // 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
@@ -36,7 +45,9 @@ const makeNodes = nodes
       ticket,
       m2: new HttpTriageM2(),
       kb: new MemoryKb(),
-      llm: new FakeTriageLlm(),
+      llm: LLM_MODE === "fake"
+        ? new FakeTriageLlm()
+        : new RealTriageLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:triage" })),
       audit,
     });
 
