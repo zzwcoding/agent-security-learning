@@ -297,7 +297,7 @@
  },
  "m12": {
   "title": "M12 MCP 体检 CLI —— 亮点清单小件",
-  "body": "<p><b>干什么：</b>soc-mcp-audit <cmd-or-url>：MCP server 静态体检——投毒描述/权限面/凭证暴露/rug-pull 提示，产出 mcp-audit-report.{md,json}。</p><ul><li>复用 guards 注入扫描但<b>可降级为本地规则</b>（决策 #11：CLI 内嵌，单文件可跑）</li><li>验收：≥3 公开 server + 1 内置恶意 fixture 投毒 100% 检出</li><li>汇报定位：独立 npm bin，MCP 安全叙事的敲门砖</li></ul>"
+  "body": "<p><b>干什么：</b>soc-mcp-audit <cmd-or-url>：MCP server 静态体检——投毒描述/权限面/凭证暴露/rug-pull 提示，产出 mcp-audit-report.{md,json}。</p><ul><li>复用 guards 注入扫描但<b>可降级为本地规则</b>（决策 #11：CLI 内嵌，单文件可跑）</li><li>transport 用 <b>@modelcontextprotocol/sdk 官方 Client</b>（stdio=StdioClientTransport / streamable HTTP=StreamableHTTPClientTransport，票 25 ADR 0002 框架红线，手写 JSON-RPC 已移除；报告契约/toolHash/退出码不变）；验收：≥3 公开 server + 1 内置恶意 fixture 投毒 100% 检出</li><li>汇报定位：独立 npm bin，MCP 安全叙事的敲门砖</li></ul>"
  },
  "evalci": {
   "title": "M11 Eval / CI —— 扫描器的标定者",
