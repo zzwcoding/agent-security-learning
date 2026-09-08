@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS runs (
   id TEXT PRIMARY KEY,
   kind TEXT NOT NULL,
   alert_id TEXT NOT NULL,
+  case_id TEXT,
   status TEXT NOT NULL DEFAULT 'queued',
   fail_reason TEXT,
   steps INTEGER NOT NULL DEFAULT 0,
@@ -85,11 +86,22 @@ CREATE INDEX IF NOT EXISTS idx_approvals_run ON approvals(run_id, tool, params_h
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, created_at);
 `;
 
+// 票 17：runs 增 case_id（knowledge_flow 的目标案件）。老库靠查缺补列——
+// SQLite 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列（case-backend 同款做法）
+function migrate(db: DB): void {
+  const cols = new Set(
+    (db.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name),
+  );
+  if (cols.size === 0) return; // runs 表不存在（DDL 已建，不该发生）
+  if (!cols.has("case_id")) db.exec("ALTER TABLE runs ADD COLUMN case_id TEXT");
+}
+
 export function openDb(path = ":memory:"): DB {
   const db = new Database(path);
   // 单写者：WAL + 5s 忙等（与 case-backend 同口径）；:memory: 下是无害 no-op
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   db.exec(DDL);
+  migrate(db);
   return db;
 }

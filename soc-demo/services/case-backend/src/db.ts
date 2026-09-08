@@ -118,6 +118,26 @@ CREATE TABLE IF NOT EXISTS used_tokens (
   source TEXT,
   burned_at INTEGER NOT NULL
 );
+
+-- 票 17（PRD §5.10 KBEntry）：知识沉淀账面。status 走 kbentry 状态机（proposed→approved/
+-- rejected，INV-5 人审唯一通道）；向量检索面在 agent 侧 chroma——本表是数据归属地
+-- （m7 卡决策「REST 面挂 M2」），approve/reject 在这里留痕 + 审计（INV-8 同事务）
+CREATE TABLE IF NOT EXISTS kb_entries (
+  id TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT NOT NULL,
+  tags TEXT NOT NULL DEFAULT '[]',
+  source_case_id TEXT,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  proposed_by TEXT NOT NULL DEFAULT '',
+  reviewed_by TEXT,
+  reject_reason TEXT,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER,
+  expires_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_kb_entries_status ON kb_entries(status, created_at);
 `;
 
 // 票 09：alerts 增 occurrences/last_seen。SQLite 的 CREATE TABLE IF NOT EXISTS 不会给

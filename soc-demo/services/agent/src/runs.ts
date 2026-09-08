@@ -17,6 +17,9 @@ export interface RunRow {
   id: string;
   kind: string;
   alertId: string;
+  /** 票 17：knowledge_flow 的目标案件（alert_flow 为 null）。alert_id 列保持 NOT NULL，
+   *  无告警上下文的 run 存空串——避免老库重建表（SQLite 去 NOT NULL 代价大）。 */
+  caseId: string | null;
   status: RunStatus;
   failReason: string | null;
   steps: number;
@@ -33,6 +36,7 @@ function mapRun(row: Record<string, unknown> | undefined): RunRow | null {
     id: row.id as string,
     kind: row.kind as string,
     alertId: row.alert_id as string,
+    caseId: (row.case_id as string | null) ?? null,
     status: row.status as RunStatus,
     failReason: (row.fail_reason as string | null) ?? null,
     steps: row.steps as number,
@@ -42,19 +46,23 @@ function mapRun(row: Record<string, unknown> | undefined): RunRow | null {
   };
 }
 
-export function createRun(db: DB, input: { kind: string; alertId: string }, ctx: RunCtx): RunRow {
+export function createRun(
+  db: DB,
+  input: { kind: string; alertId?: string; caseId?: string | null },
+  ctx: RunCtx,
+): RunRow {
   const id = `run_${randomUUID()}`;
   const now = nowMs();
   db.prepare(
-    `INSERT INTO runs (id, kind, alert_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, 'queued', ?, ?)`,
-  ).run(id, input.kind, input.alertId, now, now);
+    `INSERT INTO runs (id, kind, alert_id, case_id, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'queued', ?, ?)`,
+  ).run(id, input.kind, input.alertId ?? "", input.caseId ?? null, now, now);
   ctx.audit.record({
     action: "create",
     actor: ctx.actor ?? { type: "system", id: "internal" },
     objectId: id,
     objectType: "run",
-    details: { created: { kind: input.kind, alertId: input.alertId } },
+    details: { created: { kind: input.kind, alertId: input.alertId ?? "", caseId: input.caseId ?? null } },
     requestId: ctx.requestId,
     result: "SUCCESS",
     createdAt: nowMs(),

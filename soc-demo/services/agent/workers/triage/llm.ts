@@ -64,8 +64,11 @@ export class FakeTriageLlm implements TriageLlm {
       same_host_case_found: boolean;
     },
   ): Record<string, unknown> {
-    // R1（FR-M4.2 KB 优先）：内部事实说这是已知变更 → 良性真实事件，建议关单
-    const knownChange = kbHits.find((h) => h.kind === "known_change");
+    // R1（FR-M4.2 KB 优先）：内部事实说这是已知变更 → 良性真实事件，建议关单。
+    // 票 17：真检索面（chroma）的条目 kind 是 PRD §5.10 三值——env_fact（内网环境
+    // 事实：资产/账号/变更/演练登记）与 MemoryKb 的 known_change 同属「内部事实核验」，
+    // 同享 KB 优先；fp_pattern/runbook 是模式与处置经验，不参与本规则。
+    const knownChange = kbHits.find((h) => h.kind === "known_change" || h.kind === "env_fact");
     if (knownChange) {
       return {
         verdict: "btp",

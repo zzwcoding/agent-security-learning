@@ -49,13 +49,16 @@ export interface NodeCtx {
    *  resume 后节点从头重跑，按卡上的决定返回。驳回 → {approved:false}。 */
   awaitApproval(tool: string, params: unknown, opts?: ApproveOpts): ApprovalDecision;
   /** L2 动作全程：awaitApproval 拿决定 → 驳回直接返回不执行 → 批准则过验票闸执行
-   *  action → 焚毁登记 + 执行标记。闸拒（票过期/参数被换/重放）抛错强杀，绝不带病执行。 */
+   *  action → 焚毁登记 + 执行标记。闸拒（票过期/参数被换/重放）抛错强杀，绝不带病执行。
+   *  票 17 起 action 允许异步（kb_write 的出站 chroma 写入是 promise）——本函数对
+   *  「同步动作返回同步值、异步动作返回 promise」双形态；挂起判定（interrupt）保持
+   *  同步抛出，sync 节点不 await 时票 11 演示图的挂起语义原样成立。 */
   executeApproved(
     tool: string,
     params: unknown,
     opts: ApproveOpts,
-    action: (params: unknown) => Record<string, unknown>,
-  ): ExecutionOutcome;
+    action: (params: unknown) => Record<string, unknown> | Promise<Record<string, unknown>>,
+  ): ExecutionOutcome | Promise<ExecutionOutcome>;
 }
 
 export interface ApproveOpts {
@@ -218,6 +221,8 @@ function compileFlowGraph(plan: CompilePlan) {
   };
 
   const executeApproved: NodeCtx["executeApproved"] = (tool, params, opts, action) => {
+    // 注意：这里刻意不是 async 函数——awaitApproval 里的 interrupt() 必须同步抛出，
+    // sync 节点（approval_demo）不 await 本调用时挂起语义才成立（票 11 契约）。
     const decision = awaitApproval(tool, params, opts);
     if (!decision.approved || !decision.token) {
       return { executed: false, outcome: "rejected", approvalId: decision.approvalId };
@@ -249,17 +254,22 @@ function compileFlowGraph(plan: CompilePlan) {
       throw new Error(`approval_gate_denied:${verdict.reason}`);
     }
     const jti = (verdict.payload as ApprovalClaims).jti;
-    const result = action(params);
-    deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
-    markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
-    emitEvent(db, runId, "tool_result", {
-      node: cursor.node,
-      tool,
-      ok: true,
-      approval_id: decision.approvalId,
-      result,
-    });
-    return { executed: true, approvalId: decision.approvalId, jti, result };
+    // 票 17：动作允许异步（kb_write 出站 chroma）。收尾（焚毁/执行标记/tool_result）
+    // 统一走 finish——同步动作原地收尾（与票 11 逐字节同序），异步动作由节点 await。
+    const finish = (result: Record<string, unknown>): ExecutionOutcome => {
+      deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
+      markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
+      emitEvent(db, runId, "tool_result", {
+        node: cursor.node,
+        tool,
+        ok: true,
+        approval_id: decision.approvalId,
+        result,
+      });
+      return { executed: true, approvalId: decision.approvalId, jti, result };
+    };
+    const out = action(params);
+    return out instanceof Promise ? out.then(finish) : finish(out);
   };
 
   const nctx: NodeCtx = {
@@ -407,7 +417,10 @@ export async function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}):
   const run = requireRun(db, runId);
   return runFlow(db, runId, makeDeps(opts), {
     mode: "start",
-    initialState: { kind: run.kind, alert_id: run.alertId },
+    // 票 17：knowledge_flow 带 case_id（无 alert），交接信封按 run 行拼齐两种 kind
+    initialState: run.caseId
+      ? { kind: run.kind, case_id: run.caseId }
+      : { kind: run.kind, alert_id: run.alertId },
   });
 }
 

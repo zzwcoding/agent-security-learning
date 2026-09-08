@@ -28,6 +28,7 @@ services:
       case-backend: { condition: service_healthy }
       guards: { condition: service_healthy }
       gateway: { condition: service_healthy } # 票 27：real adapter 的 LLM 出站经 gateway /proxy/llm/*
+      chroma: { condition: service_started } # 票 17：KB 检索面（镜像无健康检查，见上）
     environment:
       # 票 27（ADR 0002 框架红线）：生产装配默认 real adapter——真 LLM 经 gateway 凭证代理
       # 出站，真凭证只活在网关进程（SECRETS_* 挂 gateway 不挂 agent）；本机离线开发显式
@@ -35,6 +36,12 @@ services:
       AGENT_LLM: ${AGENT_LLM:-real}
       LLM_MODEL: ${LLM_MODEL:-minimax-m2} # PRD 决策 #7
       SOC_LLM_PROXY_URL: ${SOC_LLM_PROXY_URL:-http://gateway:8002/proxy/llm}
+      # 票 17：KB 检索面 = 真 chroma 容器（分诊 kb_check 经 ChromaKb 查 approved 条目，
+      # 沉淀 kb_write 经 ApprovalToken 正门写入）。未设时回退内存种子/内存面（本机离线开发）。
+      KB_CHROMA_URL: ${KB_CHROMA_URL:-http://chroma:8000}
+      # 检索 embedding：hash=确定性本地 TF 哈希（离线零依赖，默认）；chroma_default=
+      # 服务端默认模型（语义向量，首次写入容器需出网下载 ~80MB，见 chroma 服务注释）
+      KB_EMBEDDING: ${KB_EMBEDDING:-hash}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/healthz"]
       interval: 5s
@@ -68,8 +75,15 @@ services:
       retries: 12
 
   chroma:
-    image: chromadb/chroma:latest # TODO: 上云前锁定具体版本号
-    ports: ["8000:8000"]
+    # 票 17（ADR 0002 框架红线：真 chromadb 落 compose）：官方镜像按 digest 钉（票 26
+    # 先例——latest 漂移不可接受；本 digest 实测 = chroma 1.0.0，arm64 本地已验，
+    # REST /api/v2/*）。服务端默认 embedding 首次写入会运行时下载 onnx 模型，与离线
+    # 纪律冲突 → agent 侧默认显式带 hashEmbedding 出站（vector-store.ts 文件头），
+    # KB_EMBEDDING=chroma_default 可切服务端模型，容器才需要出网。
+    image: chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6
+    # 宿主侧 18000：8000 是高频占用口（本机开发机实测有 python 进程盘踞 127.0.0.1:8000，
+    # openfga 给 8080 换 18080 同款处理）；容器网络内仍是 8000，服务间走 http://chroma:8000
+    ports: ["18000:8000"]
     volumes: ["./data/chroma:/data"]
     # 官方镜像里没有 wget/curl/python，做不了容器内健康检查；宿主机 curl /api/v2/heartbeat 验证
 

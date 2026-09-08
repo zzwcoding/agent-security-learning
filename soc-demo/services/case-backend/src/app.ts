@@ -32,6 +32,13 @@ import {
   type Ctx,
 } from "./store.js";
 import { InvalidTransitionError } from "./statemachine.js";
+import {
+  KbInvalidError,
+  createKbProposal,
+  decideKbProposal,
+  listKbProposals,
+  searchApprovedKb,
+} from "./kb.js";
 
 // buildApp 是纯工厂（seam，阶段 0.3 拆分沿用）：测试注入 :memory: db，生产注入文件 db。
 // REST 面照 PRD §6-M2 接口契约；另有四个薄出口，决策记录见票 03 实现记录：
@@ -62,6 +69,7 @@ export function buildApp(opts: { db?: DB } = {}) {
       err instanceof VerdictLockedError ||
       err instanceof MergeTargetClosedError ||
       err instanceof JtiExistsError ||
+      err instanceof KbInvalidError ||
       err instanceof NotFoundError
     ) {
       return reply.status(err.httpStatus).send({ error: err.code });
@@ -208,6 +216,56 @@ export function buildApp(opts: { db?: DB } = {}) {
         ctxOf(req.headers),
       ),
     );
+  });
+
+  // ---- kb/proposals（票 17，m7 卡公开接口决策：REST 面挂 M2；契约 PRD §6-M7）----
+  // 账面（SQLite 状态机 + 审计）在 M2；向量检索面（chroma）在 agent 侧 kb_write
+  // （L2 ApprovalToken 正门）——两个面的分工见 kb.ts 文件头。
+  app.post("/api/v1/kb/proposals", (req, reply) => {
+    const body = (req.body ?? {}) as {
+      kind?: string; title?: string; body?: string; tags?: string[];
+      source_case_id?: string; proposed_by?: string;
+    };
+    if (!body.kind || !body.title || !body.body) {
+      return reply.status(400).send({ error: "kind_title_body_required" });
+    }
+    return reply.status(201).send(
+      createKbProposal(
+        db,
+        {
+          kind: body.kind, title: body.title, body: body.body, tags: body.tags,
+          source_case_id: body.source_case_id ?? null,
+          proposed_by: body.proposed_by ?? "agent:knowledge",
+        },
+        ctxOf(req.headers),
+      ),
+    );
+  });
+
+  app.get("/api/v1/kb/proposals", (req) => {
+    const q = req.query as { status?: string };
+    return { proposals: listKbProposals(db, { status: q.status }) };
+  });
+
+  app.post("/api/v1/kb/proposals/:id/approve", (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { reviewer?: string };
+    // reviewer 缺省值班长（CONTEXT 角色：值班长是 L2 审批者）；真实人审身份锚在
+    // agent 侧审批卡 + ApprovalToken.approved_by（INV-9），这里是留痕镜像
+    const reviewer = body.reviewer ?? (req.headers["x-actor-id"] as string) ?? "duty_lead";
+    return decideKbProposal(db, id, { approve: true, reviewer }, ctxOf(req.headers));
+  });
+
+  app.post("/api/v1/kb/proposals/:id/reject", (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { reviewer?: string; reason?: string };
+    const reviewer = body.reviewer ?? (req.headers["x-actor-id"] as string) ?? "duty_lead";
+    return decideKbProposal(db, id, { approve: false, reviewer, reason: body.reason }, ctxOf(req.headers));
+  });
+
+  app.get("/api/v1/kb/search", (req) => {
+    const q = req.query as { q?: string; kind?: string; k?: string };
+    return { hits: searchApprovedKb(db, { q: q.q, kind: q.kind, k: q.k ? Number(q.k) : undefined }) };
   });
 
   // ---- audit / events / internal ----

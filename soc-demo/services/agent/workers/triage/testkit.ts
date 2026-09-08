@@ -24,13 +24,14 @@ export function sealTicket(
 export function makeTaskTicket(
   runId: string,
   allowedTools: string[],
-  over: Partial<{ jti: string; sub: string; iat: number; exp: number }> = {},
+  over: Partial<{ jti: string; sub: string; iat: number; exp: number; caseId: string }> = {},
 ): string {
   const iat = over.iat ?? Math.floor(Date.now() / 1000) - 10;
   return sealTicket({
     jti: over.jti ?? `tk_test_${Math.random().toString(36).slice(2)}`,
     sub: over.sub ?? "agent:triage",
-    case_id: "",
+    // 票 17：knowledge_flow 的票绑定案件（FR-S2.2）；分诊票 case_id 空（闸跳过绑定校验）
+    case_id: over.caseId ?? "",
     run_id: runId,
     scope: ["alert:update", "case:write"],
     allowed_tools: allowedTools,

@@ -41,7 +41,9 @@ test("POST /internal/runs {kind, alert_id} → 202 {run_id}，薄径 run 无人�
 });
 
 test.each([
-  ["缺 kind", { alert_id: "al-1" }, "kind_and_alert_id_required"],
+  // 票 17：kind 分两个入口（alert_flow 吃 alert_id / knowledge_flow 吃 case_id），
+  // 错误码随之拆细——缺 kind 与缺入口参数分开报
+  ["缺 kind", { alert_id: "al-1" }, "kind_required"],
   ["缺 alert_id", { kind: "alert_flow" }, "kind_and_alert_id_required"],
   ["未知 kind", { kind: "chat_flow", alert_id: "al-1" }, "unknown_kind"],
 ])("%s → 400", async (_label, payload, error) => {

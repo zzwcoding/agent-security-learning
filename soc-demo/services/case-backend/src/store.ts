@@ -501,6 +501,10 @@ export function closeCase(
       status: { from: kase.status, to: "Closed" },
       verdict: { from: kase.verdict, to: body.verdict },
     });
+    // 票 17（PRD 图 case_closed → knowledge_distill）：关案事件的 outbox 出口——
+    // 沉淀子图的触发信号。当前触发形态与 alert_flow 同款由调用方 POST /internal/runs
+    // （票 13 先例），事件先进 outbox 供下游/演示观察。
+    emitEvent(db, "case.closed", { caseId, verdict: body.verdict });
     return getCase(db, caseId) as Record<string, unknown>;
   })();
 }

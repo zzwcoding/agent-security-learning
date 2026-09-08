@@ -12,6 +12,13 @@ export const TRANSITIONS: Record<string, Record<string, string[]>> = {
     InProgress: ["Closed"],
     Closed: [],
   },
+  // 票 17（INV-5）：知识条目 proposed → approved/rejected，人审是唯一迁移口；
+  // 终态不可再迁移——表外变更一律 409（INV-10）
+  kbentry: {
+    proposed: ["approved", "rejected"],
+    approved: [],
+    rejected: [],
+  },
 };
 
 export class InvalidTransitionError extends Error {
@@ -30,7 +37,7 @@ export class InvalidTransitionError extends Error {
   }
 }
 
-export function assertTransition(entity: "alert" | "case", from: string, to: string): void {
+export function assertTransition(entity: "alert" | "case" | "kbentry", from: string, to: string): void {
   const legal = TRANSITIONS[entity]?.[from] ?? [];
   if (!legal.includes(to)) {
     throw new InvalidTransitionError(entity, from, to);
