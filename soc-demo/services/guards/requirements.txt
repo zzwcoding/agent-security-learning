@@ -3,6 +3,12 @@ uvicorn[standard]>=0.30
 # 票 24（ADR 0002 框架红线）：llm-guard + Presidio 真依赖。版本钉死（py 侧无 lockfile，
 # 钉版即锁）；llm-guard 0.3.16 自身硬依赖 presidio-analyzer/anonymizer==2.2.358 与
 # torch/transformers（包进 CI，模型不进——deberta 本地可选，探测 skip 见 test_frameworks.py）
+# CI/Docker 体积裁决（ADR 0002 票 24 裁决③）：llm-guard 硬依赖 torch，Linux 上默认解析到
+# CUDA 版 wheel（GB 级下载、镜像近 10GB）。用环境标记把 linux（GitHub CI + docker 构建）
+# 钉到 PyTorch 官方 CPU index 的 +cpu 构建；macOS 开发机不匹配标记，走 PyPI 默认 wheel。
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.0+cpu; sys_platform == "linux"
+
 llm-guard==0.3.16
 presidio-analyzer==2.2.358
 presidio-anonymizer==2.2.358

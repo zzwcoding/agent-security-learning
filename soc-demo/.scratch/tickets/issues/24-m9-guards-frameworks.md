@@ -22,3 +22,8 @@
 - [x] CI 离线口径：llm-guard 用启发式扫描器（不拉大模型）；Presidio + spacy en_core_web_sm（~12MB）允许 CI 安装；deberta 等大模型本地可选、CI 能力探测 skip 并打印原因（票 16 msbProbe 先例）——该口径由 ADR 0002 框架红线裁决背书，不许静默加回手写引擎（源：ADR 0002·框架红线）
 - [x] agent 侧 guards-client 契约测试与超时 fail-closed 语义零改动全绿（源：票 04 接缝）
 - [x] guards 全量测试迁移后全绿；架构投影文档（architecture-guards-internal.*）同步（源：票 04 回归·收尾第⑤样）
+
+
+### L0 裁决补充（2026-09-09，裁决③ torch 体积）
+
+出入③（torch 进 CI 体积代价）的 L0 裁决已执行：requirements.txt 以环境标记把 linux（GitHub CI + Docker 构建）钉到 PyTorch 官方 CPU index 的 `torch==2.14.0+cpu`，macOS 开发机不受影响（走 PyPI 默认 wheel）。双平台解析已验证：macOS dry-run → `torch==2.14.0`；`uv pip install --dry-run --python-platform linux` → `torch==2.14.0+cpu`。guards pytest 回归全绿。出入①（FR-S4.2 mapstore 缺口）维持记档，留给阶段 7 架构体检裁；出入②（deberta 对 syslog 硬误报）接受为启发式主路径实证。
