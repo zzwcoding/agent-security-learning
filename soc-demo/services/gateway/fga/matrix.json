@@ -1,0 +1,52 @@
+{
+  "store_name": "soc-demo-authz",
+  "families": {
+    "readonly_query": {
+      "tier": "L0",
+      "a2_column": "只读查询族（L0）",
+      "tools": [
+        "kb_lookup", "search_cases_by_host", "get_alert", "siem_query",
+        "related_alerts", "kb_verify", "vt_lookup", "ip_reputation",
+        "extract_knowledge"
+      ]
+    },
+    "case_write": {
+      "tier": "L1",
+      "a2_column": "案件写入族（L1：建案/并案/关单/timeline）",
+      "tools": [
+        "create_case", "merge_alert", "close_alert", "add_timeline_entry",
+        "add_task_log", "add_observable", "kb_propose", "case_assign", "case_update"
+      ]
+    },
+    "kb_write": {
+      "tier": "L2",
+      "a2_column": "KB 入库（L2 kb_write）",
+      "tools": ["kb_write"],
+      "a2_note": "A.2 该列为「需审批/审批回路」——直接执行 FGA 一律 deny，唯一通道是审批铸一次性 ApprovalToken（INV-3），不在此给任何角色直接授权"
+    },
+    "incident_response": {
+      "tier": "L2",
+      "a2_column": "高危响应族（L2：isolate/block）",
+      "tools": ["isolate_host", "block_ip", "deisolate_host", "unblock_ip"],
+      "a2_note": "同上「需审批」；且无任何 worker 持票（D7），执行只发生在审批回路铸票之后"
+    }
+  },
+  "roles": {
+    "soc1": {
+      "a2_row": "SOC1 分析师",
+      "families": ["readonly_query", "case_write"]
+    },
+    "duty_lead": {
+      "a2_row": "SOC2/值班长",
+      "families": ["readonly_query", "case_write"]
+    },
+    "admin": {
+      "a2_row": "管理员",
+      "families": ["readonly_query", "case_write"]
+    },
+    "redteam": {
+      "a2_row": "红队（演示）",
+      "families": []
+    }
+  }
+}

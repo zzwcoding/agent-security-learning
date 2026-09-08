@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.1",
+  "type_definitions": [
+    { "type": "user" },
+    {
+      "type": "family",
+      "relations": { "can_execute": { "this": {} } },
+      "metadata": {
+        "relations": {
+          "can_execute": { "directly_related_user_types": [{ "type": "user" }] }
+        }
+      }
+    },
+    {
+      "type": "tool",
+      "relations": {
+        "member_of": { "this": {} },
+        "can_execute": {
+          "tupleToUserset": {
+            "tupleset": { "relation": "member_of" },
+            "computedUserset": { "relation": "can_execute" }
+          }
+        }
+      },
+      "metadata": {
+        "relations": {
+          "member_of": { "directly_related_user_types": [{ "type": "family" }] }
+        }
+      }
+    }
+  ]
+}

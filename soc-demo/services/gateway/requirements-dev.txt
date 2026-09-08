@@ -1,3 +1,6 @@
 pytest>=8
 httpx>=0.27
 ruff>=0.6
+# 票 12：插件单测要 cpex 框架（与 contextforge 镜像内同版）；compose 拓扑断言要 pyyaml
+cpex==0.1.3
+pyyaml>=6

@@ -11,3 +11,6 @@ data/
 
 # archify visual-check 的截图/报告副产物(可再生)
 docs/*.visual-check.*
+
+# 票 12：setup-openfga.sh 每次重建世界都会刷新（内存存储 id 不稳定），不进库
+services/gateway/plugins/fga_ids.json

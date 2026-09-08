@@ -1,0 +1,33 @@
+# 票 12：fga_check 插件配置（compose 挂载进 contextforge 官方件的 /app/plugins）。
+# 身份映射对位 PRD 附录 A.2 的 4 个登录身份；「4 角色 × 4 工具族」的授权本体在
+# services/gateway/fga/matrix.json（scripts/setup-openfga.sh 灌进 openfga），
+# 这里只回答"这张脸是哪位用户"。
+plugins:
+  - name: fga_check
+    kind: fga_check.FGACheckPlugin      # plugin_dirs 里的模块.类名
+    description: "OpenFGA can_execute 闸：每次工具调用先问裁判，False/不可达一律 403（INV-1）"
+    version: "0.1.0"
+    author: "soc-demo ticket-12"
+    hooks: ["tool_pre_invoke"]
+    tags: ["authz"]
+    mode: "enforce"                      # enforce | permissive | disabled
+    on_error: "fail"                     # 插件出错=拦下这次调用，绝不带病放行
+    priority: 10                         # 越小越先跑，授权闸排最前
+    config:
+      fga_api_url: "http://openfga:8080" # compose 网络服务名（不是宿主机的 127.0.0.1）
+      ids_file: "plugins/fga_ids.json"   # store/model id 由 setup-openfga.sh 刷新
+      timeout_s: 3
+      user_map:                          # 网关身份（JWT user_email）→ FGA 用户
+        soc1@soc.local: "user:soc1"
+        duty_lead@soc.local: "user:duty_lead"
+        admin@soc.local: "user:admin"
+        redteam@soc.local: "user:redteam"
+      default_user: "user:anonymous"     # 认不出的脸=零权限匿名位（fail-closed）
+
+# 插件模块搜索目录（cwd=/app，挂载点 /app/plugins 对应 plugins/…）
+plugin_dirs:
+  - "plugins"
+
+plugin_settings:
+  plugin_timeout: 30
+  fail_on_plugin_error: true             # 授权闸装不上就拒绝启动，不开无闸的裸网关

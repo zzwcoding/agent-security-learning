@@ -1,5 +1,5 @@
 # SOC 数字员工 · 单机编排（PRD §4.1 组件清单 C1-C7；eval/MCP CLI 不进 compose）
-# 端口规划：ingest 3001 / case-backend 3002 / agent 3003 / web 5173 / guards 8001 / gateway 8002 / chroma 8000
+# 端口规划：ingest 3001 / case-backend 3002 / agent 3003 / web 5173 / guards 8001 / gateway 8002 / chroma 8000 / contextforge 4444 / openfga 18080(宿主)
 # 健康检查一律用 127.0.0.1 不用 localhost：alpine 镜像里 localhost 优先解析 ::1，服务只绑 IPv4 会被误判挂掉
 services:
   ingest:
@@ -64,6 +64,39 @@ services:
     ports: ["8000:8000"]
     volumes: ["./data/chroma:/data"]
     # 官方镜像里没有 wget/curl/python，做不了容器内健康检查；宿主机 curl /api/v2/heartbeat 验证
+
+  # ── 票 12：gateway 三容器并排（modules.md §2·2026-09-04 拍板）────────────
+  # openfga（FGA 裁决）+ contextforge（RBAC/渠道面）+ 上面的 gateway 自写件
+  # （铸币/凭证代理）。官方镜像一律不重建不 patch，自写件以挂载/env/旁路接入。
+  openfga:
+    # 内存存储（run 子命令）：容器一停授权世界全没，scripts/setup-openfga.sh
+    # 幂等重建 30 秒恢复——教学口径，与 ADR 0001 参考工程一致
+    image: openfga/openfga:v1.19.0
+    command: ["run"]
+    # 宿主侧用 18080：8080 是高频占用口（本机就有 http.server 盘踞），容器网络内仍是 8080
+    ports: ["18080:8080"]
+    # 镜像是最小件没有 shell/curl：容器内做不了健康检查，setup 脚本在宿主机等 /healthz
+
+  contextforge:
+    # 官方 PyPI 包钉版自建（ghcr 匿名拉取被网络拒，见 contextforge.Dockerfile 头注）；
+    # 插件/授权 ids 全走挂载——升级镜像不碰自写代码
+    build: { context: ./services/gateway, dockerfile: contextforge.Dockerfile }
+    ports: ["4444:4444"]
+    environment:
+      PLUGINS_ENABLED: "true"
+      # mcpgateway 1.0.x 启动即校验密钥（占位符拒绝启动，fail-closed）；教学假值
+      # 对位 gateway 的 SECRETS_* 金丝雀口径：绝不放真密钥，真部署由环境注入
+      JWT_SECRET_KEY: "teaching-jwt-secret-do-not-use-in-prod"
+      AUTH_ENCRYPTION_SECRET: "teaching-auth-encryption-secret-do-not-use-in-prod"
+    volumes: ["./services/gateway/plugins:/app/plugins"]
+    depends_on:
+      openfga: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:4444/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+
 
   web:
     build: { context: ., dockerfile: services/web/Dockerfile }
