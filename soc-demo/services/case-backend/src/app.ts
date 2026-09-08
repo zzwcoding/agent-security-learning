@@ -173,14 +173,21 @@ export function buildApp(opts: { db?: DB } = {}) {
 
   app.post("/api/v1/cases/:id/timeline", (req, reply) => {
     const { id } = req.params as { id: string };
-    const body = (req.body ?? {}) as { kind?: string; author?: string; body?: string };
+    const body = (req.body ?? {}) as { kind?: string; author?: string; body?: string; structured?: unknown };
     if (!body.kind || !body.author) {
       return reply.status(400).send({ error: "kind_and_author_required" });
     }
+    // structured：机读负载（PRD §5.5 TimelineEntry.structured，票 14 起透传——
+    // 调查报告 FR-M5.4 的 eval/检索依赖它原样读回）
     return reply.status(201).send(
       addTimelineEntry(
         db, id,
-        { kind: body.kind, author: body.author, body: body.body ?? "" },
+        {
+          kind: body.kind,
+          author: body.author,
+          body: body.body ?? "",
+          structured: body.structured,
+        },
         ctxOf(req.headers),
       ),
     );
