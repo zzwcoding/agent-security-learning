@@ -1,0 +1,40 @@
+{
+  "fixture": "approval-token/params-tampered",
+  "type": "approval_token",
+  "class": "参数篡改",
+  "source": "PRD §5.9 · INV-2",
+  "token": "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJqdGkiOiAiYXBfMDFKOVg3UTBURVNUMDAwMDAxMSIsICJhcHByb3ZhbF9pZCI6ICJhcHJfMDFKOVg3UTBURVNUMDAwMDAwNSIsICJhcHByb3ZlZF9ieSI6ICJkdXR5X2xlYWQiLCAidG9vbCI6ICJpc29sYXRlX2hvc3QiLCAicGFyYW1zX2hhc2giOiAic2hhMjU2OmI4ZGM2YjI5ZTYwMmYwMzcwMjQ1ZWQyNDQ5YzQ4NTEzZTQyMjkxYmFkZDM1MWYxYWNlYWNjZjU3NzA3YzNhYTIiLCAiY2FzZV9pZCI6ICJjYXNlXzAwMDAxMiIsICJpYXQiOiAxNzU3MDAwMDAwLCAiZXhwIjogMTc1NzAwMDMwMCwgInVzZWQiOiBmYWxzZX0.ee2f48893e26e4c35d5034c4e271b570653f456785294bc91e7175d015b763a3",
+  "payload": {
+    "jti": "ap_01J9X7Q0TEST0000011",
+    "approval_id": "apr_01J9X7Q0TEST0000005",
+    "approved_by": "duty_lead",
+    "tool": "isolate_host",
+    "params_hash": "sha256:b8dc6b29e602f0370245ed2449c48513e42291badd351f1aceaccf57707c3aa2",
+    "case_id": "case_000012",
+    "iat": 1757000000,
+    "exp": 1757000300,
+    "used": false
+  },
+  "verify_now": 1757000060,
+  "probe": {
+    "tool": "isolate_host",
+    "params": {
+      "host": "web-02"
+    }
+  },
+  "expected": {
+    "allow": false,
+    "reason": "params_mismatch"
+  },
+  "tamper": {
+    "at": "probe",
+    "field": "params",
+    "from": {
+      "host": "web-01"
+    },
+    "to": {
+      "host": "web-02"
+    },
+    "note": "签名完好，改参数偏离 params_hash 即失效"
+  }
+}

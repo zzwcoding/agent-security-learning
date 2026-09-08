@@ -1,0 +1,33 @@
+{
+  "fixture": "task-ticket/expired",
+  "type": "task_ticket",
+  "class": "过期",
+  "source": "PRD §5.8 · FR-S2.2",
+  "token": "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJqdGkiOiAidGtfMDFKOVg3UTBURVNUMDAwMDAwMyIsICJzdWIiOiAiYWdlbnQ6dHJpYWdlIiwgImNhc2VfaWQiOiAiY2FzZV8wMDAwMTIiLCAicnVuX2lkIjogInJ1bl8wMUo5WDdRMFRFU1QwMDAwMDAyIiwgInNjb3BlIjogWyJhbGVydDp1cGRhdGUiLCAiY2FzZTp3cml0ZSJdLCAiYWxsb3dlZF90b29scyI6IFsiY2xvc2VfYWxlcnQiLCAiY3JlYXRlX2Nhc2UiLCAibWVyZ2VfYWxlcnQiXSwgImlhdCI6IDE3NTcwMDAwMDAsICJleHAiOiAxNzU3MDAwOTAwfQ.759afa2d96ae4f59337d18a0f3653314f5db6092838e91624ee6e1abe802abc8",
+  "payload": {
+    "jti": "tk_01J9X7Q0TEST0000003",
+    "sub": "agent:triage",
+    "case_id": "case_000012",
+    "run_id": "run_01J9X7Q0TEST0000002",
+    "scope": [
+      "alert:update",
+      "case:write"
+    ],
+    "allowed_tools": [
+      "close_alert",
+      "create_case",
+      "merge_alert"
+    ],
+    "iat": 1757000000,
+    "exp": 1757000900
+  },
+  "verify_now": 1757001800,
+  "probe": {
+    "tool": "create_case",
+    "params": {}
+  },
+  "expected": {
+    "allow": false,
+    "reason": "token_expired"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "fixture": "task-ticket/burned",
+  "type": "task_ticket",
+  "class": "已焚毁jti",
+  "source": "PRD §5.8 · INV-2",
+  "token": "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJqdGkiOiAidGtfMDFKOVg3UTBURVNUMDAwMDAwNiIsICJzdWIiOiAiYWdlbnQ6dHJpYWdlIiwgImNhc2VfaWQiOiAiY2FzZV8wMDAwMTIiLCAicnVuX2lkIjogInJ1bl8wMUo5WDdRMFRFU1QwMDAwMDAyIiwgInNjb3BlIjogWyJhbGVydDp1cGRhdGUiLCAiY2FzZTp3cml0ZSJdLCAiYWxsb3dlZF90b29scyI6IFsiY2xvc2VfYWxlcnQiLCAiY3JlYXRlX2Nhc2UiLCAibWVyZ2VfYWxlcnQiXSwgImlhdCI6IDE3NTcwMDAwMDAsICJleHAiOiAxNzU3MDAwOTAwfQ.f035ab6b87743a71eabc2660496d35290cc75d8c1f27026894f58fd2146e43ab",
+  "payload": {
+    "jti": "tk_01J9X7Q0TEST0000006",
+    "sub": "agent:triage",
+    "case_id": "case_000012",
+    "run_id": "run_01J9X7Q0TEST0000002",
+    "scope": [
+      "alert:update",
+      "case:write"
+    ],
+    "allowed_tools": [
+      "close_alert",
+      "create_case",
+      "merge_alert"
+    ],
+    "iat": 1757000000,
+    "exp": 1757000900
+  },
+  "verify_now": 1757000100,
+  "probe": {
+    "tool": "create_case",
+    "params": {}
+  },
+  "expected": {
+    "allow": false,
+    "reason": "token_used"
+  },
+  "burn": {
+    "registry": "used_tokens",
+    "jti": "tk_01J9X7Q0TEST0000006",
+    "note": "验票前先把 jti 登记进 used_tokens 再验（重放现场）"
+  }
+}

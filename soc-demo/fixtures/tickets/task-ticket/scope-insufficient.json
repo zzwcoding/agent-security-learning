@@ -1,0 +1,33 @@
+{
+  "fixture": "task-ticket/scope-insufficient",
+  "type": "task_ticket",
+  "class": "scope不足",
+  "source": "PRD §5.8 · FR-S2.1",
+  "token": "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJqdGkiOiAidGtfMDFKOVg3UTBURVNUMDAwMDAwNCIsICJzdWIiOiAiYWdlbnQ6dHJpYWdlIiwgImNhc2VfaWQiOiAiY2FzZV8wMDAwMTIiLCAicnVuX2lkIjogInJ1bl8wMUo5WDdRMFRFU1QwMDAwMDAyIiwgInNjb3BlIjogWyJhbGVydDp1cGRhdGUiLCAiY2FzZTp3cml0ZSJdLCAiYWxsb3dlZF90b29scyI6IFsiY2xvc2VfYWxlcnQiLCAiY3JlYXRlX2Nhc2UiLCAibWVyZ2VfYWxlcnQiXSwgImlhdCI6IDE3NTcwMDAwMDAsICJleHAiOiAxNzU3MDAwOTAwfQ.03ef409e1e300b91072add7b04c76bf0ac897b5759eef71b7801751b3c4e628d",
+  "payload": {
+    "jti": "tk_01J9X7Q0TEST0000004",
+    "sub": "agent:triage",
+    "case_id": "case_000012",
+    "run_id": "run_01J9X7Q0TEST0000002",
+    "scope": [
+      "alert:update",
+      "case:write"
+    ],
+    "allowed_tools": [
+      "close_alert",
+      "create_case",
+      "merge_alert"
+    ],
+    "iat": 1757000000,
+    "exp": 1757000900
+  },
+  "verify_now": 1757000100,
+  "probe": {
+    "tool": "isolate_host",
+    "params": {}
+  },
+  "expected": {
+    "allow": false,
+    "reason": "scope_insufficient"
+  }
+}

@@ -1,0 +1,173 @@
+{
+  "contract_version": 1,
+  "source": "ADR 0001 · PRD §5.8/§5.9 · specs/modules.md m9 卡 Seam",
+  "hmac_key": {
+    "alg": "HS256",
+    "encoding": "utf8",
+    "value": "soc-demo-test-hmac-key-do-not-use-in-prod",
+    "note": "测试固定密钥，仅 fixtures/tickets/ 契约测试可用，禁入真实环境"
+  },
+  "token_format": {
+    "wire": "<b64url(header)>.<b64url(payload)>.<hex(hmac_sha256(key, 'b64h.b64p'))>",
+    "b64url": "去 padding；payload 序列化 = json.dumps(ensure_ascii=False) 默认分隔符",
+    "header": {
+      "alg": "HS256",
+      "typ": "JWT"
+    },
+    "sig": "hex 摘要（继承 task_token.py，非 JWT 标准的 b64 段）"
+  },
+  "params_hash": {
+    "canonical": "sha256(utf8(json.dumps(params, ensure_ascii=False, sort_keys=True, separators=(',',':'))))",
+    "prefix": "sha256:"
+  },
+  "clock": {
+    "policy": "验票实现必须支持注入当前时间；契约测试一律用 fixture.verify_now，禁用 wall clock"
+  },
+  "reasons": [
+    "allow",
+    "no_ticket",
+    "scope_insufficient",
+    "token_expired",
+    "token_used",
+    "params_mismatch",
+    "require_approval",
+    "signature_invalid"
+  ],
+  "reasons_note": "前七个照 PRD FR-S2.2 verifyTicket 契约（allow 加上六种 403）；signature_invalid 为本契约扩展——签名不符不在 PRD 六种 reason 内，作为 fail-closed 第一关单列，票 07 落地时纳入 reason 联合。no_ticket/require_approval 是闸控制流，不由票面 fixture 覆盖。",
+  "cases": [
+    {
+      "fixture": "task-ticket/valid",
+      "type": "task_ticket",
+      "class": "合法",
+      "probe": {
+        "tool": "create_case",
+        "params": {}
+      },
+      "expected": {
+        "allow": true,
+        "reason": "allow"
+      },
+      "source": "PRD §5.8"
+    },
+    {
+      "fixture": "task-ticket/expired",
+      "type": "task_ticket",
+      "class": "过期",
+      "probe": {
+        "tool": "create_case",
+        "params": {}
+      },
+      "expected": {
+        "allow": false,
+        "reason": "token_expired"
+      },
+      "source": "PRD §5.8 · FR-S2.2"
+    },
+    {
+      "fixture": "task-ticket/scope-insufficient",
+      "type": "task_ticket",
+      "class": "scope不足",
+      "probe": {
+        "tool": "isolate_host",
+        "params": {}
+      },
+      "expected": {
+        "allow": false,
+        "reason": "scope_insufficient"
+      },
+      "source": "PRD §5.8 · FR-S2.1"
+    },
+    {
+      "fixture": "task-ticket/payload-tampered",
+      "type": "task_ticket",
+      "class": "参数篡改",
+      "probe": {
+        "tool": "create_case",
+        "params": {}
+      },
+      "expected": {
+        "allow": false,
+        "reason": "signature_invalid"
+      },
+      "source": "PRD §5.8 · FR-S2.2"
+    },
+    {
+      "fixture": "task-ticket/burned",
+      "type": "task_ticket",
+      "class": "已焚毁jti",
+      "probe": {
+        "tool": "create_case",
+        "params": {}
+      },
+      "expected": {
+        "allow": false,
+        "reason": "token_used"
+      },
+      "source": "PRD §5.8 · INV-2"
+    },
+    {
+      "fixture": "approval-token/valid",
+      "type": "approval_token",
+      "class": "合法",
+      "probe": {
+        "tool": "isolate_host",
+        "params": {
+          "host": "web-01"
+        }
+      },
+      "expected": {
+        "allow": true,
+        "reason": "allow"
+      },
+      "source": "PRD §5.9"
+    },
+    {
+      "fixture": "approval-token/expired",
+      "type": "approval_token",
+      "class": "过期",
+      "probe": {
+        "tool": "isolate_host",
+        "params": {
+          "host": "web-01"
+        }
+      },
+      "expected": {
+        "allow": false,
+        "reason": "token_expired"
+      },
+      "source": "PRD §5.9 · FR-S2.2"
+    },
+    {
+      "fixture": "approval-token/params-tampered",
+      "type": "approval_token",
+      "class": "参数篡改",
+      "probe": {
+        "tool": "isolate_host",
+        "params": {
+          "host": "web-02"
+        }
+      },
+      "expected": {
+        "allow": false,
+        "reason": "params_mismatch"
+      },
+      "source": "PRD §5.9 · INV-2"
+    },
+    {
+      "fixture": "approval-token/burned",
+      "type": "approval_token",
+      "class": "已焚毁jti",
+      "probe": {
+        "tool": "isolate_host",
+        "params": {
+          "host": "web-01"
+        }
+      },
+      "expected": {
+        "allow": false,
+        "reason": "token_used"
+      },
+      "source": "PRD §5.9 · INV-2"
+    }
+  ]
+}

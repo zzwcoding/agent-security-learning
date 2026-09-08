@@ -1,0 +1,29 @@
+{
+  "fixture": "approval-token/expired",
+  "type": "approval_token",
+  "class": "过期",
+  "source": "PRD §5.9 · FR-S2.2",
+  "token": "eyJhbGciOiAiSFMyNTYiLCAidHlwIjogIkpXVCJ9.eyJqdGkiOiAiYXBfMDFKOVg3UTBURVNUMDAwMDAxMCIsICJhcHByb3ZhbF9pZCI6ICJhcHJfMDFKOVg3UTBURVNUMDAwMDAwNSIsICJhcHByb3ZlZF9ieSI6ICJkdXR5X2xlYWQiLCAidG9vbCI6ICJpc29sYXRlX2hvc3QiLCAicGFyYW1zX2hhc2giOiAic2hhMjU2OmI4ZGM2YjI5ZTYwMmYwMzcwMjQ1ZWQyNDQ5YzQ4NTEzZTQyMjkxYmFkZDM1MWYxYWNlYWNjZjU3NzA3YzNhYTIiLCAiY2FzZV9pZCI6ICJjYXNlXzAwMDAxMiIsICJpYXQiOiAxNzU3MDAwMDAwLCAiZXhwIjogMTc1NzAwMDMwMCwgInVzZWQiOiBmYWxzZX0.665705c6f87441cff340d2abd9577c962f81938108af26ef20a26ab0cbc08341",
+  "payload": {
+    "jti": "ap_01J9X7Q0TEST0000010",
+    "approval_id": "apr_01J9X7Q0TEST0000005",
+    "approved_by": "duty_lead",
+    "tool": "isolate_host",
+    "params_hash": "sha256:b8dc6b29e602f0370245ed2449c48513e42291badd351f1aceaccf57707c3aa2",
+    "case_id": "case_000012",
+    "iat": 1757000000,
+    "exp": 1757000300,
+    "used": false
+  },
+  "verify_now": 1757001800,
+  "probe": {
+    "tool": "isolate_host",
+    "params": {
+      "host": "web-01"
+    }
+  },
+  "expected": {
+    "allow": false,
+    "reason": "token_expired"
+  }
+}
