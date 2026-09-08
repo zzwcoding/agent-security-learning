@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.16.0">
-  <title>M4 分诊 agent · 内部结构</title>
+  <title>网关 C5 · 三容器内部结构（RBAC / FGA / 铸币 / 凭证代理）</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4955,7 +4955,7 @@
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>M4 分诊 agent · 内部结构</h1>
+        <h1>网关 C5 · 三容器内部结构（RBAC / FGA / 铸币 / 凭证代理）</h1>
       </div>
     </div>
 
@@ -5004,8 +5004,8 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="-207.69500000000005 -84.80000000000001 1794.39 834.6" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" preserveAspectRatio="none">
-        <title id="archify-diagram-title">M4 分诊 agent · 内部结构</title>
+      <svg viewBox="-276.06499999999994 -90.10000000000002 1716.1299999999999 798.2" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" preserveAspectRatio="none">
+        <title id="archify-diagram-title">网关 C5 · 三容器内部结构（RBAC / FGA / 铸币 / 凭证代理）</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -5030,169 +5030,111 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" x="200" y="282.3" width="1145" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）" x="401.3935231870968" y="30" width="447.2129536258064" height="544" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="m2" data-edge-to="load" data-edge-key="0" data-edge-id="m2-to-load" data-composition-points="200,342.3;230,342.3" d="M 200 342.3 L 230 342.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="kb" data-edge-to="kbcheck" data-edge-label="检索 approved" data-edge-key="1" data-edge-id="kb-to-kbcheck" data-composition-points="200,567;495,567;495,376.3" d="M 200 567 L 487 567 Q 495 567 495 559 L 495 376.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="load" data-edge-to="kbcheck" data-edge-key="2" data-edge-id="load-to-kb" data-composition-points="390,344.3;415,344.3" d="M 390 344.3 L 415 344.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="kbcheck" data-edge-to="mergecheck" data-edge-key="3" data-edge-id="kb-to-merge" data-composition-points="575,344.3;600,344.3" d="M 575 344.3 L 600 344.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="mergecheck" data-edge-to="selfaudit" data-edge-key="4" data-edge-id="merge-to-audit" data-composition-points="760,344.3;785,344.3" d="M 760 344.3 L 785 344.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="selfaudit" data-edge-to="verdict" data-edge-key="5" data-edge-id="audit-to-verdict" data-composition-points="945,344.3;970,344.3" d="M 945 344.3 L 970 344.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="verdict" data-edge-to="outcome" data-edge-key="6" data-edge-id="verdict-to-outcome" data-composition-points="1130,351.3;1155,351.3" d="M 1130 351.3 L 1155 351.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="guards" data-edge-to="verdict" data-edge-label="不可信段扫描+包装（D1）" data-edge-key="7" data-edge-id="guards-to-verdict" data-composition-points="200,188.6;1050,188.6;1050,312.3" d="M 200 188.6 L 1042 188.6 Q 1050 188.6 1050 196.6 L 1050 312.3" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="verdict" data-edge-to="gateway" data-edge-label="LLM 调用走代理" data-edge-key="8" data-edge-id="verdict-to-gateway" data-composition-points="1130,337.3;1142.5,337.3;1142.5,94;1155,94" d="M 1130 337.3 L 1136.25 337.3 Q 1142.5 337.3 1142.5 331.05 L 1142.5 100.25 Q 1142.5 94 1148.75 94 L 1155 94" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="cf" data-edge-label="工具可见性 · 按角色过滤（RBAC）" data-edge-key="0" data-edge-id="agent-to-cf" data-composition-points="210,307;365,307;365,96;520,96" d="M 210 307 L 357 307 Q 365 307 365 299 L 365 104 Q 365 96 373 96 L 520 96" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="ofga" data-edge-label="意图闸三态裁决" data-edge-key="1" data-edge-id="agent-to-ofga" data-composition-points="210,307;520,307" d="M 210 307 L 520 307" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+        <path data-edge-from="cf" data-edge-to="ofga" data-edge-label="fga_check 插件问询（91 行原件）" data-edge-key="2" data-edge-id="cf-to-ofga" data-composition-points="625,132;625,271" d="M 625 132 L 625 271" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="mintapi" data-edge-label="POST /internal/mint → HMAC 票据" data-edge-key="3" data-edge-id="agent-to-mint" data-composition-points="210,307;365,307;365,518;520,518" d="M 210 307 L 357 307 Q 365 307 365 315 L 365 510 Q 365 518 373 518 L 520 518" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="mintapi" data-edge-label="验票通过后 → /proxy/llm/*（LLM base_url 指这里）" data-edge-key="4" data-edge-id="agent-to-proxy" data-composition-points="125,343;125,600;625,600;625,554" d="M 125 343 L 125 592 Q 125 600 133 600 L 617 600 Q 625 600 625 592 L 625 554" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="mintapi" data-edge-to="llm-provider" data-edge-label="占位符换真 key · 转发" data-edge-key="5" data-edge-id="proxy-to-llm" data-composition-points="730,518;950,518" d="M 730 518 L 950 518" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
 
         <!-- Components -->
-        <g id="node-guards" data-node-id="guards" data-node-label="guards 注入扫描" tabindex="0" role="button" aria-label="聚焦guards 注入扫描，llm-guard（C4）, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="llm-guard（C4）" data-node-tag="不可信段过滤" data-node-context="架构组件">
-          <title>guards 注入扫描 · llm-guard（C4） · 架构组件 · 不可信段过滤</title>
-          <rect x="20" y="158.6" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="20" y="158.6" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 164.6) scale(0.6875)">
+        <g id="node-agent" data-node-id="agent" data-node-label="agent 服务（M3-M8）" tabindex="0" role="button" aria-label="聚焦agent 服务（M3-M8），LangGraph.js :3003, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="LangGraph.js :3003" data-node-tag="TS 验票闸在本体" data-node-context="架构组件">
+          <title>agent 服务（M3-M8） · LangGraph.js :3003 · 架构组件 · TS 验票闸在本体</title>
+          <rect x="40" y="271" width="170" height="72" rx="6" class="c-mask"/>
+          <rect x="40" y="271" width="170" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 277) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="110" y="186.6" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">guards 注入扫描</text>
-        <text data-detail="context" x="110" y="202.6" class="t-muted" font-size="9" text-anchor="middle">llm-guard（C4）</text>
-        <text data-detail="fine" x="110" y="210.6" class="t-external" font-size="7" text-anchor="middle">不可信段过滤</text>
+          <text data-node-label="" data-detail-anchor="" x="125" y="305" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">agent 服务（M3-M8）</text>
+        <text data-detail="context" x="125" y="321" class="t-muted" font-size="9" text-anchor="middle">LangGraph.js :3003</text>
+        <text data-detail="fine" x="125" y="335" class="t-external" font-size="7" text-anchor="middle">TS 验票闸在本体</text>
         </g>
 
-        <g id="node-m2" data-node-id="m2" data-node-label="M2 案件后端" tabindex="0" role="button" aria-label="聚焦M2 案件后端，读 Alert / 写 verdict, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="读 Alert / 写 verdict" data-node-tag="数据地基" data-node-context="架构组件">
-          <title>M2 案件后端 · 读 Alert / 写 verdict · 架构组件 · 数据地基</title>
-          <rect x="20" y="312.3" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="20" y="312.3" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 318.3) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="110" y="340.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
-        <text data-detail="context" x="110" y="356.3" class="t-muted" font-size="9" text-anchor="middle">读 Alert / 写 verdict</text>
-        <text data-detail="fine" x="110" y="364.3" class="t-external" font-size="7" text-anchor="middle">数据地基</text>
-        </g>
-
-        <g id="node-kb" data-node-id="kb" data-node-label="M7 KB approved 区" tabindex="0" role="button" aria-label="聚焦M7 KB approved 区，chroma 检索面, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="chroma 检索面" data-node-tag="top-k=5" data-node-context="架构组件">
-          <title>M7 KB approved 区 · chroma 检索面 · 架构组件 · top-k=5</title>
-          <rect x="20" y="537" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="20" y="537" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 543) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="110" y="565" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M7 KB approved 区</text>
-        <text data-detail="context" x="110" y="581" class="t-muted" font-size="9" text-anchor="middle">chroma 检索面</text>
-        <text data-detail="fine" x="110" y="589" class="t-external" font-size="7" text-anchor="middle">top-k=5</text>
-        </g>
-
-        <g id="node-gateway" data-node-id="gateway" data-node-label="gateway 凭证代理" tabindex="0" role="button" aria-label="聚焦gateway 凭证代理，S1：LLM 钥匙不落地, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="S1：LLM 钥匙不落地" data-node-tag="/proxy/llm/*" data-node-context="架构组件">
-          <title>gateway 凭证代理 · S1：LLM 钥匙不落地 · 架构组件 · /proxy/llm/*</title>
-          <rect x="1155" y="64" width="190" height="60" rx="6" class="c-mask"/>
-          <rect x="1155" y="64" width="190" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(1161 70) scale(0.6875)">
-            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
-            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="1250" y="92" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">gateway 凭证代理</text>
-        <text data-detail="context" x="1250" y="108" class="t-muted" font-size="9" text-anchor="middle">S1：LLM 钥匙不落地</text>
-        <text data-detail="fine" x="1250" y="116" class="t-external" font-size="7" text-anchor="middle">/proxy/llm/*</text>
-        </g>
-
-        <g id="node-load" data-node-id="load" data-node-label="① load_alert" tabindex="0" role="button" aria-label="聚焦① load_alert，读告警+不可信字段, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="读告警+不可信字段" data-node-tag="full_log=数据非指令" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>① load_alert · 读告警+不可信字段 · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · full_log=数据非指令</title>
-          <rect x="230" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="230" y="312.3" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(236 318.3) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="310" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">① load_alert</text>
-        <text data-detail="context" x="310" y="358.3" class="t-muted" font-size="9" text-anchor="middle">读告警+不可信字段</text>
-        <text data-detail="fine" x="310" y="368.3" class="t-backend" font-size="7" text-anchor="middle">full_log=数据非指令</text>
-        </g>
-
-        <g id="node-kbcheck" data-node-id="kbcheck" data-node-label="② kb_check" tabindex="0" role="button" aria-label="聚焦② kb_check，L0 免验只读, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="L0 免验只读" data-node-tag="历史模式提速" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>② kb_check · L0 免验只读 · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · 历史模式提速</title>
-          <rect x="415" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="415" y="312.3" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(421 318.3) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="495" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② kb_check</text>
-        <text data-detail="context" x="495" y="358.3" class="t-muted" font-size="9" text-anchor="middle">L0 免验只读</text>
-        <text data-detail="fine" x="495" y="368.3" class="t-backend" font-size="7" text-anchor="middle">历史模式提速</text>
-        </g>
-
-        <g id="node-mergecheck" data-node-id="mergecheck" data-node-label="③ merge_check" tabindex="0" role="button" aria-label="聚焦③ merge_check，L0 查重（FR-M2.4）, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="L0 查重（FR-M2.4）" data-node-tag="同主机 24h 归并" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>③ merge_check · L0 查重（FR-M2.4） · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · 同主机 24h 归并</title>
-          <rect x="600" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="600" y="312.3" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(606 318.3) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="680" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">③ merge_check</text>
-        <text data-detail="context" x="680" y="358.3" class="t-muted" font-size="9" text-anchor="middle">L0 查重（FR-M2.4）</text>
-        <text data-detail="fine" x="680" y="368.3" class="t-backend" font-size="7" text-anchor="middle">同主机 24h 归并</text>
-        </g>
-
-        <g id="node-selfaudit" data-node-id="selfaudit" data-node-label="④ self_audit" tabindex="0" role="button" aria-label="聚焦④ self_audit，产出声明 artifact, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="security" data-node-sublabel="产出声明 artifact" data-node-tag="声明≠实际→降级" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>④ self_audit · 产出声明 artifact · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · 声明≠实际→降级</title>
-          <rect x="785" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="785" y="312.3" width="160" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(791 318.3) scale(0.6875)">
+        <g id="node-cf" data-node-id="cf" data-node-label="ContextForge（官方镜像）" tabindex="0" role="button" aria-label="聚焦ContextForge（官方镜像），RBAC · 渠道面 · 插件挂载, compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）" aria-pressed="false" data-node-kind="security" data-node-sublabel="RBAC · 渠道面 · 插件挂载" data-node-tag="工具可见性按角色" data-node-context="compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）">
+          <title>ContextForge（官方镜像） · RBAC · 渠道面 · 插件挂载 · compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单） · 工具可见性按角色</title>
+          <rect x="520" y="60" width="210" height="72" rx="6" class="c-mask"/>
+          <rect x="520" y="60" width="210" height="72" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(526 66) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="865" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ self_audit</text>
-        <text data-detail="context" x="865" y="358.3" class="t-muted" font-size="9" text-anchor="middle">产出声明 artifact</text>
-        <text data-detail="fine" x="865" y="368.3" class="t-security" font-size="7" text-anchor="middle">声明≠实际→降级</text>
+          <text data-node-label="" data-detail-anchor="" x="625" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">ContextForge（官方镜像）</text>
+        <text data-detail="context" x="625" y="110" class="t-muted" font-size="9" text-anchor="middle">RBAC · 渠道面 · 插件挂载</text>
+        <text data-detail="fine" x="625" y="124" class="t-security" font-size="7" text-anchor="middle">工具可见性按角色</text>
         </g>
 
-        <g id="node-verdict" data-node-id="verdict" data-node-label="⑤ verdict_llm" tabindex="0" role="button" aria-label="聚焦⑤ verdict_llm，结构化输出四分类, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="结构化输出四分类" data-node-tag="不合 schema→重试" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>⑤ verdict_llm · 结构化输出四分类 · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · 不合 schema→重试</title>
-          <rect x="970" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="970" y="312.3" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(976 318.3) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-ofga" data-node-id="ofga" data-node-label="OpenFGA（官方镜像）" tabindex="0" role="button" aria-label="聚焦OpenFGA（官方镜像），FGA 关系型授权, compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）" aria-pressed="false" data-node-kind="security" data-node-sublabel="FGA 关系型授权" data-node-tag="三态裁决" data-node-context="compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）">
+          <title>OpenFGA（官方镜像） · FGA 关系型授权 · compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单） · 三态裁决</title>
+          <rect x="520" y="271" width="210" height="72" rx="6" class="c-mask"/>
+          <rect x="520" y="271" width="210" height="72" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(526 277) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1050" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">⑤ verdict_llm</text>
-        <text data-detail="context" x="1050" y="358.3" class="t-muted" font-size="9" text-anchor="middle">结构化输出四分类</text>
-        <text data-detail="fine" x="1050" y="368.3" class="t-backend" font-size="7" text-anchor="middle">不合 schema→重试</text>
+          <text data-node-label="" data-detail-anchor="" x="625" y="305" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">OpenFGA（官方镜像）</text>
+        <text data-detail="context" x="625" y="321" class="t-muted" font-size="9" text-anchor="middle">FGA 关系型授权</text>
+        <text data-detail="fine" x="625" y="335" class="t-security" font-size="7" text-anchor="middle">三态裁决</text>
         </g>
 
-        <g id="node-outcome" data-node-id="outcome" data-node-label="⑥ outcome" tabindex="0" role="button" aria-label="聚焦⑥ outcome，建案 / 合并 / 关单 → 写回 M2, services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="建案 / 合并 / 关单 → 写回 M2" data-node-tag="三结局动词" data-node-context="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <title>⑥ outcome · 建案 / 合并 / 关单 → 写回 M2 · services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票） · 三结局动词</title>
-          <rect x="1155" y="312.3" width="160" height="64" rx="6" class="c-mask"/>
-          <rect x="1155" y="312.3" width="160" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1161 318.3) scale(0.6875)">
+        <g id="node-mintapi" data-node-id="mintapi" data-node-label="自写小 FastAPI" tabindex="0" role="button" aria-label="聚焦自写小 FastAPI，/internal/mint + /proxy/llm/*, compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="/internal/mint + /proxy/llm/*" data-node-tag="task_token.py · proxy.py" data-node-context="compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）">
+          <title>自写小 FastAPI · /internal/mint + /proxy/llm/* · compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单） · task_token.py · proxy.py</title>
+          <rect x="520" y="482" width="210" height="72" rx="6" class="c-mask"/>
+          <rect x="520" y="482" width="210" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(526 488) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1235" y="342.3" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">⑥ outcome</text>
-        <text data-detail="context" x="1235" y="358.3" class="t-muted" font-size="9" text-anchor="middle">建案 / 合并 / 关单 → 写回 M2</text>
-        <text data-detail="fine" x="1235" y="368.3" class="t-backend" font-size="7" text-anchor="middle">三结局动词</text>
+          <text data-node-label="" data-detail-anchor="" x="625" y="516" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">自写小 FastAPI</text>
+        <text data-detail="context" x="625" y="532" class="t-muted" font-size="9" text-anchor="middle">/internal/mint + /proxy/llm/*</text>
+        <text data-detail="fine" x="625" y="546" class="t-backend" font-size="7" text-anchor="middle">task_token.py · proxy.py</text>
+        </g>
+
+        <g id="node-llm-provider" data-node-id="llm-provider" data-node-label="LLM Provider" tabindex="0" role="button" aria-label="聚焦LLM Provider，minimax-m2（决策 #7）, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="minimax-m2（决策 #7）" data-node-tag="真 key 永不进 LLM 上下文" data-node-context="架构组件">
+          <title>LLM Provider · minimax-m2（决策 #7） · 架构组件 · 真 key 永不进 LLM 上下文</title>
+          <rect x="950" y="482" width="170" height="72" rx="6" class="c-mask"/>
+          <rect x="950" y="482" width="170" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(956 488) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1035" y="516" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">LLM Provider</text>
+        <text data-detail="context" x="1035" y="532" class="t-muted" font-size="9" text-anchor="middle">minimax-m2（决策 #7）</text>
+        <text data-detail="fine" x="1035" y="546" class="t-external" font-size="7" text-anchor="middle">真 key 永不进 LLM 上下文</text>
         </g>
 
         <!-- Connection labels -->
-
-        <g data-detail="context" data-edge-from="kb" data-edge-to="kbcheck" data-edge-label="检索 approved" data-edge-key="1" data-edge-id="kb-to-kbcheck">
-          <rect x="458.8" y="451.65" width="72.4" height="14" rx="3" class="c-mask"/>
-          <text x="495" y="461.65" class="t-muted" font-size="8" text-anchor="middle">检索 approved</text>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="cf" data-edge-label="工具可见性 · 按角色过滤（RBAC）" data-edge-key="0" data-edge-id="agent-to-cf">
+          <rect x="285.6" y="181.5" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="365" y="191.5" class="t-muted" font-size="8" text-anchor="middle">工具可见性 · 按角色过滤（RBAC）</text>
         </g>
-
-
-
-
-
-        <g data-detail="context" data-edge-from="guards" data-edge-to="verdict" data-edge-label="不可信段扫描+包装（D1）" data-edge-key="7" data-edge-id="guards-to-verdict">
-          <rect x="989.8" y="230.45" width="120.39999999999999" height="14" rx="3" class="c-mask"/>
-          <text x="1050" y="240.45" class="t-muted" font-size="8" text-anchor="middle">不可信段扫描+包装（D1）</text>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="ofga" data-edge-label="意图闸三态裁决" data-edge-key="1" data-edge-id="agent-to-ofga">
+          <rect x="403.4" y="297" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="442" y="307" class="t-backend" font-size="8" text-anchor="middle">意图闸三态裁决</text>
         </g>
-        <g data-detail="context" data-edge-from="verdict" data-edge-to="gateway" data-edge-label="LLM 调用走代理" data-edge-key="8" data-edge-id="verdict-to-gateway">
-          <rect x="1103.9" y="195.65" width="77.2" height="14" rx="3" class="c-mask"/>
-          <text x="1142.5" y="205.65" class="t-muted" font-size="8" text-anchor="middle">LLM 调用走代理</text>
+        <g data-detail="context" data-edge-from="cf" data-edge-to="ofga" data-edge-label="fga_check 插件问询（91 行原件）" data-edge-key="2" data-edge-id="cf-to-ofga">
+          <rect x="545.6" y="136" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="625" y="146" class="t-muted" font-size="8" text-anchor="middle">fga_check 插件问询（91 行原件）</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="mintapi" data-edge-label="POST /internal/mint → HMAC 票据" data-edge-key="3" data-edge-id="agent-to-mint">
+          <rect x="285.6" y="450" width="158.79999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="365" y="460" class="t-muted" font-size="8" text-anchor="middle">POST /internal/mint → HMAC 票据</text>
+        </g>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="mintapi" data-edge-label="验票通过后 → /proxy/llm/*（LLM base_url 指这里）" data-edge-key="4" data-edge-id="agent-to-proxy">
+          <rect x="179.8" y="590" width="240.39999999999998" height="14" rx="3" class="c-mask"/>
+          <text x="300" y="600" class="t-muted" font-size="8" text-anchor="middle">验票通过后 → /proxy/llm/*（LLM base_url 指这里）</text>
+        </g>
+        <g data-detail="context" data-edge-from="mintapi" data-edge-to="llm-provider" data-edge-label="占位符换真 key · 转发" data-edge-key="5" data-edge-id="proxy-to-llm">
+          <rect x="784.6" y="498" width="110.8" height="14" rx="3" class="c-mask"/>
+          <text x="840" y="508" class="t-muted" font-size="8" text-anchor="middle">占位符换真 key · 转发</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）">
-          <rect data-graph-role="structural-frame-label-mask" x="204" y="292.3" width="512.2" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="208" y="305.3" class="t-cloud" font-size="9" font-weight="600">services/agent 内子模块 workers/triage（无独立 HTTP 面，由 M3 supervisor 拉起；物理无 L2 票）</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）">
+          <rect data-graph-role="structural-frame-label-mask" x="405.3935231870968" y="40" width="439.2129536258064" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="409.3935231870968" y="52.51613003225806" class="t-cloud" font-size="8.516130032258063" font-weight="600">compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）</text>
         </g>
 
         <!-- Legend -->
@@ -5389,9 +5331,9 @@
           <h3>技术栈</h3>
         </div>
         <ul>
-          <li>&bull; LangGraph 子图：load_alert → kb_check → merge_check → self_audit → verdict_llm → outcome（PRD §6-M4）</li>
-          <li>&bull; 结构化输出 schema 照 M507 runbook 的 GLOBAL OUTPUT VARIABLES 改造——prompt 契约是事实接口，改动视同接口变更</li>
-          <li>&bull; prompt 装配器 wrapUntrusted：不可信段包装后进 prompt（D1 落点）；LLM 调用全走 gateway 凭证代理（S1），本模块摸不到 key</li>
+          <li>&bull; ContextForge 官方镜像：RBAC/渠道面，自写插件挂载（fga_check.py 91 行，改 user_map 对位附录 A.2 角色矩阵）</li>
+          <li>&bull; OpenFGA 官方镜像：授权模型按 A.2 重建（4 角色 × 4 工具族），setup 脚本幂等重建、可内存存储跑单测</li>
+          <li>&bull; 自写小 FastAPI：mint = task_token.py（63 行纯标准库 HMAC-SHA256）/ proxy = proxy.py（74 行 fastapi + httpx）</li>
         </ul>
       </div>
 
@@ -5401,9 +5343,9 @@
           <h3>部署</h3>
         </div>
         <ul>
-          <li>&bull; services/agent 内子模块 workers/triage，无独立 HTTP 面——由 M3 主图拉起，输入 {alert_id, ticket}</li>
-          <li>&bull; KB 检索面只读 approved 区；检索注入内容同样过不可信包装</li>
-          <li>&bull; KB 不可达 → 降级为无 KB 分诊并在 rationale 标注，不阻塞流水线；eval 用伪 LLM fixture 可脱离真模型跑</li>
+          <li>&bull; compose 三容器并排：官方镜像不改动、自写件薄层挂载——升级镜像不碰自写代码（ADR 0001 拆件复用）</li>
+          <li>&bull; 密钥全在服务端 env：HMAC_SIGNING_KEY（票据签名）/ SECRETS_*（凭证真值仓），教学版不做 KMS/轮换</li>
+          <li>&bull; 跨语言票面契约：py 签票与 TS 验票（node:crypto 重写 ~30 行）共享 fixtures/tickets/ 同一组 fixture 测试</li>
         </ul>
       </div>
 
@@ -5413,9 +5355,9 @@
           <h3>铁律</h3>
         </div>
         <ul>
-          <li>&bull; LLM 输出不合 schema → 重试 1 次，仍失败置 uncertain + 人工待办——宁可升级人工不可猜</li>
-          <li>&bull; self_audit 声明与 merge_check 实际结果矛盾 → verdict 强制降级 uncertain（eval 可测）</li>
-          <li>&bull; 物理无 L2 票：分诊 agent 没有任何高危工具的票，永远不会触发审批</li>
+          <li>&bull; LLM 不能给自己授权、不能批准自己、不能解析凭证、不能改策略（Tracecat 威胁模型表述 · 汇报引句）</li>
+          <li>&bull; 全链路 fail-closed + deny 覆盖 allow：FGA 异常/代理异常/扫描异常一律拒绝执行</li>
+          <li>&bull; 金丝雀凭证断言：SECRETS_ 值在 prompt/工具调用/审计/时间线全链路 grep 不到，命中即 run 终止 + Web 红标</li>
         </ul>
       </div>
     </div>
@@ -14824,27 +14766,6 @@
       }
     });
   </script>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 <!-- arch-nodepop:begin -->
 <style>
   [data-node-id]{cursor:pointer}

@@ -28,6 +28,8 @@ const LINKS = {
   "m5-investigation": [{ href: "architecture-m5-internal.html", text: "M5 内部结构图（调查工具循环 + 三条缰绳）" }],
   "m6-enrichment": [{ href: "architecture-m6-internal.html", text: "M6 内部结构图（TLP/PAP 闸门 + microVM 沙箱）" }],
   "m7-knowledge": [{ href: "architecture-m7-internal.html", text: "M7 内部结构图（提炼→人审→入库 + 检索面）" }],
+  gateway: [{ href: "architecture-gateway-internal.html", text: "网关内部结构图（三容器并排 + 铸币/凭证代理双流）" }],
+  agent: [{ href: "architecture-m3-internal.html", text: "M3 内部结构图（agent 服务内部：调度/工人/闸/检查点）" }],
 };
 
 // 内部图节点 id → arch-notes.json 键的别名（内部图 id 是另一套命名）

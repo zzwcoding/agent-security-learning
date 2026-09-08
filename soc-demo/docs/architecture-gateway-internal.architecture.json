@@ -1,0 +1,150 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "网关 C5 · 三容器内部结构（RBAC / FGA / 铸币 / 凭证代理）",
+    "output": "architecture-gateway-internal.html",
+    "quality_profile": "showcase",
+    "locale": "zh-CN",
+    "viewBox": [1320, 614]
+  },
+  "components": [
+    {
+      "id": "agent",
+      "type": "external",
+      "label": "agent 服务（M3-M8）",
+      "sublabel": "LangGraph.js :3003",
+      "pos": [40, 271],
+      "size": [170, 72],
+      "tag": "TS 验票闸在本体"
+    },
+    {
+      "id": "cf",
+      "type": "security",
+      "label": "ContextForge（官方镜像）",
+      "sublabel": "RBAC · 渠道面 · 插件挂载",
+      "pos": [520, 60],
+      "size": [210, 72],
+      "tag": "工具可见性按角色"
+    },
+    {
+      "id": "ofga",
+      "type": "security",
+      "label": "OpenFGA（官方镜像）",
+      "sublabel": "FGA 关系型授权",
+      "pos": [520, 271],
+      "size": [210, 72],
+      "tag": "三态裁决"
+    },
+    {
+      "id": "mintapi",
+      "type": "backend",
+      "label": "自写小 FastAPI",
+      "sublabel": "/internal/mint + /proxy/llm/*",
+      "pos": [520, 482],
+      "size": [210, 72],
+      "tag": "task_token.py · proxy.py"
+    },
+    {
+      "id": "llm-provider",
+      "type": "external",
+      "label": "LLM Provider",
+      "sublabel": "minimax-m2（决策 #7）",
+      "pos": [950, 482],
+      "size": [170, 72],
+      "tag": "真 key 永不进 LLM 上下文"
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "compose gateway 控制面 · 三容器并排（2026-09-04 拍板：自写件不动镜像内部，排障简单）",
+      "wraps": ["cf", "ofga", "mintapi"]
+    }
+  ],
+  "connections": [
+    {
+      "id": "agent-to-cf",
+      "from": "agent",
+      "to": "cf",
+      "label": "工具可见性 · 按角色过滤（RBAC）",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "agent-to-ofga",
+      "from": "agent",
+      "to": "ofga",
+      "label": "意图闸三态裁决",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [442, 307]
+    },
+    {
+      "id": "cf-to-ofga",
+      "from": "cf",
+      "to": "ofga",
+      "label": "fga_check 插件问询（91 行原件）",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelAt": [625, 146]
+    },
+    {
+      "id": "agent-to-mint",
+      "from": "agent",
+      "to": "mintapi",
+      "label": "POST /internal/mint → HMAC 票据",
+      "fromSide": "right",
+      "toSide": "left",
+      "labelAt": [365, 460]
+    },
+    {
+      "id": "agent-to-proxy",
+      "from": "agent",
+      "to": "mintapi",
+      "label": "验票通过后 → /proxy/llm/*（LLM base_url 指这里）",
+      "fromSide": "bottom",
+      "toSide": "bottom",
+      "via": [[125, 600], [625, 600]],
+      "labelAt": [300, 600]
+    },
+    {
+      "id": "proxy-to-llm",
+      "from": "mintapi",
+      "to": "llm-provider",
+      "label": "占位符换真 key · 转发",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "技术栈",
+      "items": [
+        "ContextForge 官方镜像：RBAC/渠道面，自写插件挂载（fga_check.py 91 行，改 user_map 对位附录 A.2 角色矩阵）",
+        "OpenFGA 官方镜像：授权模型按 A.2 重建（4 角色 × 4 工具族），setup 脚本幂等重建、可内存存储跑单测",
+        "自写小 FastAPI：mint = task_token.py（63 行纯标准库 HMAC-SHA256）/ proxy = proxy.py（74 行 fastapi + httpx）"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "部署",
+      "items": [
+        "compose 三容器并排：官方镜像不改动、自写件薄层挂载——升级镜像不碰自写代码（ADR 0001 拆件复用）",
+        "密钥全在服务端 env：HMAC_SIGNING_KEY（票据签名）/ SECRETS_*（凭证真值仓），教学版不做 KMS/轮换",
+        "跨语言票面契约：py 签票与 TS 验票（node:crypto 重写 ~30 行）共享 fixtures/tickets/ 同一组 fixture 测试"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "铁律",
+      "items": [
+        "LLM 不能给自己授权、不能批准自己、不能解析凭证、不能改策略（Tracecat 威胁模型表述 · 汇报引句）",
+        "全链路 fail-closed + deny 覆盖 allow：FGA 异常/代理异常/扫描异常一律拒绝执行",
+        "金丝雀凭证断言：SECRETS_ 值在 prompt/工具调用/审计/时间线全链路 grep 不到，命中即 run 终止 + Web 红标"
+      ]
+    }
+  ]
+}

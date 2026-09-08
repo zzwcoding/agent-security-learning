@@ -254,5 +254,21 @@
  "toolsrc": {
   "title": "工具后端 —— 调查的弹药库",
   "body": "<p><b>业务：</b>mock SIEM 告警集 + KB approved 区，调查的两件只读工具（siem_query/kb_read）的落点。</p><p><b>技术选型：</b>它是 seam：fixture 检索（演示/CI 快）↔ 将来真 Wazuh/chroma，换 adapter 不换代码——M5 的「可换后端」承诺就落在这。</p>"
+ },
+ "cf": {
+  "title": "ContextForge —— RBAC 渠道面（官方镜像）",
+  "body": "<p><b>干什么：</b>按角色过滤工具可见性——什么角色看得见什么工具清单；兼多渠道入口面（目标场景#1 网关叙事）。</p><ul><li><b>技术选型：</b>官方镜像 + 自写插件挂载，不自己写网关（重资产只部署+精读）</li><li>fga_check.py 插件（91 行，路线 3 原件直接搬，改 user_map 对位附录 A.2 角色矩阵）</li><li>汇报点：RBAC 管「看得见什么」，FGA 管「用得了没有」，两层不打架</li></ul>"
+ },
+ "ofga": {
+  "title": "OpenFGA —— 关系型授权裁决（官方镜像）",
+  "body": "<p><b>干什么：</b>FGA 裁决「这个身份对这个工具/数据是什么关系」，M8 意图闸三态 <b>allow / deny / require_approval</b>（FR-M8.4，Tracecat 三态对齐）。</p><ul><li><b>技术选型：</b>官方镜像；授权模型按附录 A.2 重建（4 角色 × 4 工具族）</li><li>setup 脚本幂等重建 + 可内存存储跑单测（ADR 0001 搬思路不搬仓库）</li><li>裁决顺序：deny 覆盖 allow（default-deny）</li></ul>"
+ },
+ "mintapi": {
+  "title": "自写小 FastAPI —— 铸币 + 凭证代理",
+  "body": "<p><b>干什么：</b>两个端点撑起 M9 的 py 侧：<b>POST /internal/mint</b> 签 HMAC 票据；<b>/proxy/llm/*</b> 凭证代理（LLM base_url 指这里）。</p><ul><li><b>铸币时刻①：</b>登录签长期身份门票；<b>②：</b>L2 审批通过后签一次性 ApprovalToken（用后焚毁，登记 M2 used_tokens）</li><li><b>技术选型：</b>task_token.py 63 行纯标准库 HMAC-SHA256；proxy.py 74 行 fastapi+httpx——都是路线 3 实测件参数化搬入</li><li>fail-closed：占位符无对应凭证 → 执行失败 + 审计</li></ul>"
+ },
+ "agent": {
+  "title": "agent 服务（M3-M8）—— 本图的调用方",
+  "body": "<p><b>视角说明：</b>本图里它是网关的客户：来铸票（拉起 worker / 审批通过）、来问可见性（M8 入口链）、带着已过 TS 验票闸的工具调用/LLM 请求来换真 key。</p><ul><li>TS 验票闸（M9-S2）在本体内部，不在网关——网关只签票不验票</li><li>内部结构见 M3 内部结构图（延伸阅读）</li></ul>"
  }
 }
