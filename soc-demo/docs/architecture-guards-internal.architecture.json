@@ -91,7 +91,7 @@
    "id": "lguard",
    "type": "security",
    "label": "llm-guard 注入扫描",
-   "sublabel": "PromptInjection scanner · 超时 2s",
+   "sublabel": "启发式扫描器族 · Regex/InvisibleText",
    "pos": [
     900,
     130
@@ -100,13 +100,13 @@
     200,
     72
    ],
-   "tag": "复用路线 1-3 管线"
+   "tag": "票 24 真引入 · 零模型进 CI"
   },
   {
    "id": "presidio",
    "type": "security",
    "label": "Presidio 脱敏管道",
-   "sublabel": "/analyze + /anonymize · zh/en 实体集",
+   "sublabel": "Analyzer+Anonymizer · spacy sm",
    "pos": [
     940,
     400
@@ -115,13 +115,13 @@
     220,
     72
    ],
-   "tag": "EMAIL/PHONE/IP/PERSON"
+   "tag": "EMAIL/PHONE/CN_ID/CREDIT_CARD/IP"
   },
   {
    "id": "rfc1918",
    "type": "security",
    "label": "自定义识别器",
-   "sublabel": "RFC1918 内网白名单",
+   "sublabel": "Rfc1918ExemptIpRecognizer",
    "pos": [
     940,
     520
@@ -130,7 +130,7 @@
     220,
     56
    ],
-   "tag": "内网 IP 不脱（决策 #8）"
+   "tag": "override 内建 IpRecognizer"
   },
   {
    "id": "mapstore",
@@ -315,9 +315,10 @@
    "dot": "cyan",
    "title": "技术栈",
    "items": [
-    "Python + FastAPI :8001（C4，可同服务多端点）；llm-guard PromptInjection scanner（路线 1-3 实测管线复用），扫描超时默认 2s",
-    "Presidio：默认 zh/en 实体集（EMAIL/PHONE/IP/PERSON）+ RFC1918 内网网段白名单自定义识别器（决策 #8）",
-    "无状态服务：脱敏映射仅服务端内存、run 结束即弃；通道策略表按通道配动作（block/剔除/仅标记）"
+    "Python + FastAPI :8001（C4，可同服务多端点）；llm-guard 0.3.16 启发式扫描器族（5×Regex + InvisibleText，票 24 真引入），扫描超时默认 2s",
+    "Presidio 2.2.358：AnalyzerEngine 识别 + AnonymizerEngine 占位替换；内建 EMAIL/CREDIT_CARD/IP + 自定义 CN 手机号/CN_ID PatternRecognizer；NLP 钉 spacy en_core_web_sm（~12MB，CI 允许）",
+    "deberta 主模型本地可选（能力探测 skip 并打印原因，票 16 msbProbe 先例）——实测对 syslog 日志有硬误报，主判定路径用确定性启发式",
+    "无状态服务：通道策略表按通道配动作（block/剔除/仅标记）；阈值配置层=族权重求和 + THRESHOLD 0.5（票 04 契约不变）"
    ]
   },
   {
