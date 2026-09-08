@@ -62,12 +62,11 @@ for email, tool, want in expect:
 EOF
 echo "PASS 插件裁决：allow/deny/匿名 三路全对（真容器 → 真容器）"
 
-echo "== 5. 换镜像不碰自写件（验收④：重建镜像层 → 自写件仍从挂载来）=="
-docker compose build contextforge >/dev/null
+echo "== 5. 换镜像不碰自写件（验收④：官方镜像按 digest 强制重建容器 → 自写件仍从挂载来）=="
 docker compose up -d --force-recreate contextforge
 wait_url http://127.0.0.1:4444/health contextforge
 docker compose exec -T contextforge grep -q "fga_check" /app/plugins/config.yaml \
-  && echo "PASS 重建镜像后插件配置原样（挂载件不随镜像升级漂移）"
+  && echo "PASS 官方镜像重建容器后插件配置原样（挂载件不随镜像升级漂移）"
 
 echo
 echo "SMOKE PASS（票 12：四条验收的真容器证据齐了）"

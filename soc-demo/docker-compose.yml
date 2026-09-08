@@ -78,16 +78,26 @@ services:
     # 镜像是最小件没有 shell/curl：容器内做不了健康检查，setup 脚本在宿主机等 /healthz
 
   contextforge:
-    # 官方 PyPI 包钉版自建（ghcr 匿名拉取被网络拒，见 contextforge.Dockerfile 头注）；
-    # 插件/授权 ids 全走挂载——升级镜像不碰自写代码
-    build: { context: ./services/gateway, dockerfile: contextforge.Dockerfile }
+    # 票 26（2026-09-09 切换）：官方镜像按 digest 钉。对应 IBM/mcp-context-forge
+    # revision 13d5493714861a2d0edb9c6a9702bce106f65711，镜像内 mcpgateway 1.0.10 + cpex 0.1.3。
+    # 新仓 ghcr.io/ibm/mcp-contextforge-gateway 匿名渠道关闭（token 端点 DENIED、manifest 403）；
+    # 本机 docker pull 对 ghcr 全程卡死，镜像经 registry API 手工落地——多 arch index
+    # 为 sha256:31cf1d45ab56d83fc109ac0de1ada7b359df2497a52765af73421f013fa76b4d，
+    # 但 daemon 只认下面这个 arm64 子 manifest digest（见票 26 实现记录与回退路径
+    # contextforge.Dockerfile）。插件/授权 ids 全走挂载——升级镜像不碰自写代码。
+    image: ghcr.io/ibm/mcp-context-forge@sha256:98dfab27a38b8aa1c1d3bc02c1e911d5a3dfc230559fea22ccdffad2cfd58b6a
     ports: ["4444:4444"]
     environment:
       PLUGINS_ENABLED: "true"
-      # mcpgateway 1.0.x 启动即校验密钥（占位符拒绝启动，fail-closed）；教学假值
-      # 对位 gateway 的 SECRETS_* 金丝雀口径：绝不放真密钥，真部署由环境注入
+      # 1.0.x 启动即校验密钥（占位符拒绝启动，fail-closed）；教学假值对位 gateway 的
+      # SECRETS_* 金丝雀口径：绝不放真密钥，真部署由环境注入
       JWT_SECRET_KEY: "teaching-jwt-secret-do-not-use-in-prod"
       AUTH_ENCRYPTION_SECRET: "teaching-auth-encryption-secret-do-not-use-in-prod"
+      # 1.0.10 新增三件（票 26 实测）：gunicorn 绑定面默认 127.0.0.1（不放开则宿主端口
+      # 映射不通）+ 平台管理员/默认用户密码强校验（≥12 位，email_auth_enabled 默认开）
+      HOST: "0.0.0.0"
+      PLATFORM_ADMIN_PASSWORD: "teaching-admin-pass-do-not-use-in-prod"
+      DEFAULT_USER_PASSWORD: "teaching-user-pass-do-not-use-in-prod"
     volumes: ["./services/gateway/plugins:/app/plugins"]
     depends_on:
       openfga: { condition: service_started }
