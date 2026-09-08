@@ -22,11 +22,16 @@ CREATE TABLE IF NOT EXISTS alerts (
   verdict_ai TEXT,
   date INTEGER NOT NULL,
   new_date INTEGER NOT NULL,
+  last_seen INTEGER,
+  occurrences INTEGER NOT NULL DEFAULT 1,
   in_progress_date INTEGER,
   imported_date INTEGER,
   closed_date INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_alerts_status ON alerts(status);
+-- 票 09（INV-6）：去重唯一约束兜底在 M2 SQLite——重复推送 (source, source_ref) 走
+-- upsert occurrences+1，靠索引而非应用层查-插，防并发重复（PRD §6-M1 实现机制）
+CREATE UNIQUE INDEX IF NOT EXISTS idx_alerts_dedup ON alerts(source, source_ref);
 
 CREATE TABLE IF NOT EXISTS cases (
   id TEXT PRIMARY KEY,
@@ -115,11 +120,25 @@ CREATE TABLE IF NOT EXISTS used_tokens (
 );
 `;
 
+// 票 09：alerts 增 occurrences/last_seen。SQLite 的 CREATE TABLE IF NOT EXISTS 不会给
+// 已存在的旧库文件补列，所以老库靠这里查缺补列（新库 DDL 一次到位，这里是 no-op）。
+function migrate(db: DB): void {
+  const cols = new Set(
+    (db.prepare("PRAGMA table_info(alerts)").all() as { name: string }[]).map((c) => c.name),
+  );
+  if (cols.size === 0) return; // alerts 表都不存在（不该发生，DDL 已建）
+  if (!cols.has("last_seen")) db.exec("ALTER TABLE alerts ADD COLUMN last_seen INTEGER");
+  if (!cols.has("occurrences")) {
+    db.exec("ALTER TABLE alerts ADD COLUMN occurrences INTEGER NOT NULL DEFAULT 1");
+  }
+}
+
 export function openDb(path = ":memory:"): DB {
   const db = new Database(path);
   // 单写者：WAL + 5s 忙等（PRD 异常与边界）；:memory: 下这两条是无害的 no-op
   db.pragma("journal_mode = WAL");
   db.pragma("busy_timeout = 5000");
   db.exec(DDL);
+  migrate(db);
   return db;
 }

@@ -1,8 +1,8 @@
 import type { FastifyInstance } from "fastify";
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { buildApp } from "./app.js";
 import { openDb } from "./db.js";
-import { createAlert } from "./store.js";
+import { createAlert, ingestAlert, pollEvents, queryAudit } from "./store.js";
 
 type DB = ReturnType<typeof openDb>;
 type InjectResponse = Awaited<ReturnType<FastifyInstance["inject"]>>;
@@ -359,5 +359,95 @@ test("健康检查保持原样（骨架测试不回退）", async () => {
   const r = await inject(app, "GET", "/healthz");
   expect(r.statusCode).toBe(200);
   expect(r.json()).toEqual({ ok: true, service: "case-backend" });
+  await app.close();
+});
+
+// ---------- ingest 去重（票 09 · INV-6 · m1 卡「唯一约束兜底在 M2 SQLite」）----------
+// m1 卡机制：靠数据库唯一约束而非应用层查-插，防并发重复。这里在真 SQLite 上验证
+// upsert 语义；ingest 服务的 webhook 链路测试见 services/ingest（seam= M2 REST）。
+
+function dedupInput(over: Record<string, unknown> = {}) {
+  return {
+    type: "wazuh_alert",
+    source: "wazuh:centos7",
+    sourceRef: "1682430696.3725",
+    title: "sshd: brute force trying to get access to the system.",
+    severity: 3,
+    date: Date.parse("2023-04-25T13:51:36.409Z"),
+    ...over,
+  };
+}
+
+afterEach(() => vi.useRealTimers());
+
+test("ingestAlert 新建：dedup=false，occurrences=1，发 alert.created", () => {
+  const db = openDb(":memory:");
+  const { alert, dedup } = ingestAlert(db, dedupInput());
+  expect(dedup).toBe(false);
+  expect(alert.occurrences).toBe(1);
+  expect(alert.lastSeen).toBeTypeOf("number");
+  expect(alert.status).toBe("New");
+  const events = pollEvents(db, 0);
+  expect(events).toHaveLength(1);
+  expect(events[0]).toMatchObject({ topic: "alert.created" });
+});
+
+test("同一 (source, sourceRef) 连推 3 次：只建 1 条，occurrences 1→2→3，刷新 lastSeen（INV-6）", () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-08T10:00:00Z"));
+  const db = openDb(":memory:");
+  const first = ingestAlert(db, dedupInput());
+  expect(first.dedup).toBe(false);
+
+  vi.advanceTimersByTime(60_000); // 推开时钟，证明 lastSeen 真的被刷新而不是建单时刻
+  const second = ingestAlert(db, dedupInput());
+  expect(second.dedup).toBe(true);
+  expect(second.alert.id).toBe(first.alert.id);
+  expect(second.alert.occurrences).toBe(2);
+  expect(second.alert.lastSeen).toBeGreaterThan(first.alert.newDate as number);
+
+  vi.advanceTimersByTime(60_000);
+  const third = ingestAlert(db, dedupInput());
+  expect(third.alert.occurrences).toBe(3);
+  expect(third.alert.lastSeen).toBeGreaterThan(second.alert.lastSeen as number);
+
+  const all = db.prepare("SELECT COUNT(*) AS n FROM alerts").get() as { n: number };
+  expect(all.n).toBe(1); // 不新建
+});
+
+test("重复推送不重复触发流水线：3 次推送 outbox 仍只有 1 条 alert.created（INV-6）", () => {
+  const db = openDb(":memory:");
+  for (let i = 0; i < 3; i += 1) ingestAlert(db, dedupInput());
+  const events = pollEvents(db, 0) as { topic: string }[];
+  expect(events).toHaveLength(1);
+  expect(events[0].topic).toBe("alert.created");
+});
+
+test("重复推送记审计 diff（INV-8）：create 一条 + update（occurrences diff）一条", () => {
+  const db = openDb(":memory:");
+  const { alert } = ingestAlert(db, dedupInput());
+  ingestAlert(db, dedupInput());
+  const entries = queryAudit(db, { objectId: alert.id as string }) as {
+    action: string;
+    details: unknown;
+  }[];
+  expect(entries.map((e) => e.action)).toEqual(["create", "update"]);
+  expect(entries[1].details).toEqual({
+    occurrences: { from: 1, to: 2 },
+    lastSeen: "refreshed",
+  });
+});
+
+test("REST POST /api/v1/alerts：新建 201 dedup=false，重复 200 dedup=true（m1 写入口契约）", async () => {
+  const { app } = makeApp();
+  const first = await inject(app, "POST", "/api/v1/alerts", dedupInput({ tags: ["group:sshd"] }));
+  expect(first.statusCode).toBe(201);
+  expect(first.json().dedup).toBe(false);
+  expect(first.json().alert.sourceRef).toBe("1682430696.3725");
+
+  const again = await inject(app, "POST", "/api/v1/alerts", dedupInput());
+  expect(again.statusCode).toBe(200);
+  expect(again.json().dedup).toBe(true);
+  expect(again.json().alert.id).toBe(first.json().alert.id);
   await app.close();
 });

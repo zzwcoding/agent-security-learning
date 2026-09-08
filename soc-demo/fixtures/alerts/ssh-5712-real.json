@@ -1,0 +1,18 @@
+{
+  "timestamp": "2023-04-25T13:51:36.409000Z",
+  "id": "1682430696.3725",
+  "rule": {
+    "id": "5712",
+    "level": 10,
+    "description": "sshd: brute force trying to get access to the system.",
+    "groups": ["syslog", "sshd", "authentication_failures"],
+    "firedtimes": 2,
+    "mitre": { "id": ["T1110"], "tactic": ["Credential Access"], "technique": ["Brute Force"] }
+  },
+  "agent": { "id": "000", "name": "centos7" },
+  "manager": { "name": "centos7" },
+  "decoder": { "name": "sshd" },
+  "data": { "srcip": "18.18.18.18", "srcport": "48928", "srcuser": "blimey" },
+  "full_log": "Oct 15 21:07:00 linux-agent sshd[29205]: Invalid user blimey from 18.18.18.18 port 48928",
+  "location": "master->/var/log/syslog"
+}

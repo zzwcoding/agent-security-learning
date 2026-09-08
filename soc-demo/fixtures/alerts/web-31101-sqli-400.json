@@ -1,0 +1,22 @@
+{
+  "timestamp": "2023-04-25T14:20:12.310000Z",
+  "id": "1682432012.3101",
+  "rule": {
+    "id": "31101",
+    "level": 5,
+    "description": "Web server 400 error code.",
+    "groups": ["web", "accesslog", "attack"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "001", "name": "web-01" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "web-accesslog" },
+  "data": {
+    "protocol": "GET",
+    "srcip": "198.51.100.7",
+    "id": "400",
+    "url": "/products.php?id=1%20UNION%20SELECT%20username%2Cpassword%20FROM%20users--"
+  },
+  "full_log": "198.51.100.7 - - [25/Apr/2023:14:20:12 +0000] \"GET /products.php?id=1%20UNION%20SELECT%20username%2Cpassword%20FROM%20users-- HTTP/1.1\" 400 241 \"-\" \"curl/7.29.0\"",
+  "location": "/var/log/httpd/access_log"
+}

@@ -1,0 +1,25 @@
+{
+  "timestamp": "2023-04-25T14:02:31.777000Z",
+  "id": "1682431351.7771",
+  "rule": {
+    "id": "554",
+    "level": 7,
+    "description": "File added to the system.",
+    "groups": ["ossec", "syscheck", "syscheck_entry_added"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "001", "name": "web-01" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "syscheck_db" },
+  "syscheck": {
+    "path": "/etc/cron.d/db-backup",
+    "mode": "add",
+    "size_after": "137",
+    "uname_after": "root",
+    "md5_after": "9d5f1c7e21b52a6e59b4c31f2e5a2d6e",
+    "sha1_after": "b3aa1cffee1100aabbccddeeff00112233445566",
+    "sha256_after": "c05640e21ec2b1b4b4101c1a67a1a3c8af7c7ae9b6b98f8b1b1f0e9a2d3c4b5a"
+  },
+  "full_log": "File '/etc/cron.d/db-backup' added\nMode: add\nUser: root\nHashes: md5=9d5f1c7e21b52a6e59b4c31f2e5a2d6e",
+  "location": "syscheck"
+}

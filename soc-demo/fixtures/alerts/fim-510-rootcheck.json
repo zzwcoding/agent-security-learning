@@ -1,0 +1,16 @@
+{
+  "timestamp": "2023-04-25T14:10:09.412000Z",
+  "id": "1682431409.4109",
+  "rule": {
+    "id": "510",
+    "level": 7,
+    "description": "Host-based anomaly detection event (rootcheck).",
+    "groups": ["ossec", "rootcheck"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "002", "name": "db-01" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "rootcheck" },
+  "full_log": "Rootkit 't0rn' detected by the presence of file '/sbin/t0rns'.",
+  "location": "rootcheck"
+}

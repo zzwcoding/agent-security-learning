@@ -15,6 +15,7 @@ import {
   findActiveCases,
   getAlert,
   getCaseDetail,
+  ingestAlert,
   listAlerts,
   listCases,
   listTimeline,
@@ -65,6 +66,22 @@ export function buildApp(opts: { db?: DB } = {}) {
   });
 
   // ---- alerts ----
+  // m1 写入口（票 09，m1 卡 Seam「出站写库 = M2 REST」）：去重 upsert 在 store.ingestAlert，
+  // 唯一约束兜底在 SQLite；新建 201 / 重复 200（幂等返回既有 id，不产生新事件）。
+  app.post("/api/v1/alerts", (req, reply) => {
+    const input = (req.body ?? {}) as {
+      type?: string; source?: string; sourceRef?: string; title?: string;
+    };
+    if (!input.type || !input.source || !input.sourceRef || !input.title) {
+      return reply.status(400).send({ error: "invalid_alert" });
+    }
+    const { alert, dedup } = ingestAlert(
+      db,
+      input as unknown as Parameters<typeof ingestAlert>[1],
+    );
+    return reply.status(dedup ? 200 : 201).send({ alert, dedup });
+  });
+
   app.get("/api/v1/alerts", (req) => {
     const q = req.query as { status?: string; host?: string };
     return listAlerts(db, { status: q.status, host: q.host });

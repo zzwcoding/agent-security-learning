@@ -4,14 +4,17 @@
   "version": "0.1.0",
   "description": "SOC 数字员工：告警分诊与响应助手（路线 5 演示项目）",
   "packageManager": "pnpm@10.34.3",
+  "type": "module",
   "scripts": {
     "lint": "eslint services packages",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test"
+    "test": "pnpm -r run test",
+    "replay": "tsx scripts/replay.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",
     "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "typescript-eslint": "^8.0.0"
   }

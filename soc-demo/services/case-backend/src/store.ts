@@ -142,6 +142,8 @@ function mapAlert(row: Record<string, unknown> | undefined): Record<string, unkn
     verdictAi: pj(row.verdict_ai as string, null),
     date: row.date,
     newDate: row.new_date,
+    lastSeen: row.last_seen,
+    occurrences: row.occurrences,
     inProgressDate: row.in_progress_date,
     importedDate: row.imported_date,
     closedDate: row.closed_date,
@@ -203,8 +205,59 @@ export function createAlert(db: DB, input: AlertInput): Record<string, unknown> 
   return getAlert(db, id) as Record<string, unknown>;
 }
 
-export function getAlert(db: DB, id: string): Record<string, unknown> | null {
-  const row = db.prepare("SELECT * FROM alerts WHERE id = ?").get(id) as
+// m1 告警接入的写入口（票 09）：upsert 语义，重复 (source, sourceRef) 走唯一索引冲突
+// → occurrences+1 + 刷新 last_seen，不新建行、不发 alert.created（INV-6：不重复触发流水线），
+// 但记一条审计 diff（INV-8：occurrences 变了就是写操作）。与 createAlert 的区别：
+// createAlert 是「无脑新建」（手工/测试路径），这里才是带去重的正门。
+export interface IngestAlertResult {
+  alert: Record<string, unknown>;
+  dedup: boolean;
+}
+
+export function ingestAlert(db: DB, input: AlertInput): IngestAlertResult {
+  return db.transaction(() => {
+    const seenAt = nowMs();
+    const row = db
+      .prepare(
+        `INSERT INTO alerts (id, type, source, source_ref, title, description, severity, tlp, pap,
+                             status, tags, raw, date, new_date, last_seen)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?, ?, ?)
+         ON CONFLICT(source, source_ref)
+         DO UPDATE SET occurrences = occurrences + 1, last_seen = excluded.last_seen
+         RETURNING id, occurrences`,
+      )
+      .get(
+        randomUUID(), input.type, input.source, input.sourceRef, input.title,
+        input.description ?? "", input.severity ?? 2, input.tlp ?? 2, input.pap ?? 2,
+        j(input.tags ?? []), input.raw ? j(input.raw) : null, input.date ?? seenAt, seenAt, seenAt,
+      ) as { id: string; occurrences: number };
+    const dedup = row.occurrences > 1;
+    const ctx: Ctx = { actor: { type: "system", id: "m1:ingest" }, requestId: randomUUID() };
+    if (dedup) {
+      recordAudit(db, ctx, "update", row.id, "alert", {
+        occurrences: { from: row.occurrences - 1, to: row.occurrences },
+        lastSeen: "refreshed",
+      });
+    } else {
+      for (const o of input.observables ?? []) {
+        db.prepare(
+          `INSERT INTO observables (id, alert_id, data_type, data, message, tlp, pap, ioc, tags, source_alert_id)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ).run(
+          randomUUID(), row.id, o.dataType, o.data, o.message ?? null,
+          o.tlp ?? 2, o.pap ?? 2, o.ioc ? 1 : 0, j(o.tags ?? []), row.id,
+        );
+      }
+      recordAudit(db, ctx, "create", row.id, "alert", {
+        created: { title: input.title, sourceRef: input.sourceRef },
+      });
+      emitEvent(db, "alert.created", { alertId: row.id, source: input.source, sourceRef: input.sourceRef });
+    }
+    return { alert: getAlert(db, row.id) as Record<string, unknown>, dedup };
+  })();
+}
+
+export function getAlert(db: DB, id: string): Record<string, unknown> | null {  const row = db.prepare("SELECT * FROM alerts WHERE id = ?").get(id) as
     | Record<string, unknown>
     | undefined;
   const alert = mapAlert(row);
