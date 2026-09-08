@@ -10,6 +10,12 @@ import { MemoryKb } from "../workers/triage/kb.js";
 import { FakeTriageLlm } from "../workers/triage/llm.js";
 import { RealTriageLlm } from "../workers/triage/llm-real.js";
 import { GatewayLlmClient } from "./llm-client.js";
+import { HttpInvestigationM2 } from "../workers/investigation/m2.js";
+import { FixtureSiem } from "../workers/investigation/siem.js";
+import { makeChatFlow } from "../workers/chat/flow.js";
+import { FakeChatLlm } from "../workers/chat/llm.js";
+import { RealChatLlm } from "../workers/chat/llm-real.js";
+import { makeFgaChecker } from "./fga-client.js";
 import { makeKnowledgeFlow } from "../workers/knowledge/flow.js";
 import { HttpKnowledgeM2 } from "../workers/knowledge/m2.js";
 import { FakeKnowledgeLlm } from "../workers/knowledge/llm.js";
@@ -26,9 +32,10 @@ const dataDir = new URL("../../../data/", import.meta.url);
 mkdirSync(dataDir, { recursive: true });
 const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite", dataDir));
 
-// 图选择（票 13 起 alert_flow 接 m4 分诊子图；票 17 起 knowledge_flow 接 m7 沉淀子图）：
+// 图选择（票 13 起 alert_flow 接 m4 分诊子图；票 17 起 knowledge_flow 接 m7 沉淀子图；
+// 票 18 起 chat_flow 接 m8 对话 Copilot）：
 //   AGENT_FLOW=approval_demo → 带 L2 动作的演示图（curl 走通审批回路，票 11）
-//   其余按 run.kind 组图：alert_flow=triage / knowledge_flow=knowledge。
+//   其余按 run.kind 组图：alert_flow=triage / knowledge_flow=knowledge / chat_flow=chat。
 //   makeNodes 在每个 run 拉起时被调：app.ts 先按 kind 向 gateway 铸任务票（INV-3：
 //   票面无 L2），票交进来组图。
 //
@@ -41,6 +48,10 @@ const kbStore: VectorStore = KB_CHROMA_URL
   ? new RealChromaClient({ baseUrl: KB_CHROMA_URL })
   : new MemoryVectorStore();
 const kbForTriage = KB_CHROMA_URL ? new ChromaKb(kbStore) : new MemoryKb();
+// chat 的只读面（票 18）：M2 REST + fixture SIEM 语料（m5 worker 同款 adapter 直用）
+const siemForChat = new FixtureSiem(fileURLToPath(new URL("../../../fixtures/alerts/", import.meta.url)));
+// chat 的 FGA 裁决面（票 12 真 openfga 容器；FGA_API_URL/FGA_IDS_FILE env 见 compose）
+const fgaForChat = makeFgaChecker();
 //
 // LLM 装配（票 27·ADR 0002 框架红线）：生产默认 real adapter——minimax-m2 经 gateway
 // /proxy/llm/* 凭证代理出站（占位符换真凭证 + 金丝雀断言在代理层，票 08 契约；真凭证只活
@@ -67,6 +78,26 @@ const makeNodes = nodes
         llm: LLM_MODE === "fake"
           ? new FakeKnowledgeLlm()
           : new RealKnowledgeLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:knowledge" })),
+        audit,
+      });
+    }
+    if (run.kind === "chat_flow") {
+      // m8 对话 Copilot（票 18）：只读面 = investigation 的 M2/SIEM adapter；
+      // 意图闸 FGA = 真 openfga 容器（票 12）；LLM 照 AGENT_LLM 切 fake/real；
+      // guards 预检走 guards-client 默认 HTTP（GUARDS_URL，compose 服务名可达）。
+      const requestId = `launch_${run.id}`;
+      return makeChatFlow({
+        runId: run.id,
+        requestId,
+        caseId: run.caseId,
+        ticket,
+        m2: new HttpInvestigationM2(),
+        siem: siemForChat,
+        kb: kbForTriage,
+        llm: LLM_MODE === "fake"
+          ? new FakeChatLlm()
+          : new RealChatLlm(new GatewayLlmClient({ requestId, actor: "agent:chat" })),
+        fga: fgaForChat,
         audit,
       });
     }

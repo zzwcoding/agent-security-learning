@@ -5,7 +5,9 @@
 // run 变异步的那张票再接——本票 run 是同步直跑，订阅者连上时事件已全部落盘。
 import type { DB } from "./db.js";
 
-// PRD §6-M3 事件类型闭合枚举（Web 消费方靠它渲染流水线视图/审批卡/审计流）
+// PRD §6-M3 事件类型闭合枚举（Web 消费方靠它渲染流水线视图/审批卡/审计流）。
+// 票 18 追加 chat 三型（PRD §6-M8 对话 wire 契约：token/done/denied）——同一张落盘
+// 总线，对话流因此同样有自增 id 与 Last-Event-ID 补发（INV-7 原样继承）。
 export type SseEventType =
   | "node_enter"
   | "node_exit"
@@ -14,7 +16,10 @@ export type SseEventType =
   | "approval_required"
   | "approval_decided"
   | "audit"
-  | "error";
+  | "error"
+  | "token"
+  | "denied"
+  | "done";
 
 export interface RunEvent {
   id: number;

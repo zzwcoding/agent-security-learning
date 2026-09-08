@@ -7,3 +7,13 @@ export class NotFoundError extends Error {
     this.name = "not_found";
   }
 }
+
+// 票 18（FR-M8.1）：会话缺失/坏票/过期一律 401，Web 据此引导重登录（PRD M8 异常与边界）。
+export class UnauthorizedError extends Error {
+  readonly code = "unauthorized";
+  readonly httpStatus = 401;
+  constructor() {
+    super("unauthorized: missing, malformed or expired session");
+    this.name = "unauthorized";
+  }
+}

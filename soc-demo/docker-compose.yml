@@ -29,6 +29,7 @@ services:
       guards: { condition: service_healthy }
       gateway: { condition: service_healthy } # 票 27：real adapter 的 LLM 出站经 gateway /proxy/llm/*
       chroma: { condition: service_started } # 票 17：KB 检索面（镜像无健康检查，见上）
+      openfga: { condition: service_started } # 票 18：chat 意图闸三态裁决的真 FGA 容器（票 12）
     environment:
       # 票 27（ADR 0002 框架红线）：生产装配默认 real adapter——真 LLM 经 gateway 凭证代理
       # 出站，真凭证只活在网关进程（SECRETS_* 挂 gateway 不挂 agent）；本机离线开发显式
@@ -42,6 +43,14 @@ services:
       # 检索 embedding：hash=确定性本地 TF 哈希（离线零依赖，默认）；chroma_default=
       # 服务端默认模型（语义向量，首次写入容器需出网下载 ~80MB，见 chroma 服务注释）
       KB_EMBEDDING: ${KB_EMBEDDING:-hash}
+      # 票 18：chat 意图闸的 OpenFGA 出站（容器网络内服务名:原生端口；fga_ids.json 是
+      # setup-openfga.sh 每次重建世界时刷新的运行时产物，bind mount 只读共享，不写死）
+      FGA_API_URL: ${FGA_API_URL:-http://openfga:8080}
+      FGA_IDS_FILE: ${FGA_IDS_FILE:-/fga/fga_ids.json}
+      FGA_MATRIX_FILE: ${FGA_MATRIX_FILE:-/fga-matrix/matrix.json}
+    volumes:
+      - "./services/gateway/plugins:/fga:ro" # store/model id 与 contextforge 插件同源一份
+      - "./services/gateway/fga:/fga-matrix:ro" # matrix.json = 可见工具清单的单一来源
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3003/healthz"]
       interval: 5s

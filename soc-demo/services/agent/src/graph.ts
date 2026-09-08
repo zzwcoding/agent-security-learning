@@ -140,6 +140,9 @@ export interface ExecuteOpts {
   used?: BurnRegistry;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY，与闸同口径）。 */
   hmacKey?: string;
+  /** 票 18：交接态覆写。chat_flow 的消息/角色不在 run 行里（它是用户触发不是内部触发），
+   *  由调用方（POST /api/v1/chat）随启动注入；缺省仍按 run 行拼 kind/alert_id/case_id。 */
+  initialState?: Record<string, unknown>;
 }
 
 interface DriveDeps {
@@ -417,10 +420,11 @@ export async function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}):
   const run = requireRun(db, runId);
   return runFlow(db, runId, makeDeps(opts), {
     mode: "start",
-    // 票 17：knowledge_flow 带 case_id（无 alert），交接信封按 run 行拼齐两种 kind
-    initialState: run.caseId
+    // 票 17：knowledge_flow 带 case_id（无 alert），交接信封按 run 行拼齐两种 kind；
+    // 票 18：chat_flow 由调用方注入完整交接态（message/role 随请求来，不在 run 行）
+    initialState: opts.initialState ?? (run.caseId
       ? { kind: run.kind, case_id: run.caseId }
-      : { kind: run.kind, alert_id: run.alertId },
+      : { kind: run.kind, alert_id: run.alertId }),
   });
 }
 

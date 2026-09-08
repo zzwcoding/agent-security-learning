@@ -9,6 +9,8 @@ RUN pnpm install --frozen-lockfile --filter @soc-demo/agent...
 
 COPY tsconfig.base.json ./
 COPY services/agent/ services/agent/
+# 票 18：chat 只读面 siem_query 的 fixture 语料（FixtureSiem 读 fixtures/alerts/）
+COPY fixtures/ fixtures/
 
 WORKDIR /app/services/agent
 EXPOSE 3003
