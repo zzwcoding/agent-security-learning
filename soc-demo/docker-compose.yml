@@ -45,6 +45,14 @@ services:
   gateway:
     build: ./services/gateway
     ports: ["8002:8002"]
+    # S1 凭证真值仓（PRD §13 SECRETS_*）：教学假值当金丝雀，真部署改由部署环境注入，
+    # 不许把真密钥写进仓库；SOC_HMAC_KEY 不设默认值（票 06 口径：缺它铸票 fail-closed），
+    # 部署时同口径以环境变量注入
+    environment:
+      SOC_LLM_UPSTREAM: ${SOC_LLM_UPSTREAM:-https://api.minimaxi.com}
+      SECRETS_LLM_API_KEY: ${SECRETS_LLM_API_KEY:-}
+      SECRETS_VT_KEY: ${SECRETS_VT_KEY:-canary-vt-key-teaching-fake}
+      SECRETS_SIEM_TOKEN: ${SECRETS_SIEM_TOKEN:-canary-siem-token-teaching-fake}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
       interval: 5s

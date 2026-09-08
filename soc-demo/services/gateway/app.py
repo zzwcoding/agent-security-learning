@@ -1,17 +1,19 @@
-"""m9 gateway 侧容器（:8002）的薄装配层：端点挂这里，逻辑在各自模块里。
+"""m9 gateway 自写件容器（:8002）的薄装配层：端点挂这里，逻辑在各自模块里。
 
-m9 卡公开接口的 gateway 两条：POST /internal/mint（票 06 本文件，铸票逻辑在
-mint.py）与 /proxy/llm/*（票 08 凭证代理）；生产验票闸在 TS 侧 agent（票 07）。
-密钥从 env SOC_HMAC_KEY 注入（教学版 HMAC 自签，蓝图注释 STS/Keycloak 演进，
-ADR 0001「搬票型不搬代码」）；env 缺失一律拒绝铸票——造不出签名的票等于没有
-铸币能力，宁可不发也不发无签票（fail-closed，INV-1）。
+m9 卡公开接口的 gateway 两条：POST /internal/mint（票 06，铸票逻辑在 mint.py）与
+/proxy/llm/*（票 08，凭证代理逻辑在 proxy.py）；生产验票闸在 TS 侧 agent（票 07）。
+密钥从 env 注入（教学版 HMAC 自签 + SECRETS_* 凭证真值仓，蓝图注释 STS/Keycloak
+演进，ADR 0001「搬票型不搬代码」）；env 缺失一律拒绝服务——铸不出签名的票、换不
+出真 key 的代理，等于没有这块能力，宁可拒绝也不裸转发（fail-closed，INV-1）。
 """
 import os
 
 import mint
 from fastapi import FastAPI, HTTPException
+from proxy import router as proxy_router
 
 app = FastAPI()
+app.include_router(proxy_router, prefix="/proxy/llm")  # 凭证代理：LLM base_url 指这里
 
 
 @app.get("/healthz")
