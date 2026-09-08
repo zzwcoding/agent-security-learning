@@ -45,12 +45,13 @@ export interface Checkpointed {
   envelopes: EnvelopeRow[];
 }
 
-/** 读末态（先整链复核）：诚实链 → 最后一个快照 + 全链；被动过 → 抛 TamperedCheckpointError。 */
+/** 读末态（先整链复核）：诚实链 → 最后一个快照 + 全链；被动过 → 抛 TamperedCheckpointError。
+ *  空链不是篡改——中断发生在第一个节点跑完之前，无可恢复亦无可疑，交空态让 runner 从头起。 */
 export function loadRunState(db: DB, runId: string): Checkpointed {
   const rows = loadRows(db, runId);
-  verifyChain(rows); // 空链/断链/篡改都在这里炸
+  verifyChain(rows); // 断链/篡改都在这里炸
   if (rows.length === 0) {
-    throw new TamperedCheckpointError(`no checkpoint for ${runId}`);
+    return { state: {}, envelopes: [] };
   }
   const last = rows[rows.length - 1];
   return { state: JSON.parse(last.state) as Record<string, unknown>, envelopes: rows };

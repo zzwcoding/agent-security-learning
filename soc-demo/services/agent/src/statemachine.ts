@@ -43,3 +43,36 @@ export function assertRunTransition(from: RunStatus, to: RunStatus): void {
 export function isTerminalRun(status: string): boolean {
   return status === "completed" || status === "failed";
 }
+
+// 审批卡状态机（票 11）：pending 是唯一可裁决态。裁决（approve/reject）是终局——
+// 「审批卡是单决媒体」，并发审批后到者 409 就从这里来（PRD M10 异常与边界；
+// 与 run 状态机同源仲裁：INV-10 表之外的变更一律抛错→409，不静默改写）。
+export const APPROVAL_STATES = ["pending", "approved", "rejected"] as const;
+
+export type ApprovalStatus = (typeof APPROVAL_STATES)[number];
+
+export const APPROVAL_TRANSITIONS: Record<ApprovalStatus, ApprovalStatus[]> = {
+  pending: ["approved", "rejected"],
+  approved: [],
+  rejected: [],
+};
+
+export class InvalidApprovalTransitionError extends Error {
+  readonly code = "InvalidTransition";
+  readonly httpStatus = 409;
+  readonly from: string;
+  readonly to: string;
+
+  constructor(from: string, to: string) {
+    super(`InvalidTransition: approval ${from} -> ${to}`);
+    this.name = "InvalidApprovalTransition";
+    this.from = from;
+    this.to = to;
+  }
+}
+
+export function assertApprovalTransition(from: ApprovalStatus, to: ApprovalStatus): void {
+  if (!(APPROVAL_TRANSITIONS[from] ?? []).includes(to)) {
+    throw new InvalidApprovalTransitionError(from, to);
+  }
+}

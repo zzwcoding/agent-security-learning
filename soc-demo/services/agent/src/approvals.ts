@@ -1,0 +1,233 @@
+// 审批卡领域模块（票 11）：L2 动作 interrupt 时开卡、值班长在卡上裁决。
+// 「审批决定绑定 (run, tool_call)」落在卡的三个字段上——run_id + tool + params_hash：
+// 换 run、换工具、换参数都定位不到同一张卡，决定就套不上去（验收 1/4 的绑定锚）。
+// INV-8：开卡/裁决/执行全链审计；INV-10：裁决走审批状态机，表之外一律 409。
+import { randomUUID } from "node:crypto";
+import type { DB } from "./db.js";
+import type { RunCtx } from "./runs.js";
+import { transitionRun } from "./runs.js";
+import { assertApprovalTransition, type ApprovalStatus } from "./statemachine.js";
+import { NotFoundError } from "./errors.js";
+import { emitEvent } from "./events.js";
+import { paramsHash } from "./verify-ticket.js";
+
+export interface ApprovalRow {
+  id: string;
+  runId: string;
+  node: string;
+  tool: string;
+  params: unknown;
+  paramsHash: string;
+  caseId: string | null;
+  reason: string | null;
+  status: ApprovalStatus;
+  approver: string | null;
+  rejectReason: string | null;
+  token: string | null;
+  tokenJti: string | null;
+  executedAt: number | null;
+  createdAt: number;
+  decidedAt: number | null;
+}
+
+const nowMs = () => Date.now();
+
+function mapApproval(row: Record<string, unknown> | undefined): ApprovalRow | null {
+  if (!row) return null;
+  return {
+    id: row.id as string,
+    runId: row.run_id as string,
+    node: row.node as string,
+    tool: row.tool as string,
+    params: JSON.parse(row.params as string) as unknown,
+    paramsHash: row.params_hash as string,
+    caseId: (row.case_id as string | null) ?? null,
+    reason: (row.reason as string | null) ?? null,
+    status: row.status as ApprovalStatus,
+    approver: (row.approver as string | null) ?? null,
+    rejectReason: (row.reject_reason as string | null) ?? null,
+    token: (row.token as string | null) ?? null,
+    tokenJti: (row.token_jti as string | null) ?? null,
+    executedAt: (row.executed_at as number | null) ?? null,
+    createdAt: row.created_at as number,
+    decidedAt: (row.decided_at as number | null) ?? null,
+  };
+}
+
+/** 开卡即挂起（一个事务里做三件事）：插卡 → 广播 approval_required → run 转 awaiting_approval。
+ *  run 不在 running 时状态机抛 409，整卡回滚——「挂起」这个动作本身就是原子的。 */
+export function openApprovalCard(
+  db: DB,
+  input: {
+    runId: string;
+    node: string;
+    tool: string;
+    params: unknown;
+    caseId?: string | null;
+    reason?: string | null;
+  },
+  ctx: RunCtx,
+): ApprovalRow {
+  const id = `apr_${randomUUID()}`;
+  const hash = paramsHash(input.params);
+  const now = nowMs();
+  return db.transaction(() => {
+    // run 状态门：只有 running 能挂起（INV-10）
+    transitionRun(db, input.runId, "awaiting_approval", ctx);
+    db.prepare(
+      `INSERT INTO approvals (id, run_id, node, tool, params, params_hash, case_id, reason, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
+    ).run(
+      id, input.runId, input.node, input.tool,
+      JSON.stringify(input.params) ?? "null", hash,
+      input.caseId ?? null, input.reason ?? null, now,
+    );
+    emitEvent(db, input.runId, "approval_required", {
+      approval_id: id,
+      node: input.node,
+      tool: input.tool,
+      params: input.params,
+      params_hash: hash,
+      reason: input.reason ?? null,
+    });
+    ctx.audit.record({
+      action: "create",
+      actor: ctx.actor ?? { type: "system", id: "m3:supervisor" },
+      objectId: id,
+      objectType: "approval",
+      details: { run_id: input.runId, node: input.node, tool: input.tool, params_hash: hash },
+      requestId: ctx.requestId,
+      result: "SUCCESS",
+      createdAt: nowMs(),
+    });
+    return getApproval(db, id) as ApprovalRow;
+  })();
+}
+
+/** 找该 (run, tool_call) 最新一张「还能生效」的卡。已执行过的卡排除——同一 run 里
+ *  再次提请同样的 tool_call 要开新卡走新审批（一次性语义的结构面）。 */
+export function findDecidableCard(
+  db: DB,
+  runId: string,
+  tool: string,
+  hash: string,
+): ApprovalRow | null {
+  return mapApproval(
+    db
+      .prepare(
+        `SELECT * FROM approvals
+          WHERE run_id = ? AND tool = ? AND params_hash = ? AND executed_at IS NULL
+          ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(runId, tool, hash) as Record<string, unknown>,
+  );
+}
+
+export function getApproval(db: DB, id: string): ApprovalRow | null {
+  return mapApproval(db.prepare("SELECT * FROM approvals WHERE id = ?").get(id) as Record<string, unknown>);
+}
+
+export function requireApproval(db: DB, id: string): ApprovalRow {
+  const card = getApproval(db, id);
+  if (!card) throw new NotFoundError(`approval ${id}`);
+  return card;
+}
+
+export function listApprovals(db: DB, status?: ApprovalStatus): ApprovalRow[] {
+  const rows = (
+    status
+      ? db.prepare("SELECT * FROM approvals WHERE status = ? ORDER BY created_at DESC, rowid DESC").all(status)
+      : db.prepare("SELECT * FROM approvals ORDER BY created_at DESC, rowid DESC").all()
+  ) as Record<string, unknown>[];
+  return rows.map((r) => mapApproval(r) as ApprovalRow);
+}
+
+export interface DecideInput {
+  approve: boolean;
+  approver: string;
+  reason?: string;
+  /** 批准时铸出的 ApprovalToken wire 串与 jti（approve 端点先铸票再裁决，见 app.ts）。 */
+  token?: string;
+  tokenJti?: string;
+}
+
+/** 裁决（批准/驳回），审批状态机在这里仲裁：先到先得，后到 409（并发审批后到者 409）。
+ *  actor 是人（值班长），INV-8 的审批审计从这里落。 */
+export function decideApproval(db: DB, id: string, d: DecideInput, ctx: RunCtx): ApprovalRow {
+  return db.transaction(() => {
+    const card = requireApproval(db, id);
+    const to: ApprovalStatus = d.approve ? "approved" : "rejected";
+    assertApprovalTransition(card.status, to); // INV-10：pending 之外全是 409
+    const now = nowMs();
+    db.prepare(
+      `UPDATE approvals SET status = ?, approver = ?, reject_reason = ?, token = ?, token_jti = ?, decided_at = ?
+        WHERE id = ?`,
+    ).run(
+      to, d.approver, d.approve ? null : (d.reason ?? null),
+      d.approve ? (d.token ?? null) : null, d.approve ? (d.tokenJti ?? null) : null,
+      now, id,
+    );
+    ctx.audit.record({
+      action: d.approve ? "approve" : "reject",
+      actor: { type: "user", id: d.approver },
+      objectId: id,
+      objectType: "approval",
+      details: {
+        status: { from: card.status, to },
+        tool: card.tool,
+        params_hash: card.paramsHash,
+        run_id: card.runId,
+        ...(d.approve ? {} : { reason: d.reason ?? null }),
+      },
+      requestId: ctx.requestId,
+      result: "SUCCESS",
+      createdAt: now,
+    });
+    emitEvent(db, card.runId, "approval_decided", {
+      approval_id: id,
+      node: card.node,
+      tool: card.tool,
+      decision: to,
+      by: d.approver,
+      ...(d.approve ? {} : { reason: d.reason ?? null }),
+    });
+    return getApproval(db, id) as ApprovalRow;
+  })();
+}
+
+/** 执行标记：闸放行 + 动作跑完后打。执行过的卡不再授权第二次执行（一次性）。 */
+export function markApprovalExecuted(db: DB, id: string, jti: string, ctx: RunCtx): void {
+  const card = requireApproval(db, id);
+  db.prepare("UPDATE approvals SET executed_at = ? WHERE id = ?").run(nowMs(), id);
+  ctx.audit.record({
+    action: "execute",
+    actor: ctx.actor ?? { type: "agent", id: "m3:supervisor" },
+    objectId: id,
+    objectType: "approval",
+    // 记操作不记内容（FR-S5.2）：工具名 + 参数指纹 + 票 jti，不落参数原文与执行输出
+    details: { tool: card.tool, params_hash: card.paramsHash, jti },
+    requestId: ctx.requestId,
+    result: "SUCCESS",
+    createdAt: nowMs(),
+  });
+}
+
+/** REST wire 形状（m9 卡公开接口）：snake_case，params 是原对象。 */
+export function toWire(row: ApprovalRow): Record<string, unknown> {
+  return {
+    id: row.id,
+    run_id: row.runId,
+    node: row.node,
+    tool: row.tool,
+    params: row.params,
+    params_hash: row.paramsHash,
+    case_id: row.caseId,
+    reason: row.reason,
+    status: row.status,
+    approver: row.approver,
+    reject_reason: row.rejectReason,
+    executed: row.executedAt !== null,
+    created_at: row.createdAt,
+    decided_at: row.decidedAt,
+  };
+}

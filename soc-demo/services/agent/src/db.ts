@@ -43,6 +43,30 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   created_at INTEGER NOT NULL,
   PRIMARY KEY (run_id, seq)
 );
+
+-- 审批卡（票 11）：L2 动作 interrupt 时开卡，卡即「决定绑定 (run, tool_call)」的落点——
+-- (run_id, tool, params_hash) 定位一次 tool_call；params 存 JSON 原文（Web 展示），
+-- 身份比对只用 params_hash（INV-2 的锚）。status 走 statemachine 的审批状态机。
+CREATE TABLE IF NOT EXISTS approvals (
+  id TEXT PRIMARY KEY,
+  run_id TEXT NOT NULL,
+  node TEXT NOT NULL,
+  tool TEXT NOT NULL,
+  params TEXT NOT NULL,
+  params_hash TEXT NOT NULL,
+  case_id TEXT,
+  reason TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  approver TEXT,
+  reject_reason TEXT,
+  token TEXT,
+  token_jti TEXT,
+  executed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_run ON approvals(run_id, tool, params_hash);
+CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, created_at);
 `;
 
 export function openDb(path = ":memory:"): DB {
