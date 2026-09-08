@@ -156,7 +156,7 @@
 ### Seam 与测试
 
 - Seam: LLM 调用（adapter：minimax-m2 经凭证代理 / eval fixture 伪 LLM）；prompt 装配器 `wrapUntrusted`
-- Adapter: fixture 伪 LLM
+- Adapter: 双 adapter 落地（票 27）：`RealTriageLlm`（minimax-m2 经凭证代理，生产默认）+ `FakeTriageLlm`（确定性，测试默认；`AGENT_LLM` 切换）
 - 测试计划: 标注集宏准确率 ≥80%；同主机 24h 两条 TP 只建 1 案；自我审计 checkpoint 100% 出现；并发同告警只分诊 1 次
 
 ### 备注
