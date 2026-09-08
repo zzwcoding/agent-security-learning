@@ -10,3 +10,4 @@ minimumReleaseAge: 0
 # pnpm 10 默认拦截依赖的安装脚本；esbuild（tsx/vite 依赖）需要跑 postinstall 才能用
 onlyBuiltDependencies:
   - esbuild
+  - better-sqlite3

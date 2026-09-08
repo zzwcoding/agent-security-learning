@@ -1,0 +1,23 @@
+{
+  "name": "@soc-demo/mcp-audit",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "soc-mcp-audit：MCP server 静态体检 CLI（投毒描述/权限面/凭证暴露/rug-pull）",
+  "bin": {
+    "soc-mcp-audit": "./bin/soc-mcp-audit.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "audit": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "server": "evil-calendar",
+  "target": "node test/fixtures/evil-server.mjs",
+  "engine": "embedded-rules (decision 11)",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "list_events",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "search_notes",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": true,
+        "score": 1,
+        "families": [
+          "instruction_override",
+          "prompt_exfiltration",
+          "mcp_camouflage"
+        ]
+      }
+    },
+    {
+      "name": "sync_contacts",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact",
+        "credential_surface"
+      ],
+      "poison_scan": {
+        "is_injection": true,
+        "score": 1,
+        "families": [
+          "authority_escalation",
+          "invisible_chars"
+        ]
+      }
+    },
+    {
+      "name": "run_diagnostic",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    }
+  ],
+  "credential_exposure": [
+    {
+      "source": "schema:sync_contacts",
+      "match": "api_key"
+    }
+  ],
+  "rug_pull": {
+    "status": "baseline_created"
+  },
+  "summary": {
+    "tool_count": 4,
+    "high_risk": 2,
+    "poisoned": 2
+  }
+}

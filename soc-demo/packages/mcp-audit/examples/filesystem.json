@@ -1,0 +1,181 @@
+{
+  "server": "secure-filesystem-server",
+  "target": "npx -y @modelcontextprotocol/server-filesystem /tmp",
+  "engine": "embedded-rules (decision 11)",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "read_file",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "read_text_file",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "read_media_file",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "read_multiple_files",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "write_file",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "edit_file",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "create_directory",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "list_directory",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "list_directory_with_sizes",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "directory_tree",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "move_file",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "search_files",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "get_file_info",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "list_allowed_directories",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    }
+  ],
+  "credential_exposure": [],
+  "rug_pull": {
+    "status": "baseline_created"
+  },
+  "summary": {
+    "tool_count": 14,
+    "high_risk": 1,
+    "poisoned": 0
+  }
+}

@@ -1,0 +1,126 @@
+{
+  "server": "memory-server",
+  "target": "npx -y @modelcontextprotocol/server-memory",
+  "engine": "embedded-rules (decision 11)",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "create_entities",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "create_relations",
+      "suggested_tier": "L1",
+      "requires_approval": false,
+      "risks": [
+        "write_operation"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "add_observations",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "delete_entities",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "delete_observations",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "delete_relations",
+      "suggested_tier": "L2",
+      "requires_approval": true,
+      "risks": [
+        "high_impact"
+      ],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "read_graph",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "search_nodes",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    },
+    {
+      "name": "open_nodes",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    }
+  ],
+  "credential_exposure": [],
+  "rug_pull": {
+    "status": "baseline_created"
+  },
+  "summary": {
+    "tool_count": 9,
+    "high_risk": 3,
+    "poisoned": 0
+  }
+}

@@ -7,4 +7,9 @@ export default tseslint.config(
   { ignores: ["**/dist/**", "**/node_modules/**"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    // 纯 JS 文件（npm bin 壳、MCP fixture server）走 node 全局
+    files: ["**/bin/**/*.js", "**/fixtures/**/*.mjs"],
+    languageOptions: { globals: { console: "readonly", process: "readonly" } },
+  },
 );

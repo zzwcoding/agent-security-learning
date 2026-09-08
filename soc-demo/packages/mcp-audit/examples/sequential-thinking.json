@@ -1,0 +1,28 @@
+{
+  "server": "sequential-thinking-server",
+  "target": "npx -y @modelcontextprotocol/server-sequential-thinking",
+  "engine": "embedded-rules (decision 11)",
+  "transport": "stdio",
+  "tools": [
+    {
+      "name": "sequentialthinking",
+      "suggested_tier": "L0",
+      "requires_approval": false,
+      "risks": [],
+      "poison_scan": {
+        "is_injection": false,
+        "score": 0,
+        "families": []
+      }
+    }
+  ],
+  "credential_exposure": [],
+  "rug_pull": {
+    "status": "baseline_created"
+  },
+  "summary": {
+    "tool_count": 1,
+    "high_risk": 0,
+    "poisoned": 0
+  }
+}
