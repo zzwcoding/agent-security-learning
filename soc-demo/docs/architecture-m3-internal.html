@@ -5043,7 +5043,7 @@
         <path data-edge-from="graph" data-edge-to="m7" data-edge-key="7" data-edge-id="graph-to-m7" data-composition-points="750,232;800,232;800,312;850,312" d="M 750 232 L 792 232 Q 800 232 800 240 L 800 304 Q 800 312 808 312 L 850 312" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="m7" data-edge-to="gate" data-edge-label="工具调用过闸（M4-M7 共用）" data-edge-key="8" data-edge-id="m7-to-gate" data-composition-points="920,339;920,362;945,362;945,385" d="M 920 339 L 920 354 Q 920 362 928 362 L 937 362 Q 945 362 945 370 L 945 385" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="gate" data-edge-to="tools" data-edge-label="放行出网·带票" data-edge-key="9" data-edge-id="gate-to-tools" data-composition-points="1040,417;1095,417;1095,210;1150,210" d="M 1040 417 L 1087 417 Q 1095 417 1095 409 L 1095 218 Q 1095 210 1103 210 L 1150 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="graph" data-edge-to="checkpointer" data-edge-label="每步落检查点·信封 hash 链" data-edge-key="10" data-edge-id="graph-to-checkpointer" data-composition-points="645,266;645,330" d="M 645 266 L 645 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="graph" data-edge-to="checkpointer" data-edge-label="框架每 superstep 调 saver·信封 hash 链" data-edge-key="10" data-edge-id="graph-to-checkpointer" data-composition-points="645,266;645,330" d="M 645 266 L 645 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="checkpointer" data-edge-to="graph" data-edge-label="resume 恢复·篡改必拒" data-edge-key="11" data-edge-id="checkpointer-to-graph" data-composition-points="645,330;645,306;774,306;774,246;750,246" d="M 645 330 L 645 314 Q 645 306 653 306 L 766 306 Q 774 306 774 298 L 774 254 Q 774 246 766 246 L 750 246" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="graph" data-edge-to="budget" data-edge-label="每步过秤" data-edge-key="12" data-edge-id="graph-to-budget" data-composition-points="750,218;810,218;810,475;450,475" d="M 750 218 L 802 218 Q 810 218 810 226 L 810 467 Q 810 475 802 475 L 450 475" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         <path data-edge-from="graph" data-edge-to="approver" data-edge-label="L2 interrupt·批复 resume" data-edge-key="13" data-edge-id="graph-to-approver" data-composition-points="540,218;500,218;470,218;470,430;230,430;230,490;180,490" d="M 540 218 L 508 218 Q 500 218 492 218 L 478 218 Q 470 218 470 226 L 470 422 Q 470 430 462 430 L 238 430 Q 230 430 230 438 L 230 482 Q 230 490 222 490 L 180 490" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
@@ -5113,16 +5113,16 @@
         <text data-detail="fine" x="370" y="252" class="t-backend" font-size="7" text-anchor="middle">Last-Event-ID 补发</text>
         </g>
 
-        <g id="node-graph" data-node-id="graph" data-node-label="② graph 主图" tabindex="0" role="button" aria-label="聚焦② graph 主图，supervisor 调度 · 路由, compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="supervisor 调度 · 路由" data-node-tag="interrupt / resume" data-node-context="compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）">
-          <title>② graph 主图 · supervisor 调度 · 路由 · compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图） · interrupt / resume</title>
+        <g id="node-graph" data-node-id="graph" data-node-label="② graph 主图" tabindex="0" role="button" aria-label="聚焦② graph 主图，StateGraph 声明编排 · 路由, compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="StateGraph 声明编排 · 路由" data-node-tag="原生 interrupt()/Command" data-node-context="compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）">
+          <title>② graph 主图 · StateGraph 声明编排 · 路由 · compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图） · 原生 interrupt()/Command</title>
           <rect x="540" y="170" width="210" height="96" rx="6" class="c-mask"/>
           <rect x="540" y="170" width="210" height="96" rx="6" class="c-backend" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(546 176) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="645" y="216" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② graph 主图</text>
-        <text data-detail="context" x="645" y="232" class="t-muted" font-size="9" text-anchor="middle">supervisor 调度 · 路由</text>
-        <text data-detail="fine" x="645" y="258" class="t-backend" font-size="7" text-anchor="middle">interrupt / resume</text>
+        <text data-detail="context" x="645" y="232" class="t-muted" font-size="9" text-anchor="middle">StateGraph 声明编排 · 路由</text>
+        <text data-detail="fine" x="645" y="258" class="t-backend" font-size="7" text-anchor="middle">原生 interrupt()/Command</text>
         </g>
 
         <g id="node-m4" data-node-id="m4" data-node-label="M4 分诊子图" tabindex="0" role="button" aria-label="聚焦M4 分诊子图，四分类 verdict, compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="四分类 verdict" data-node-tag="物理无 L2 票" data-node-context="compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）">
@@ -5198,8 +5198,8 @@
         <text data-detail="context" x="1240" y="224" class="t-muted" font-size="9" text-anchor="middle">guards · SIEM · 沙箱</text>
         </g>
 
-        <g id="node-checkpointer" data-node-id="checkpointer" data-node-label="④ checkpointer 检查点" tabindex="0" role="button" aria-label="聚焦④ checkpointer 检查点，SQLite · 信封 hash 链, compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）" aria-pressed="false" data-node-kind="database" data-node-sublabel="SQLite · 信封 hash 链" data-node-tag="杀进程可恢复" data-node-context="compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）">
-          <title>④ checkpointer 检查点 · SQLite · 信封 hash 链 · compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图） · 杀进程可恢复</title>
+        <g id="node-checkpointer" data-node-id="checkpointer" data-node-label="④ checkpointer 检查点" tabindex="0" role="button" aria-label="聚焦④ checkpointer 检查点，BaseCheckpointSaver · 信封 hash 链, compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）" aria-pressed="false" data-node-kind="database" data-node-sublabel="BaseCheckpointSaver · 信封 hash 链" data-node-tag="杀进程可恢复" data-node-context="compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图）">
+          <title>④ checkpointer 检查点 · BaseCheckpointSaver · 信封 hash 链 · compose 服务 agent :3003（卷 ./data/agent:/data · M4-M7 子模块无独立 HTTP 面，细节见各自子图） · 杀进程可恢复</title>
           <rect x="540" y="330" width="210" height="70" rx="6" class="c-mask"/>
           <rect x="540" y="330" width="210" height="70" rx="6" class="c-database" stroke-width="1.5"/>
           <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(546 336) scale(0.6875)">
@@ -5207,7 +5207,7 @@
             <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
           <text data-node-label="" data-detail-anchor="" x="645" y="363" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ checkpointer 检查点</text>
-        <text data-detail="context" x="645" y="379" class="t-muted" font-size="9" text-anchor="middle">SQLite · 信封 hash 链</text>
+        <text data-detail="context" x="645" y="379" class="t-muted" font-size="9" text-anchor="middle">BaseCheckpointSaver · 信封 hash 链</text>
         <text data-detail="fine" x="645" y="392" class="t-database" font-size="7" text-anchor="middle">杀进程可恢复</text>
         </g>
 
@@ -5253,9 +5253,9 @@
           <rect x="1058.8" y="293.5" width="72.4" height="14" rx="3" class="c-mask"/>
           <text x="1095" y="303.5" class="t-muted" font-size="8" text-anchor="middle">放行出网·带票</text>
         </g>
-        <g data-detail="context" data-edge-from="graph" data-edge-to="checkpointer" data-edge-label="每步落检查点·信封 hash 链" data-edge-key="10" data-edge-id="graph-to-checkpointer">
+        <g data-detail="context" data-edge-from="graph" data-edge-to="checkpointer" data-edge-label="框架每 superstep 调 saver·信封 hash 链" data-edge-key="10" data-edge-id="graph-to-checkpointer">
           <rect x="587" y="270" width="130" height="14" rx="3" class="c-mask"/>
-          <text x="652" y="280" class="t-muted" font-size="8" text-anchor="middle">每步落检查点·信封 hash 链</text>
+          <text x="652" y="280" class="t-muted" font-size="8" text-anchor="middle">框架每 superstep 调 saver·信封 hash 链</text>
         </g>
         <g data-detail="context" data-edge-from="checkpointer" data-edge-to="graph" data-edge-label="resume 恢复·篡改必拒" data-edge-key="11" data-edge-id="checkpointer-to-graph">
           <rect x="656.5" y="286" width="106" height="14" rx="3" class="c-mask"/>

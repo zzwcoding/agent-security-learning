@@ -44,6 +44,22 @@ CREATE TABLE IF NOT EXISTS checkpoints (
   PRIMARY KEY (run_id, seq)
 );
 
+-- checkpoint 任务写入（票 23，LangGraph 原生机制）：interrupt/resume 的中间写入
+-- （__interrupt__/__resume__ 记录）挂在产生它的那个 checkpoint 上，杀进程重启后
+-- Command(resume) 靠它们找回被挂起的任务。blob 是 serde 序列化字节。
+CREATE TABLE IF NOT EXISTS checkpoint_writes (
+  thread_id TEXT NOT NULL,
+  checkpoint_ns TEXT NOT NULL DEFAULT '',
+  checkpoint_id TEXT NOT NULL,
+  task_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  channel TEXT NOT NULL,
+  type TEXT NOT NULL,
+  value TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (thread_id, checkpoint_ns, checkpoint_id, task_id, idx)
+);
+
 -- 审批卡（票 11）：L2 动作 interrupt 时开卡，卡即「决定绑定 (run, tool_call)」的落点——
 -- (run_id, tool, params_hash) 定位一次 tool_call；params 存 JSON 原文（Web 展示），
 -- 身份比对只用 params_hash（INV-2 的锚）。status 走 statemachine 的审批状态机。

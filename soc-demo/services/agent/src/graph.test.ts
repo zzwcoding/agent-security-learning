@@ -105,9 +105,13 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
     expect(types.at(-1)).toBe("audit"); // run_completed 的审计镜像
     expect(types).not.toContain("error");
 
-    // 检查点：每个节点一个信封，链可验证，末态带着交接上下文（alert_id）
+    // 检查点：链可验证，末态带着交接上下文（alert_id）。
+    // 票 23 载体迁移的可观察差异：信封节奏改由 LangGraph 原生 checkpoint 机制决定——
+    // 2 节点薄径 = 输入簿记 2 环（step -1 原始输入 / step 0 输入落通道，节点名 __input__）
+    // + 每个节点跑完 1 环 = 4 环（旧手写执行器是每节点 1 环）。防篡改语义不变：
+    // 每环都盖信封 hash，篡改任意字节 resume 必拒（真载体断言在 langgraph-flow.test.ts）。
     const { state, envelopes } = loadRunState(db2, run2.id);
-    expect(envelopes).toHaveLength(2);
+    expect(envelopes).toHaveLength(THIN_ALERT_FLOW.length + 2);
     expect(state).toMatchObject({ kind: "alert_flow", alert_id: "al-5712", route: "end" });
   });
 

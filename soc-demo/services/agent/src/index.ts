@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
 import { openDb } from "./db.js";
+import { APPROVAL_DEMO_FLOW } from "./graph.js";
 import { makeTriageFlow } from "../workers/triage/flow.js";
 import { HttpTriageM2 } from "../workers/triage/m2.js";
 import { MemoryKb } from "../workers/triage/kb.js";
@@ -23,7 +24,10 @@ const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite"
 // KB 现为内存 stub（m4 卡依赖；真 chroma 检索 = 票 17）；LLM 为 fixture 伪 LLM
 // （m4 卡 adapter：minimax-m2 经凭证代理接真件时只换 llm adapter）。
 const audit = new ConsoleAuditSink();
-const makeNodes = process.env.AGENT_FLOW === "approval_demo"
+// approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
+// 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
+const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : undefined;
+const makeNodes = nodes
   ? undefined
   : (run: { id: string }, ticket: string) =>
     makeTriageFlow({
@@ -38,6 +42,6 @@ const makeNodes = process.env.AGENT_FLOW === "approval_demo"
 
 // 审计 sink 当前是 ConsoleAuditSink（进 compose 日志可观察）+ SSE 里的 audit 镜像事件
 // （run_events 落盘）；M2 开出审计写入口后换 HttpAuditSink 汇入同一 audit_entries 表。
-buildApp({ db: openDb(dbPath), audit, makeNodes })
+buildApp({ db: openDb(dbPath), audit, nodes, makeNodes })
   .listen({ port: PORT, host: "0.0.0.0" })
   .then(() => console.log(`agent listening on :${PORT}, db=${dbPath}`));

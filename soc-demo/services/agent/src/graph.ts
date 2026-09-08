@@ -1,15 +1,29 @@
-// 图执行器（m3 内部模块 graph）。票 10 落了薄径：run 生命周期 queued→running→(节点循环)
-// →completed/failed，每步都有 SSE 事件 + 审计 + checkpointer 信封。票 11 在循环里接入
-// 审批回路：节点走到 L2 动作时经 awaitApproval() 开卡挂起（run→awaiting_approval），
-// 值班长在审批卡 REST 上裁决后经 resumeRun() 从信封链末态续跑——「决定绑定 (run,
-// tool_call)」由审批卡字段定位（见 approvals.ts）。执行一律过 verifyTicket 闸 + 用后焚毁
-// （INV-2/INV-3），闸拒则强杀不吞错（INV-1）。
+// 图编排（m3 内部模块 graph）。票 23 起（ADR 0002 框架回补）：手写执行循环换成
+// @langchain/langgraph 的 StateGraph 声明编排——节点/边/END 直接可读对应 m3 卡子图；
+// L2 挂起/恢复走框架原生 interrupt()/Command(resume)（ApprovalInterrupt 控制流异常
+// 已移除）；检查点由 EnvelopeCheckpointSaver（BaseCheckpointSaver）按框架节奏落盘，
+// 信封 hash 链防篡改语义原样保留（checkpointer.ts）。
+//
+// 不变的部分（M2 对账面 / 外部契约，不在本票替换范围）：run 状态机（INV-10）、
+// budget 三闸（60s/20 步/50k token）、SSE 事件（INV-7）、审批卡与验票闸（INV-2/3/9）。
+// 执行语义照旧：每节点 node_enter/node_exit 事件、跑完盖检查点、失败强杀成 failed
+// 并落审计 + error 事件（INV-1 不吞错）——「节点跑完」的盖章现在由框架在每个
+// superstep 调 checkpointer.put 完成，节点包装层只管事件与进度回写。
 import { randomUUID } from "node:crypto";
+import {
+  Annotation,
+  Command,
+  END,
+  START,
+  StateGraph,
+  interrupt,
+  isGraphInterrupt,
+} from "@langchain/langgraph";
 import type { DB } from "./db.js";
 import { getRun, requireRun, saveProgress, transitionRun, type RunCtx, type RunRow } from "./runs.js";
 import { emitEvent, type SseEventType } from "./events.js";
-import { checkpoint, resumeRun as restoreCheckpoint } from "./checkpointer.js";
-import type { Envelope } from "./envelope.js";
+import { resumeRun as restoreCheckpoint } from "./checkpointer.js";
+import { EnvelopeCheckpointSaver } from "./checkpointer.js";
 import { BudgetExceededError, budgetFromEnv, type RunBudget } from "./budget.js";
 import type { AuditSink } from "./audit.js";
 import { findDecidableCard, markApprovalExecuted, openApprovalCard } from "./approvals.js";
@@ -31,8 +45,8 @@ export interface NodeCtx {
   emit(type: SseEventType, payload: Record<string, unknown>): void;
   charge(tokens: number): void;
   checkLlm(startedAtMs: number, nowMs: number): void;
-  /** L2 审批闸口：首次调用开卡并中断本 run（awaiting_approval）；resume 后再进来时
-   *  按卡上的决定返回。驳回 → {approved:false}。 */
+  /** L2 审批闸口：首次调用开卡并经 LangGraph interrupt() 挂起本 run（awaiting_approval）；
+   *  resume 后节点从头重跑，按卡上的决定返回。驳回 → {approved:false}。 */
   awaitApproval(tool: string, params: unknown, opts?: ApproveOpts): ApprovalDecision;
   /** L2 动作全程：awaitApproval 拿决定 → 驳回直接返回不执行 → 批准则过验票闸执行
    *  action → 焚毁登记 + 执行标记。闸拒（票过期/参数被换/重放）抛错强杀，绝不带病执行。 */
@@ -60,18 +74,11 @@ export type ExecutionOutcome =
   | { executed: true; approvalId: string; jti: string; result: Record<string, unknown> }
   | { executed: false; outcome: "rejected"; approvalId: string };
 
-/** 中断控制流：awaitApproval 开完卡抛出，runner 捕获后原地收手——不是错误，是挂起。 */
-class ApprovalInterrupt extends Error {
-  constructor(readonly approvalId: string) {
-    super(`approval_interrupt: ${approvalId}`);
-    this.name = "ApprovalInterrupt";
-  }
-}
-
 export interface FlowNode {
   name: string;
   /** 票 13 起允许异步：triage worker 的出站调用（guards 扫描 / LLM / M2 REST）都是
-   *  promise，runner 在这里 await——同步节点不受影响，失败兜底/审批中断语义不变。 */
+   *  promise，LangGraph 节点包装层在这里 await——同步节点不受影响，失败兜底/审批
+   *  挂起语义不变。 */
   run(ctx: NodeCtx): void | Promise<void>;
 }
 
@@ -156,46 +163,58 @@ function makeDeps(opts: ExecuteOpts): DriveDeps {
   };
 }
 
-/** 跑节点循环直到终态或挂起。任何失败都强杀成 failed 并落审计 + error 事件（不吞错）；
- *  ApprovalInterrupt 例外——挂起不是失败，卡已开、run 已在 awaiting_approval，原地返回。
- *  票 13：节点可异步（出站 guards/LLM/M2），循环逐节点 await。 */
-async function drive(db: DB, runId: string, deps: DriveDeps, start: {
-  state: Record<string, unknown>;
-  startIndex: number;
-  prevEnvelope: Envelope | null;
-}): Promise<RunRow> {
-  const { ctx, nodes, budget } = deps;
-  const actor = ctx.actor ?? { type: "system", id: "m3:supervisor" };
-  // 审计 → SSE 的镜像：审计是真相源，事件流是它的广播（PRD §6-M3 事件类型含 audit）
-  const mirrorAudit = (entry: Record<string, unknown>) => emitEvent(db, runId, "audit", entry);
-  const transitionAndMirror = (to: RunRow["status"]) => {
-    const from = (getRun(db, runId) as RunRow).status;
-    transitionRun(db, runId, to, ctx);
-    mirrorAudit({ action: "update", result: "SUCCESS", status: { from, to } });
-  };
+// LangGraph 图状态：单一 run 通道（LastValue：后写覆盖前写）。worker 的 FlowNode 语义
+// 是「原地改 ctx.state」——节点包装层把通道值浅拷贝成 working 交给节点，节点返回后
+// 作为新通道值写回。所有 m4-m6 子图的产物（alert/verdict/report/…）都装在这个通道里，
+// 因此每个检查点的字节都盖着信封 hash——防篡改面对 worker 产出同样生效。
+const RunFlowState = Annotation.Root({
+  run: Annotation<Record<string, unknown>>({
+    reducer: (_prev, next) => next,
+    default: () => ({}),
+  }),
+});
 
-  let prev = start.prevEnvelope;
-  let completed = start.startIndex; // run.steps 口径 = 跑完的节点数（挂起的节点不算）
-  const cursor = { node: "" };
-  const state = start.state;
+interface CompilePlan {
+  db: DB;
+  runId: string;
+  deps: DriveDeps;
+  /** 进度账本：progress.completed = 已跑完的节点数（挂起/失败的节点不算），
+   *  resume 时从 run 行接续——run.steps 口径与票 10 保持一致。 */
+  progress: { completed: number };
+  cursor: { node: string };
+}
 
-  // L2 审批闸口的两段式（Tracecat interrupt 语义：resume 后节点重跑，interrupt 处拿到决定）
-  const awaitApproval = (tool: string, params: unknown, opts: ApproveOpts): ApprovalDecision => {
-    const existing = findDecidableCard(db, runId, tool, paramsHash(params));
-    if (existing?.status === "rejected") return { approved: false, approvalId: existing.id };
-    if (existing?.status === "approved" && existing.token) {
-      return { approved: true, approvalId: existing.id, token: existing.token };
+/** 把 FlowNode[] 声明成 StateGraph：节点一一对应，边按序串联，末节点接 END——
+ *  m3 卡子图（intake→route→END / load_alert→…→outcome→END）在 addNode/addEdge
+ *  里直接可读。每 run 编译一次（节点工厂捕获本 run 的 db/deps）。 */
+function compileFlowGraph(plan: CompilePlan) {
+  const { db, runId, deps, progress, cursor } = plan;
+  const actor = deps.ctx.actor ?? { type: "system", id: "m3:supervisor" };
+
+  // ---- L2 审批闸口（决定绑定 (run, tool_call)：审批卡字段是唯一锚）----
+
+  const awaitApproval = (tool: string, params: unknown, opts?: ApproveOpts): ApprovalDecision => {
+    const o: ApproveOpts = opts ?? {};
+    for (;;) {
+      const existing = findDecidableCard(db, runId, tool, paramsHash(params));
+      if (existing?.status === "rejected") return { approved: false, approvalId: existing.id };
+      if (existing?.status === "approved" && existing.token) {
+        return { approved: true, approvalId: existing.id, token: existing.token };
+      }
+      // pending = 决定还没落（重启后批准前的重入），幂等再中断，不重复开卡。
+      // LangGraph 原生 interrupt：未决即抛 GraphInterrupt 挂起本 superstep。resume 后
+      // 节点从头重跑，interrupt() 可能回吞旧 resume 值直接返回——决定以 DB 为准，
+      // 回到循环顶重查卡；卡仍未决就再次中断，直到没有新 resume 值真正挂起。
+      const card = existing ?? openApprovalCard(db, {
+        runId,
+        node: cursor.node,
+        tool,
+        params,
+        caseId: o.caseId ?? null,
+        reason: o.reason ?? null,
+      }, deps.ctx);
+      interrupt(card.id);
     }
-    // pending = 决定还没落（重启后批准前的重入），幂等再中断，不重复开卡
-    const card = existing ?? openApprovalCard(db, {
-      runId,
-      node: cursor.node,
-      tool,
-      params,
-      caseId: opts.caseId ?? null,
-      reason: opts.reason ?? null,
-    }, ctx);
-    throw new ApprovalInterrupt(card.id);
   };
 
   const executeApproved: NodeCtx["executeApproved"] = (tool, params, opts, action) => {
@@ -217,13 +236,13 @@ async function drive(db: DB, runId: string, deps: DriveDeps, start: {
     );
     if (!verdict.allow) {
       // 闸拒 = 授权链有缺口（票过期/参数被换/重放），fail-closed：审计 DENIED 后强杀
-      ctx.audit.record({
+      deps.ctx.audit.record({
         action: "deny",
         actor,
         objectId: decision.approvalId,
         objectType: "approval",
         details: { tool, reason: verdict.reason, params_hash: paramsHash(params) },
-        requestId: ctx.requestId,
+        requestId: deps.ctx.requestId,
         result: "DENIED",
         createdAt: Date.now(),
       });
@@ -232,7 +251,7 @@ async function drive(db: DB, runId: string, deps: DriveDeps, start: {
     const jti = (verdict.payload as ApprovalClaims).jti;
     const result = action(params);
     deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
-    markApprovalExecuted(db, decision.approvalId, jti, ctx);
+    markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
     emitEvent(db, runId, "tool_result", {
       node: cursor.node,
       tool,
@@ -245,39 +264,98 @@ async function drive(db: DB, runId: string, deps: DriveDeps, start: {
 
   const nctx: NodeCtx = {
     runId,
-    state,
+    state: {}, // 每节点注入各自的 working 拷贝（见包装层）
     emit: (type, payload) => void emitEvent(db, runId, type, payload),
-    charge: (tokens) => budget.charge(tokens),
-    checkLlm: (startedAtMs, nowMs) => budget.checkLlm(cursor.node, startedAtMs, nowMs),
+    charge: (tokens) => deps.budget.charge(tokens),
+    checkLlm: (startedAtMs, now) => deps.budget.checkLlm(cursor.node, startedAtMs, now),
     awaitApproval,
     executeApproved,
   };
 
-  try {
-    transitionAndMirror("running");
-    for (const node of nodes.slice(start.startIndex)) {
-      cursor.node = node.name;
-      emitEvent(db, runId, "node_enter", { node: node.name });
-      budget.step(); // 资源兜底之一：max_steps（默认 20）
-      await node.run(nctx);
-      emitEvent(db, runId, "node_exit", { node: node.name });
-      // 每个节点跑完盖一个信封（链式：prev_hash 逐环相扣），resume 从末态恢复
-      prev = checkpoint(db, prev, {
-        runId,
-        node: node.name,
-        stateJson: JSON.stringify(state),
-      });
-      completed += 1;
-      saveProgress(db, runId, completed, budget.tokens);
-    }
+  // ---- FlowNode → LangGraph 节点包装：事件 + 预算 + 状态拷贝进出 ----
+  // addSequence 一次登记全部节点（节点名集合进入图的节点类型，后续 addEdge 可读名字）；
+  // 边按 FlowNode 顺序串联，末节点接 END——m3 卡子图在声明里直接可读。
+  type FlowUpdate = { run: Record<string, unknown> };
+  const entries: [string, (state: typeof RunFlowState.State) => Promise<FlowUpdate>][] =
+    deps.nodes.map((node) => [
+      node.name,
+      async (state) => {
+        cursor.node = node.name;
+        emitEvent(db, runId, "node_enter", { node: node.name });
+        deps.budget.step(); // 资源兜底之一：max_steps（默认 20）
+        const working = { ...state.run };
+        await node.run({ ...nctx, state: working });
+        emitEvent(db, runId, "node_exit", { node: node.name });
+        progress.completed += 1;
+        saveProgress(db, runId, progress.completed, deps.budget.tokens);
+        return { run: working };
+      },
+    ]);
+
+  const sg = new StateGraph(RunFlowState).addSequence(entries);
+  sg.addEdge(START, deps.nodes[0].name);
+  for (let i = 0; i < deps.nodes.length - 1; i++) {
+    sg.addEdge(deps.nodes[i].name, deps.nodes[i + 1].name);
+  }
+  sg.addEdge(deps.nodes[deps.nodes.length - 1].name, END);
+
+  // checkpointer = 信封 hash 链（BaseCheckpointSaver）；nodeLabel 让每个节点跑完后的
+  // 框架检查点盖上「刚跑完的节点名」，框架簿记检查点（输入态）落成 __input__。
+  const checkpointer = new EnvelopeCheckpointSaver(db, () => cursor.node);
+  return sg.compile({ checkpointer });
+}
+
+/** 挂起判定：LangGraph 在 invoke 返回值里带 __interrupt__ 通道 = run 停在 interrupt 处
+ *  （此时审批卡已开、run 已被 openApprovalCard 原子地转入 awaiting_approval）。 */
+function isSuspended(result: unknown): boolean {
+  return result !== null && typeof result === "object" && "__interrupt__" in result;
+}
+
+type FlowPlan =
+  | { mode: "start"; initialState: Record<string, unknown> }
+  | { mode: "resume" };
+
+/** 跑一张图到终态或挂起。状态迁移/审计镜像/失败强杀的口径与票 10 一致：
+ *  任何失败都强杀成 failed 并落审计 + error 事件（不吞错）；interrupt 挂起不是失败，
+ *  卡已开、run 已在 awaiting_approval，原地返回。 */
+async function runFlow(db: DB, runId: string, deps: DriveDeps, plan: FlowPlan): Promise<RunRow> {
+  const { ctx, budget, nodes } = deps;
+  const actor = ctx.actor ?? { type: "system", id: "m3:supervisor" };
+  // 审计 → SSE 的镜像：审计是真相源，事件流是它的广播（PRD §6-M3 事件类型含 audit）
+  const mirrorAudit = (entry: Record<string, unknown>) => emitEvent(db, runId, "audit", entry);
+  const transitionAndMirror = (to: RunRow["status"]) => {
+    const from = (getRun(db, runId) as RunRow).status;
+    transitionRun(db, runId, to, ctx);
+    mirrorAudit({ action: "update", result: "SUCCESS", status: { from, to } });
+  };
+  transitionAndMirror("running");
+
+  // 空图：老执行循环对空 FlowNode[] 是「直跑完」——StateGraph 编不出空节点链，保持语义
+  if (nodes.length === 0) {
     transitionAndMirror("completed");
+    return getRun(db, runId) as RunRow;
+  }
+
+  const progress = { completed: plan.mode === "resume" ? (getRun(db, runId) as RunRow).steps : 0 };
+  const cursor = { node: "" };
+  const graph = compileFlowGraph({ db, runId, deps, progress, cursor });
+  // durability "sync"：每个 superstep 的检查点（信封）落库后才进下一步——与票 10
+  // 「每节点一信封」的持久化纪律同强度；thread_id 即 run_id（信封链的 run_id）。
+  const config = { configurable: { thread_id: runId }, durability: "sync" as const };
+
+  let result: unknown;
+  try {
+    result = plan.mode === "resume"
+      ? await graph.invoke(new Command({ resume: true }), config) // resume 值仅作唤醒信号，决定以审批卡为准
+      : await graph.invoke({ run: plan.initialState }, config);
   } catch (e) {
-    if (e instanceof ApprovalInterrupt) {
-      saveProgress(db, runId, completed, budget.tokens); // 挂起前的计费照记（token 兜底跨 resume 连续）
+    if (isGraphInterrupt(e)) {
+      // 框架通常在 invoke 内消化挂起；这里只兜住逃逸形态——不是失败，原样收手
+      saveProgress(db, runId, progress.completed, budget.tokens);
       return getRun(db, runId) as RunRow;
     }
     const kill = (failReason: string, details: Record<string, unknown>) => {
-      saveProgress(db, runId, completed, budget.tokens);
+      saveProgress(db, runId, progress.completed, budget.tokens);
       transitionRun(db, runId, "failed", ctx, failReason);
       ctx.audit.record({
         action: "kill",
@@ -306,43 +384,49 @@ async function drive(db: DB, runId: string, deps: DriveDeps, start: {
         message: e instanceof Error ? e.message : String(e),
       });
     }
+    return getRun(db, runId) as RunRow;
   }
+
+  if (isSuspended(result)) {
+    saveProgress(db, runId, progress.completed, budget.tokens); // 挂起前的计费照记（token 兜底跨 resume 连续）
+    // resume 重入后再次挂起（卡仍未决，幂等再中断）时 run 已被 transitionAndMirror
+    // 转回 running——挂起态必须落回 awaiting_approval，状态机与 Web 观察面才一致
+    // （首次挂起由 openApprovalCard 在开卡事务里完成这一步）。
+    if ((getRun(db, runId) as RunRow).status === "running") {
+      transitionAndMirror("awaiting_approval");
+    }
+    return getRun(db, runId) as RunRow;
+  }
+  transitionAndMirror("completed");
   return getRun(db, runId) as RunRow;
 }
 
-/** 跑一个 run 到终态（从 queued 开跑）。票 10 薄径为同步直跑；票 13 起 worker 节点带
- *  出站调用（guards/LLM/M2 REST），executeRun 变异步——调用方 await 到终态（仍无真
- *  并发调度，后台化等 worker 全接入的票再换），签名兜底语义不变。 */
+/** 跑一个 run 到终态（从 queued 开跑）。调用方 await 到终态（仍无真并发调度，
+ *  后台化等 worker 全接入的票再换），签名兜底语义不变。 */
 export async function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}): Promise<RunRow> {
   const run = requireRun(db, runId);
-  return drive(db, runId, makeDeps(opts), {
-    state: { kind: run.kind, alert_id: run.alertId },
-    startIndex: 0,
-    prevEnvelope: null,
+  return runFlow(db, runId, makeDeps(opts), {
+    mode: "start",
+    initialState: { kind: run.kind, alert_id: run.alertId },
   });
 }
 
-/** 审批 resume（票 11）：从信封链末态续跑挂起的 run。只有 awaiting_approval 能被
- *  resume（INV-10 状态门）；信封链复核失败 → 拒绝恢复 + 审计 FAILURE（FR-M3.3）；
- *  兜底口径（steps/tokens）从 run 行接续，不因重启清零。 */
+/** 审批 resume（票 11）：经 LangGraph Command(resume) 从信封链末态续跑挂起的 run。
+ *  只有 awaiting_approval 能被 resume（INV-10 状态门）；信封链复核失败 → 拒绝恢复 +
+ *  审计 FAILURE（FR-M3.3）；兜底口径（steps/tokens）从 run 行接续，不因重启清零。 */
 export async function resumeRun(db: DB, runId: string, opts: ExecuteOpts = {}): Promise<RunRow> {
   const run = requireRun(db, runId);
   if (run.status !== "awaiting_approval") {
     throw new InvalidRunTransitionError(run.status, "running");
   }
   const deps = makeDeps(opts);
-  // 先验货再放行：链被动时状态原样不动（checkpointer 里已落审计 FAILURE）
-  const restored = restoreCheckpoint(db, runId, {
+  // 先验货再放行：链被动时状态原样不动（checkpointer 里已落审计 FAILURE）；
+  // LangGraph 真正读盘（EnvelopeCheckpointSaver.getTuple，内含第二次整链复核）之前拦截。
+  restoreCheckpoint(db, runId, {
     audit: deps.ctx.audit,
     requestId: deps.ctx.requestId,
   });
   deps.budget.steps = run.steps;
   deps.budget.tokens = run.tokensUsed;
-  return drive(db, runId, deps, {
-    state: restored.envelopes.length
-      ? restored.state
-      : { kind: run.kind, alert_id: run.alertId },
-    startIndex: Math.min(run.steps, deps.nodes.length),
-    prevEnvelope: restored.envelopes.at(-1) ?? null,
-  });
+  return runFlow(db, runId, deps, { mode: "resume" });
 }

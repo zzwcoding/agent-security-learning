@@ -13,7 +13,7 @@
  },
  "m3-supervisor": {
   "title": "M3 supervisor 编排 —— 系统的大脑",
-  "body": "<p><b>干什么：</b>图编排与路由（LangGraph.js 主图拉起 M4-M7 子图）、checkpointer、票据申领、审批 interrupt、SSE 事件总线、资源兜底。</p><ul><li><b>硬规矩</b>：自己不持工具、不做安全判断，只调度；worker 之间不直接对话，靠共享 Case 资源层协作</li><li><b>审批</b>：L2 高危动作在图里 interrupt() 挂起，等人点头才 resume</li><li><b>资源兜底</b>：LLM 超时 60s / max_steps 20 / token 50k per run，任一超限强杀 + 审计（决策 #4/#5/#12）</li><li><b>验收</b>：杀进程重启后审批状态可恢复；信封 hash 篡改必拒；5712 fixture 全链路无人干预跑完</li></ul><p><b>内部结构图</b>（调度主图 + 检查点恢复 + 审批挂起）：同目录 architecture-m3-internal.html</p>"
+  "body": "<p><b>干什么：</b>图编排与路由、checkpointer、票据申领、审批 interrupt、SSE 事件总线、资源兜底。编排真上 LangGraph.js（票 23·ADR 0002 框架回补）：FlowNode 子图以 <b>StateGraph</b> 声明（节点/边/END 可读对应 m4-m6 卡），L2 高危动作挂起/恢复走框架原生 <b>interrupt()/Command(resume)</b>，手写执行循环与 ApprovalInterrupt 控制流异常已移除。</p><ul><li><b>checkpointer</b>：自定义 <b>BaseCheckpointSaver</b>——框架每个 superstep 调 saver 落盘，信封 hash 链（state 字节 sha256 + prev_hash 链）装在 put/getTuple 接缝里：读出先整链复核，篡改任意字节 resume 必拒 + FAILURE 审计（防篡改语义不因框架妥协）</li><li><b>硬规矩</b>：自己不持工具、不做安全判断，只调度；worker 之间不直接对话，靠共享 Case 资源层协作</li><li><b>审批</b>：interrupt 挂起即开审批卡，决定绑定 (run, tool_call)；值班长在审批卡 REST 裁决后 Command(resume) 续跑，杀进程重启后状态可恢复且仍认原调用</li><li><b>资源兜底</b>：LLM 超时 60s / max_steps 20 / token 50k per run，任一超限强杀 + 审计（决策 #4/#5/#12）</li><li><b>验收</b>：杀进程重启后审批状态可恢复；信封 hash 篡改必拒；5712 fixture 全链路无人干预跑完</li></ul><p><b>内部结构图</b>（StateGraph 编排 + 信封链 checkpointer + 审批挂起）：同目录 architecture-m3-internal.html</p>"
  },
  "m4-triage": {
   "title": "M4 分诊 agent —— 流水线第一棒",
