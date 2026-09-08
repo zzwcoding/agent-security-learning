@@ -2,7 +2,7 @@
 
 **What to build:** 登录角色会话 → guards 输入预检 → 意图分类 → OpenFGA 三态裁决（allow 只读直查 / require_approval 转审批 / deny 拒绝并解释）→ SSE 流式回答。复用 m3 chat_flow。
 
-**Blocked by:** 04, 10, 11, 12
+**Blocked by:** 04, 10, 11, 12, 23, 27
 
 **Touches modules:** `m3`, `m8`, `m9`
 

@@ -2,7 +2,7 @@
 
 **What to build:** 案件关闭 → 提炼 KBEntry 草稿（proposed）→ kb_write L2 人审闸 → approved 进 chroma 检索面。kb/proposals REST 挂 m2。驳回后检索面确定性查不到。
 
-**Blocked by:** 03, 11, 13
+**Blocked by:** 03, 11, 13, 23
 
 **Touches modules:** `m2`, `m7`, `m9`
 
