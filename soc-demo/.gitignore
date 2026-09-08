@@ -14,3 +14,6 @@ docs/*.visual-check.*
 
 # 票 12：setup-openfga.sh 每次重建世界都会刷新（内存存储 id 不稳定），不进库
 services/gateway/plugins/fga_ids.json
+
+# m11 eval 运行产物（evals/ 每次跑测重新生成，latest.json 供 m10 Eval 页读取）
+eval-results/

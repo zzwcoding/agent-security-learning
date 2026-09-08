@@ -1,0 +1,16 @@
+# m11 分诊维用例（票 19）：格式照 PRD §5.11（FR-M11.1）。
+# KB 已知变更优先（FR-M4.2）：web-01 /etc/cron.d/db-backup = CHG-1042 计划内变更 → 良性真实事件。
+name: fim_known_change_btp
+input:
+  alert_fixture: ../../../alerts/fim-554-file-added.json
+expected_verdict: btp
+expected_output:
+  - "verdict 为 benign_true_positive"
+  - "rationale 提到 KB 已知变更命中（CHG-1042）"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [triage, medium]
+mock_policy: always_mock
+attack: null

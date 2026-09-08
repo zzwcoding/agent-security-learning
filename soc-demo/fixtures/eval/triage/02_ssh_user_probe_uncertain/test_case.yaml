@@ -1,0 +1,16 @@
+# m11 分诊维用例（票 19）：格式照 PRD §5.11（FR-M11.1）。
+# 孤立无效用户试探 = 弱信号，宁可升级人工不可猜（M507 决策点 R3）。
+name: ssh_user_probe_uncertain
+input:
+  alert_fixture: ../../../alerts/ssh-5710-bad-user.json
+expected_verdict: uncertain
+expected_output:
+  - "verdict 为 uncertain"
+  - "recommended_action 为 human（升级人工待办）"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [triage, easy]
+mock_policy: always_mock
+attack: null

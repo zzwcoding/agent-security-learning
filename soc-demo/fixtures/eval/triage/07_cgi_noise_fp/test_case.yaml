@@ -1,0 +1,16 @@
+# m11 分诊维用例（票 19）：格式照 PRD §5.11（FR-M11.1）。
+# 遗留 CGI 5xx = Web 运维噪声 → 误报（M507 决策点 R4）。
+name: cgi_noise_fp
+input:
+  alert_fixture: ../../../alerts/web-31103-cgi-500.json
+expected_verdict: fp
+expected_output:
+  - "verdict 为 false_positive"
+  - "recommended_action 为 close"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [triage, easy]
+mock_policy: always_mock
+attack: null

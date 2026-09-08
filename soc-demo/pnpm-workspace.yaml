@@ -1,6 +1,7 @@
 packages:
   - "services/*"
   - "packages/*"
+  - "evals"
 
 # 关闭 minimumReleaseAge 供应链闸门（pnpm 10 的设置放这里才生效，.npmrc 同名项是给旧版兜底）：
 # demo 演进快，"24 小时冷静期"会把刚发布一天的正常包挡在 Docker 构建外。

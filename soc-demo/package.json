@@ -6,9 +6,10 @@
   "packageManager": "pnpm@10.34.3",
   "type": "module",
   "scripts": {
-    "lint": "eslint services packages",
+    "lint": "eslint services packages evals",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+    "test:eval": "pnpm -C evals test:eval",
     "replay": "tsx scripts/replay.ts"
   },
   "devDependencies": {
