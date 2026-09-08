@@ -76,11 +76,11 @@ describe("run 状态机迁移表全组合（INV-10）", () => {
 // ---------- 薄径 run：无 worker 无人干预跑完（验收 5）----------
 
 describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
-  test("queued→running→completed 无人干预跑完，SSE 事件与检查点齐备", () => {
+  test("queued→running→completed 无人干预跑完，SSE 事件与检查点齐备", async () => {
     const db = makeDb();
     const run = makeRun(db);
 
-    const done = executeRun(db, run.id, { requestId: "req-run" });
+    const done = await executeRun(db, run.id, { requestId: "req-run" });
 
     expect(done.status).toBe("completed");
     expect(done.failReason).toBeNull();
@@ -90,7 +90,7 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
     const audit = new MemoryAuditSink();
     const db2 = makeDb();
     const run2 = makeRun(db2);
-    executeRun(db2, run2.id, { audit, requestId: "req-audit" });
+    await executeRun(db2, run2.id, { audit, requestId: "req-audit" });
     const statusAudits = audit.entries.filter((e) => e.objectType === "run");
     expect(statusAudits.map((e) => e.action)).toEqual(["update", "update"]);
     expect(statusAudits[0].details).toMatchObject({ status: { from: "queued", to: "running" } });
@@ -111,12 +111,12 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
     expect(state).toMatchObject({ kind: "alert_flow", alert_id: "al-5712", route: "end" });
   });
 
-  test("不存在的 run → NotFoundError", () => {
+  test("不存在的 run → NotFoundError", async () => {
     const db = makeDb();
-    expect(() => executeRun(db, "run_nope", { requestId: "req-x" })).toThrow(NotFoundError);
+    await expect(executeRun(db, "run_nope", { requestId: "req-x" })).rejects.toThrow(NotFoundError);
   });
 
-  test("资源兜底 token 超限：伪 LLM 节点充 50k+1 token → run 强杀 failed + 审计 FAILURE + error 事件", () => {
+  test("资源兜底 token 超限：伪 LLM 节点充 50k+1 token → run 强杀 failed + 审计 FAILURE + error 事件", async () => {
     const db = makeDb();
     const audit = new MemoryAuditSink();
     const run = makeRun(db);
@@ -125,7 +125,7 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
       name: "triage",
       run: (ctx: { charge(t: number): void }) => ctx.charge(50_001),
     };
-    const done = executeRun(db, run.id, { nodes: [fatNode], audit, requestId: "req-budget" });
+    const done = await executeRun(db, run.id, { nodes: [fatNode], audit, requestId: "req-budget" });
 
     expect(done.status).toBe("failed");
     expect(done.failReason).toBe("budget_exceeded:token_budget");
@@ -146,7 +146,7 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
     expect(events.at(-1)?.payload).toMatchObject({ code: "budget_exceeded", kind: "token_budget" });
   });
 
-  test("资源兜底 max_steps 20：第 21 步强杀 failed + 审计", () => {
+  test("资源兜底 max_steps 20：第 21 步强杀 failed + 审计", async () => {
     const db = makeDb();
     const audit = new MemoryAuditSink();
     const run = makeRun(db);
@@ -154,7 +154,7 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
       name: `step${i}`,
       run: () => {},
     }));
-    const done = executeRun(db, run.id, { nodes: loop, audit, requestId: "req-steps" });
+    const done = await executeRun(db, run.id, { nodes: loop, audit, requestId: "req-steps" });
 
     expect(done.status).toBe("failed");
     expect(done.failReason).toBe("budget_exceeded:max_steps");
@@ -162,7 +162,7 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
     expect(audit.entries.some((e) => e.result === "FAILURE")).toBe(true);
   });
 
-  test("资源兜底 LLM 超时 60s：伪 LLM 节点报 61s → 强杀 failed + 审计（per-node env 口子在 budget 单测锁）", () => {
+  test("资源兜底 LLM 超时 60s：伪 LLM 节点报 61s → 强杀 failed + 审计（per-node env 口子在 budget 单测锁）", async () => {
     const db = makeDb();
     const audit = new MemoryAuditSink();
     const run = makeRun(db);
@@ -170,14 +170,14 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
       name: "triage",
       run: (ctx: { checkLlm(s: number, n: number): void }) => ctx.checkLlm(1_000, 61_001),
     };
-    const done = executeRun(db, run.id, { nodes: [slowLlmNode], audit, requestId: "req-llm" });
+    const done = await executeRun(db, run.id, { nodes: [slowLlmNode], audit, requestId: "req-llm" });
 
     expect(done.status).toBe("failed");
     expect(done.failReason).toBe("budget_exceeded:llm_timeout");
     expect(audit.entries.some((e) => e.result === "FAILURE")).toBe(true);
   });
 
-  test("节点自身抛错 → run failed + 审计 + error 事件（不吞错，PRD 异常与边界）", () => {
+  test("节点自身抛错 → run failed + 审计 + error 事件（不吞错，PRD 异常与边界）", async () => {
     const db = makeDb();
     const audit = new MemoryAuditSink();
     const run = makeRun(db);
@@ -187,18 +187,18 @@ describe("executeRun 薄径（alert_flow 无 worker 直 END）", () => {
         throw new Error("boom");
       },
     };
-    const done = executeRun(db, run.id, { nodes: [bad], audit, requestId: "req-err" });
+    const done = await executeRun(db, run.id, { nodes: [bad], audit, requestId: "req-err" });
     expect(done.status).toBe("failed");
     expect(done.failReason).toBe("node_error:intake");
     const events = eventsAfter(db, run.id, 0);
     expect(events.at(-1)?.type).toBe("error");
   });
 
-  test("budgetFromEnv 是生产默认（env 口子真实生效）：MAX_STEPS=1 时第 2 步强杀", () => {
+  test("budgetFromEnv 是生产默认（env 口子真实生效）：MAX_STEPS=1 时第 2 步强杀", async () => {
     const env = { MAX_STEPS: "1", MAX_TOKENS_PER_RUN: "100", LLM_TIMEOUT_MS: "1000" };
     const db = makeDb();
     const run = makeRun(db);
-    const done = executeRun(db, run.id, {
+    const done = await executeRun(db, run.id, {
       nodes: [
         { name: "a", run: () => {} },
         { name: "b", run: () => {} },

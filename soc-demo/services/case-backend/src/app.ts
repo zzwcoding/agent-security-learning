@@ -6,6 +6,7 @@ import {
   JtiExistsError,
   MergeTargetClosedError,
   NotFoundError,
+  VerdictLockedError,
   VerdictRequiredError,
   addTimelineEntry,
   closeAlert,
@@ -21,6 +22,7 @@ import {
   listTimeline,
   lookupUsedToken,
   mergeAlertIntoCase,
+  patchAlert,
   patchCase,
   pollEvents,
   queryAudit,
@@ -56,6 +58,7 @@ export function buildApp(opts: { db?: DB } = {}) {
     if (
       err instanceof InvalidTransitionError ||
       err instanceof VerdictRequiredError ||
+      err instanceof VerdictLockedError ||
       err instanceof MergeTargetClosedError ||
       err instanceof JtiExistsError ||
       err instanceof NotFoundError
@@ -113,6 +116,17 @@ export function buildApp(opts: { db?: DB } = {}) {
   app.post("/api/v1/alerts/:id/reopen", (req) => {
     const { id } = req.params as { id: string };
     return reopenAlert(db, id, ctxOf(req.headers));
+  });
+
+  // m4 分诊写回（票 13）：verdict_ai 落库 + FR-M4.5 verdict 锁（claim/outcome 两拍），
+  // uncertain 挂人工待办同 PATCH 带 status（走 alert 状态机）。语义见 store.patchAlert。
+  app.patch("/api/v1/alerts/:id", (req) => {
+    const { id } = req.params as { id: string };
+    return patchAlert(
+      db, id,
+      (req.body ?? {}) as { verdict?: string; verdict_ai?: unknown; status?: string },
+      ctxOf(req.headers),
+    );
   });
 
   // ---- cases（/active 是静态段，注册在 :id 之前更稳）----

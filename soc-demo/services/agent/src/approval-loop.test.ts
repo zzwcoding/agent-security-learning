@@ -49,6 +49,10 @@ function makeFakeMint(over: { ttl?: number; iatShift?: number } = {}) {
         .digest("hex");
       return { token: `${header}.${b64p}.${sig}`, payload };
     },
+    // 本文件不跑分诊子图：任务票铸造给个显式失败桩，接口齐整即可
+    async mintTaskTicket() {
+      throw new Error("mintTaskTicket not expected in this test");
+    },
   };
   return { client, calls };
 }
@@ -403,6 +407,9 @@ describe("fail-closed 边界", () => {
         async mintApprovalToken() {
           throw new Error("gateway down");
         },
+        async mintTaskTicket() {
+          throw new Error("gateway down");
+        },
       },
       burn: used,
       used,
@@ -479,17 +486,17 @@ describe("fail-closed 边界", () => {
 // ---------- resume 的状态门（INV-10：只有 awaiting_approval 能被 resume） ----------
 
 describe("resumeRun 状态门", () => {
-  test("queued / completed 的 run 不能 resume → 409 InvalidRunTransition；未知 run → 404", () => {
+  test("queued / completed 的 run 不能 resume → 409 InvalidRunTransition；未知 run → 404", async () => {
     const db = openDb(":memory:");
     const audit = { record: () => {} };
     const queued = createRun(db, { kind: "alert_flow", alertId: "al-1" }, {
       audit,
       requestId: "req-gate",
     });
-    expect(() => resumeRun(db, queued.id, { audit, requestId: "req-gate" })).toThrow(
+    await expect(resumeRun(db, queued.id, { audit, requestId: "req-gate" })).rejects.toThrow(
       InvalidRunTransitionError,
     );
-    expect(() => resumeRun(db, "run_nope", { audit, requestId: "req-gate" })).toThrow(
+    await expect(resumeRun(db, "run_nope", { audit, requestId: "req-gate" })).rejects.toThrow(
       /not_found/,
     );
   });

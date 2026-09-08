@@ -1,8 +1,9 @@
-// 审批回路的两条出站 seam（票 11）。adapter 形态照 m1 的 M2Client 先例：
-// 测试换假件，生产换 HTTP，链路代码一行不改。
+// agent 侧的出站票据 seam（票 11 审批铸票 + 票 13 任务票）。adapter 形态照 m1 的
+// M2Client 先例：测试换假件，生产换 HTTP，链路代码一行不改。
 //
-// 铸票：m9 卡「审批卡 REST 挂 agent，铸票调 gateway」——agent 自己不持签名密钥，
-// 批准后 POST gateway /internal/mint（票 06 产物，SOC_HMAC_KEY 在网关 env）。
+// 铸票：m9 卡「审批卡 REST 挂 agent，铸票调 gateway」+「每个 worker 被拉起时由铸币
+// 服务签发任务级最小 scope 票」——agent 自己不持签名密钥，一律 POST gateway
+// /internal/mint（票 06 产物，SOC_HMAC_KEY 在网关 env）。
 // 焚毁：INV-2「用后焚毁登记」，登记真相在 M2 used_tokens 表（票 03，
 // 审计同库同事务）；执行成功后 fire-and-forget POST，写失败只打日志不阻塞——
 // 登记缺口的兜底是 ApprovalToken 300s TTL + 卡的 executed_at 单次执行标记。
@@ -19,6 +20,17 @@ export interface MintRequest {
   caseId: string | null;
 }
 
+/** 任务票铸造参数（票 13 起用，PRD §5.8）：worker 被拉起时的任务级最小 scope 票。
+ *  allowed_tools 只含该 worker 的工具族——分诊的六件套里没有任何 L2（INV-3）。 */
+export interface TaskTicketRequest {
+  jti: string;
+  sub: string;
+  caseId: string | null;
+  runId: string;
+  scope: string[];
+  allowedTools: string[];
+}
+
 export interface MintedToken {
   token: string;
   payload: Record<string, unknown>;
@@ -26,6 +38,8 @@ export interface MintedToken {
 
 export interface MintClient {
   mintApprovalToken(req: MintRequest): Promise<MintedToken>;
+  /** 任务票（TTL 900s，CONTEXT.md 统一口径）：L1 写工具的授权票，worker 每次拉起申领一枚。 */
+  mintTaskTicket(req: TaskTicketRequest): Promise<MintedToken>;
 }
 
 export class HttpMintClient implements MintClient {
@@ -33,6 +47,27 @@ export class HttpMintClient implements MintClient {
 
   constructor(baseUrl = process.env.GATEWAY_URL ?? "http://gateway:8002") {
     this.baseUrl = baseUrl;
+  }
+
+  async mintTaskTicket(req: TaskTicketRequest): Promise<MintedToken> {
+    const res = await fetch(`${this.baseUrl}/internal/mint`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        type: "task_ticket",
+        jti: req.jti,
+        sub: req.sub,
+        case_id: req.caseId ?? "",
+        run_id: req.runId,
+        scope: req.scope,
+        allowed_tools: req.allowedTools,
+      }),
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) {
+      throw new Error(`gateway mint failed: HTTP ${res.status}`);
+    }
+    return (await res.json()) as MintedToken;
   }
 
   async mintApprovalToken(req: MintRequest): Promise<MintedToken> {

@@ -70,7 +70,9 @@ class ApprovalInterrupt extends Error {
 
 export interface FlowNode {
   name: string;
-  run(ctx: NodeCtx): void;
+  /** 票 13 起允许异步：triage worker 的出站调用（guards 扫描 / LLM / M2 REST）都是
+   *  promise，runner 在这里 await——同步节点不受影响，失败兜底/审批中断语义不变。 */
+  run(ctx: NodeCtx): void | Promise<void>;
 }
 
 // PRD 图：alert_flow: intake(已落库) → triage → …。薄径只保留确定性节点：
@@ -85,7 +87,8 @@ export const THIN_ALERT_FLOW: FlowNode[] = [
   },
   {
     name: "route",
-    // supervisor 的路由点：本票无 worker 注册，直 END；后续票在这里路由到 triage 子图
+    // supervisor 的路由点。票 13 起生产默认图是 triage 子图（index.ts makeNodes 组图），
+    // 薄径作为无 worker 时的兜底保留（测试/演示）
     run: (ctx) => {
       ctx.state.route = "end";
     },
@@ -154,12 +157,13 @@ function makeDeps(opts: ExecuteOpts): DriveDeps {
 }
 
 /** 跑节点循环直到终态或挂起。任何失败都强杀成 failed 并落审计 + error 事件（不吞错）；
- *  ApprovalInterrupt 例外——挂起不是失败，卡已开、run 已在 awaiting_approval，原地返回。 */
-function drive(db: DB, runId: string, deps: DriveDeps, start: {
+ *  ApprovalInterrupt 例外——挂起不是失败，卡已开、run 已在 awaiting_approval，原地返回。
+ *  票 13：节点可异步（出站 guards/LLM/M2），循环逐节点 await。 */
+async function drive(db: DB, runId: string, deps: DriveDeps, start: {
   state: Record<string, unknown>;
   startIndex: number;
   prevEnvelope: Envelope | null;
-}): RunRow {
+}): Promise<RunRow> {
   const { ctx, nodes, budget } = deps;
   const actor = ctx.actor ?? { type: "system", id: "m3:supervisor" };
   // 审计 → SSE 的镜像：审计是真相源，事件流是它的广播（PRD §6-M3 事件类型含 audit）
@@ -255,7 +259,7 @@ function drive(db: DB, runId: string, deps: DriveDeps, start: {
       cursor.node = node.name;
       emitEvent(db, runId, "node_enter", { node: node.name });
       budget.step(); // 资源兜底之一：max_steps（默认 20）
-      node.run(nctx);
+      await node.run(nctx);
       emitEvent(db, runId, "node_exit", { node: node.name });
       // 每个节点跑完盖一个信封（链式：prev_hash 逐环相扣），resume 从末态恢复
       prev = checkpoint(db, prev, {
@@ -306,9 +310,10 @@ function drive(db: DB, runId: string, deps: DriveDeps, start: {
   return getRun(db, runId) as RunRow;
 }
 
-/** 跑一个 run 到终态（从 queued 开跑）。薄径为同步直跑（better-sqlite3 全同步、无真 LLM，
- *  微秒级完成）；接 worker/LLM 后换异步调度，本函数签名与兜底语义不变。 */
-export function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}): RunRow {
+/** 跑一个 run 到终态（从 queued 开跑）。票 10 薄径为同步直跑；票 13 起 worker 节点带
+ *  出站调用（guards/LLM/M2 REST），executeRun 变异步——调用方 await 到终态（仍无真
+ *  并发调度，后台化等 worker 全接入的票再换），签名兜底语义不变。 */
+export async function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}): Promise<RunRow> {
   const run = requireRun(db, runId);
   return drive(db, runId, makeDeps(opts), {
     state: { kind: run.kind, alert_id: run.alertId },
@@ -320,7 +325,7 @@ export function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}): RunRo
 /** 审批 resume（票 11）：从信封链末态续跑挂起的 run。只有 awaiting_approval 能被
  *  resume（INV-10 状态门）；信封链复核失败 → 拒绝恢复 + 审计 FAILURE（FR-M3.3）；
  *  兜底口径（steps/tokens）从 run 行接续，不因重启清零。 */
-export function resumeRun(db: DB, runId: string, opts: ExecuteOpts = {}): RunRow {
+export async function resumeRun(db: DB, runId: string, opts: ExecuteOpts = {}): Promise<RunRow> {
   const run = requireRun(db, runId);
   if (run.status !== "awaiting_approval") {
     throw new InvalidRunTransitionError(run.status, "running");

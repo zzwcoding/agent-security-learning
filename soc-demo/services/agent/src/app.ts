@@ -17,6 +17,8 @@ import { NotFoundError } from "./errors.js";
 import { MemoryAuditSink, type AuditSink } from "./audit.js";
 import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner } from "./token-ports.js";
 import type { BurnRegistry } from "./verify-ticket.js";
+import { TRIAGE_TOOLS } from "../workers/triage/prompt.js";
+import type { RunRow } from "./runs.js";
 
 // 本票放行的 run kind。chat_flow（票 18）/知识沉淀（票 17）到票再放——fail-closed：
 // 不认识的 kind 直接 400，不给「什么都接」留口子。
@@ -30,6 +32,10 @@ export function buildApp(opts: {
   db?: DB;
   audit?: AuditSink;
   nodes?: FlowNode[];
+  /** 每-run 图工厂（票 13）：alert_flow 拉起时先向 gateway 铸任务票（PRD FR-M3.4：
+   *  worker 拉起即申领任务级最小 scope 票），再把票交进图工厂组 triage 子图。
+   *  不传 = 用静态 nodes（薄径/审批演示），也不铸票。 */
+  makeNodes?: (run: RunRow, ticket: string) => FlowNode[] | Promise<FlowNode[]>;
   /** 铸 ApprovalToken 的出站 seam（m9 卡：铸票调 gateway）。 */
   mint?: MintClient;
   /** 执行后的焚毁登记口（INV-2，M2 used_tokens）。 */
@@ -75,9 +81,10 @@ export function buildApp(opts: {
   });
 
   // m3 卡公开接口：POST /internal/runs {kind, alert_id} → 202 {run_id}
-  // （PRD：内部触发 = M2 alert.created → 这里；薄径 run 无 worker 直 END，
-  //   AGENT_FLOW=approval_demo 时挂带 L2 动作的演示图，可 curl 走通审批回路）
-  app.post("/internal/runs", (req, reply) => {
+  // （PRD：内部触发 = M2 alert.created → 这里。票 13 起 alert_flow 经 makeNodes 接
+  //   triage worker：先铸任务票（gateway /internal/mint，票面 scope=分诊六件套，
+  //   无任何 L2——INV-3），再组图直跑到终态；铸票失败 502，不留无票 run。）
+  app.post("/internal/runs", async (req, reply) => {
     const body = (req.body ?? {}) as { kind?: string; alert_id?: string };
     if (!body.kind || !body.alert_id) {
       return reply.status(400).send({ error: "kind_and_alert_id_required" });
@@ -92,10 +99,25 @@ export function buildApp(opts: {
       requestId,
       actor: { type: "system", id: actorId },
     });
-    // 薄径同步直跑（SQLite 全同步、无真 LLM）：无 L2 时返回即终态；有 L2 时停在
-    // awaiting_approval（审批是异步的人的输入）。worker/LLM 接入后这里换异步调度；
-    // executeRun 自带失败兜底，壳不用改。
-    executeRun(db, run.id, { nodes: opts.nodes, audit, requestId });
+    let nodes = opts.nodes;
+    if (opts.makeNodes) {
+      try {
+        const minted = await mint.mintTaskTicket({
+          jti: `tk_${randomUUID()}`,
+          sub: "agent:triage",
+          caseId: null, // 分诊时还没有 case；闸侧跳过 case 绑定校验
+          runId: run.id,
+          scope: ["alert:update", "case:write"],
+          allowedTools: [...TRIAGE_TOOLS],
+        });
+        nodes = await opts.makeNodes(run, minted.token);
+      } catch {
+        return reply.status(502).send({ error: "mint_failed" });
+      }
+    }
+    // 同步直跑到终态再 202（节点可异步：guards/LLM/M2 出站都 await）；
+    // executeRun 自带失败兜底，壳不用改。真异步调度（先 202 后台跑）等后续票。
+    await executeRun(db, run.id, { ...runOpts(req.headers as Record<string, unknown>), nodes });
     return reply.status(202).send({ run_id: run.id });
   });
 
@@ -139,7 +161,7 @@ export function buildApp(opts: {
     } catch {
       return reply.status(502).send({ error: "mint_failed" });
     }
-    decideAndResume(id, { approve: true, approver: body.approver, token: minted.token, tokenJti: String(minted.payload.jti ?? "") }, req.headers);
+    await decideAndResume(id, { approve: true, approver: body.approver, token: minted.token, tokenJti: String(minted.payload.jti ?? "") }, req.headers);
     return {
       approval_id: id,
       approval_token: minted.token,
@@ -153,7 +175,7 @@ export function buildApp(opts: {
     const body = (req.body ?? {}) as { approver?: string; reason?: string };
     if (!body.approver) return reply.status(400).send({ error: "approver_required" });
     const card = requireApproval(db, id); // 404
-    decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers);
+    await decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers);
     return {
       approval_id: id,
       decision: "rejected",
@@ -164,10 +186,10 @@ export function buildApp(opts: {
 
   // 裁决（409 仲裁在审批状态机）→ resume 推进 run：批准路径执行 L2 动作，
   // 驳回路径节点拿到 rejected 决定跳过执行；两条路 run 都由信封链末态续跑。
-  function decideAndResume(id: string, decision: DecideInput, headers: Record<string, unknown>): void {
+  async function decideAndResume(id: string, decision: DecideInput, headers: Record<string, unknown>): Promise<void> {
     const card = requireApproval(db, id);
     decideApproval(db, id, decision, httpCtx(headers));
-    resumeRun(db, card.runId, runOpts(headers));
+    await resumeRun(db, card.runId, runOpts(headers));
   }
 
   // m3 卡公开接口：GET /api/v1/events/stream?run_id=（SSE，INV-7）

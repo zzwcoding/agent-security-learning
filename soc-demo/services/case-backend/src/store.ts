@@ -36,6 +36,14 @@ export class MergeTargetClosedError extends Error {
     this.name = "merge_target_closed";
   }
 }
+export class VerdictLockedError extends Error {
+  readonly code = "verdict_locked";
+  readonly httpStatus = 409;
+  constructor(what: string) {
+    super(`verdict_locked: ${what}`);
+    this.name = "verdict_locked";
+  }
+}
 export class JtiExistsError extends Error {
   readonly code = "jti_exists";
   readonly httpStatus = 409;
@@ -532,6 +540,61 @@ export function reopenAlert(db: DB, alertId: string, ctx: Ctx): Record<string, u
     recordAudit(db, ctx, "update", alertId, "alert", {
       status: { from: alert.status, to: "InProgress" },
     });
+    return getAlert(db, alertId) as Record<string, unknown>;
+  })();
+}
+
+// 分诊写回（票 13，m4 卡接口契约 PATCH /api/v1/alerts/:id）：verdict 生命周期
+// null → in-progress（锁定）→ 终值（PRD §5.1）。
+//   - in-progress = 拾取锁（FR-M4.5）：条件更新 WHERE verdict IS NULL，两个 run 同时
+//     拾取同一条告警只有先到者成功，后到者 409 verdict_locked——「并发同告警只分诊
+//     1 次」的并发安全就压在这一条 SQL 上，不靠应用层查-改。
+//   - 终值只能从 in-progress 来（先拾取后判定）；终值即终局，不许再改。
+//   - verdict_ai（AI 判断双轨列）必须在拾取之后写——没锁就写结果等于绕过防重复拾取。
+//   - status 走 alert 状态机（uncertain 挂人工待办 = New→InProgress）。
+export function patchAlert(
+  db: DB,
+  alertId: string,
+  body: { verdict?: string | null; verdict_ai?: unknown; status?: string },
+  ctx: Ctx,
+): Record<string, unknown> {
+  return db.transaction(() => {
+    const alert = getAlert(db, alertId);
+    if (!alert) throw new NotFoundError(`alert ${alertId}`);
+    const details: Record<string, unknown> = {};
+
+    if (body.verdict !== undefined) {
+      if (body.verdict === "in-progress") {
+        const res = db.prepare(
+          "UPDATE alerts SET verdict = 'in-progress' WHERE id = ? AND verdict IS NULL",
+        ).run(alertId);
+        if (res.changes === 0) throw new VerdictLockedError(alertId); // 别人已拾取/已终值
+      } else if (typeof body.verdict === "string" && (VERDICTS as readonly string[]).includes(body.verdict)) {
+        if (alert.verdict !== "in-progress") throw new VerdictLockedError(alertId);
+        db.prepare("UPDATE alerts SET verdict = ? WHERE id = ?").run(body.verdict, alertId);
+      } else {
+        throw new VerdictRequiredError();
+      }
+      details.verdict = { from: alert.verdict, to: body.verdict };
+    }
+
+    if (body.verdict_ai !== undefined) {
+      if (alert.verdict === null && body.verdict === undefined) {
+        throw new VerdictLockedError(alertId); // 未拾取不许写 AI 判断
+      }
+      db.prepare("UPDATE alerts SET verdict_ai = ? WHERE id = ?").run(j(body.verdict_ai), alertId);
+      details.verdict_ai = { from: alert.verdictAi, to: body.verdict_ai };
+    }
+
+    if (body.status !== undefined && body.status !== alert.status) {
+      assertTransition("alert", alert.status as string, body.status);
+      db.prepare("UPDATE alerts SET status = ? WHERE id = ?").run(body.status, alertId);
+      details.status = { from: alert.status, to: body.status };
+    }
+
+    if (Object.keys(details).length > 0) {
+      recordAudit(db, ctx, "patch", alertId, "alert", details);
+    }
     return getAlert(db, alertId) as Record<string, unknown>;
   })();
 }
