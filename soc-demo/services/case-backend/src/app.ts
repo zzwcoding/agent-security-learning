@@ -8,6 +8,7 @@ import {
   NotFoundError,
   VerdictLockedError,
   VerdictRequiredError,
+  addCaseObservable,
   addTimelineEntry,
   closeAlert,
   closeCase,
@@ -170,6 +171,22 @@ export function buildApp(opts: { db?: DB } = {}) {
 
   app.get("/api/v1/cases/:id/timeline", (req) =>
     listTimeline(db, (req.params as { id: string }).id));
+
+  // m6 富化回写（票 15，FR-M6.3）：analyzer artifacts 经 L1 add_observable 落这里。
+  // 去重合并语义在 store.addCaseObservable（按 dataType+data）；HTTP 面新建 201 /
+  // 合并 200，对齐 ingest 去重的状态码口径。
+  app.post("/api/v1/cases/:id/observables", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as {
+      dataType?: string; data?: string; message?: string; tlp?: number; pap?: number; ioc?: boolean; tags?: string[];
+    };
+    const { dataType, data } = body;
+    if (!dataType || !data) {
+      return reply.status(400).send({ error: "data_type_and_data_required" });
+    }
+    const { observable, dedup } = addCaseObservable(db, id, { ...body, dataType, data }, ctxOf(req.headers));
+    return reply.status(dedup ? 200 : 201).send({ observable, dedup });
+  });
 
   app.post("/api/v1/cases/:id/timeline", (req, reply) => {
     const { id } = req.params as { id: string };

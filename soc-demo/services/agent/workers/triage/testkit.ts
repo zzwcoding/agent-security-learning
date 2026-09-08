@@ -3,7 +3,7 @@
 import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { buildApp as buildCaseApp } from "../../../case-backend/src/app.js";
-import { openDb as openCaseDb } from "../../../case-backend/src/db.js";
+import { openDb as openCaseDb, type DB as CaseDb } from "../../../case-backend/src/db.js";
 import { scanInjection, type ScanDecision } from "../../src/guards-client.js";
 
 /** fixtures/tickets/contract.json 的测试固定密钥（禁入真实环境）。 */
@@ -65,18 +65,23 @@ export const fakeScan = async (
 
 export interface CaseBackend {
   url: string;
+  /** 内存库句柄（票 15 起）：富化 eval 布景要种 tlp=4 的 observable——现行 REST/m1
+   *  映射都只产 tlp=2，布景直接种库（出入已记票 15）。 */
+  db: CaseDb;
   close(): Promise<void>;
 }
 
 /** 起真 case-backend（内存库 + 随机端口）：状态机/409/审计语义全在环内，
  *  HttpTriageM2（生产 adapter）直连它。 */
 export async function startCaseBackend(): Promise<CaseBackend> {
-  const app = buildCaseApp({ db: openCaseDb(":memory:") });
+  const db = openCaseDb(":memory:");
+  const app = buildCaseApp({ db });
   await app.listen({ port: 0, host: "127.0.0.1" });
   const address = app.server.address();
   const port = typeof address === "object" && address ? address.port : 0;
   return {
     url: `http://127.0.0.1:${port}`,
+    db,
     close: () => new Promise((resolve) => app.close(() => resolve())),
   };
 }
@@ -129,6 +134,12 @@ export function alertInputFromWazuh(w: Obj): Obj {
   push("other", data.srcuser, true);
   push("url", data.url, true);
   push("filename", sys.path, false);
+  // 票 15：补 hash 抽取（ingest wazuh.ts 的 HASH_FIELD 同款正则）——vt-87105 布景的
+  // sha256_after 必须以 hash observable 进案，富化场景才有东西可查。此前 stub 漏了它，
+  // 与真 m1 映射漂移；出入记票 15。
+  for (const [k, v] of Object.entries(sys)) {
+    if (/^(md5|sha1|sha256|hash)(_after|_new)?$/.test(k)) push("hash", v, false);
+  }
 
   return {
     type: "wazuh_alert",

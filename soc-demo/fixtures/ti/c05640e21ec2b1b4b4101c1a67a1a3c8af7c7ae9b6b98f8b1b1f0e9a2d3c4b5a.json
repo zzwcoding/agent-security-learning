@@ -1,0 +1,15 @@
+{
+  "data": "c05640e21ec2b1b4b4101c1a67a1a3c8af7c7ae9b6b98f8b1b1f0e9a2d3c4b5a",
+  "dataType": "hash",
+  "taxonomies": [
+    { "namespace": "VT", "predicate": "reputation", "value": "5/70", "level": "malicious" }
+  ],
+  "full": {
+    "positives": 5,
+    "total": 70,
+    "permalink": "https://www.virustotal.com/gui/file/c05640e21ec2b1b4"
+  },
+  "artifacts": [
+    { "dataType": "filename", "data": "invoice_apr.zip" }
+  ]
+}

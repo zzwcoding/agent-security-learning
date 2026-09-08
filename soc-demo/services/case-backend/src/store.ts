@@ -642,6 +642,63 @@ export function patchCase(
   })();
 }
 
+// 票 15 FR-M6.3：analyzer 提取的新 observable 回写案件，与既有 observable 重复 →
+// 去重合并（PRD §6-M6 异常与边界）：按 (case_id, dataType, data) 找既有行——命中就不
+// 新建行，tags 去重并入（旧在前新在后）、message 仅原空时回填，201→200 的语义对齐
+// ingest 去重（INV-6 同款幂等口径）；审计照 INV-8 记 diff（tags/message 的 from→to）。
+export interface AddCaseObservableResult {
+  observable: Record<string, unknown>;
+  dedup: boolean;
+}
+
+export function addCaseObservable(
+  db: DB,
+  caseId: string,
+  input: ObservableInput,
+  ctx: Ctx,
+): AddCaseObservableResult {
+  return db.transaction(() => {
+    requireCase(db, caseId);
+    const existing = db
+      .prepare("SELECT * FROM observables WHERE case_id = ? AND data_type = ? AND data = ?")
+      .get(caseId, input.dataType, input.data) as Record<string, unknown> | undefined;
+    if (existing) {
+      const oldTags = pj<string[]>(existing.tags as string, []);
+      const merged = [...oldTags, ...(input.tags ?? []).filter((t) => !oldTags.includes(t))];
+      const newMessage = existing.message ?? input.message ?? null;
+      db.prepare("UPDATE observables SET tags = ?, message = COALESCE(message, ?) WHERE id = ?").run(
+        j(merged), input.message ?? null, existing.id as string,
+      );
+      recordAudit(db, ctx, "update", existing.id as string, "observable", {
+        tags: { from: oldTags, to: merged },
+        message: { from: existing.message ?? null, to: newMessage },
+        dedup: true,
+      });
+      return {
+        observable: mapObservable(
+          db.prepare("SELECT * FROM observables WHERE id = ?").get(existing.id as string) as Record<string, unknown>,
+        ),
+        dedup: true,
+      };
+    }
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO observables (id, case_id, data_type, data, message, tlp, pap, ioc, tags)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      id, caseId, input.dataType, input.data, input.message ?? null,
+      input.tlp ?? 2, input.pap ?? 2, input.ioc ? 1 : 0, j(input.tags ?? []),
+    );
+    recordAudit(db, ctx, "create", id, "observable", {
+      created: { caseId, dataType: input.dataType, data: input.data },
+    });
+    return {
+      observable: mapObservable(db.prepare("SELECT * FROM observables WHERE id = ?").get(id) as Record<string, unknown>),
+      dedup: false,
+    };
+  })();
+}
+
 // 手工建案（intake_source=manual）：POST /api/v1/cases 用，不经 alert
 export function createCaseManual(
   db: DB,
