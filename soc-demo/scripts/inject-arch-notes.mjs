@@ -30,6 +30,7 @@ const LINKS = {
   "m7-knowledge": [{ href: "architecture-m7-internal.html", text: "M7 内部结构图（提炼→人审→入库 + 检索面）" }],
   gateway: [{ href: "architecture-gateway-internal.html", text: "网关内部结构图（三容器并排 + 铸币/凭证代理双流）" }],
   agent: [{ href: "architecture-m3-internal.html", text: "M3 内部结构图（agent 服务内部：调度/工人/闸/检查点）" }],
+  guards: [{ href: "architecture-guards-internal.html", text: "guards 内部结构图（扫描/脱敏双管道 + 标定闭环）" }],
 };
 
 // 内部图节点 id → arch-notes.json 键的别名（内部图 id 是另一套命名）

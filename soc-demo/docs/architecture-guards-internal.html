@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="generator" content="archify 2.16.0">
-  <title>M6 富化 agent · 内部结构</title>
+  <title>防护微服务 C4 · 内部结构（注入扫描 + PII 脱敏）</title>
   <script>
     // Resolve the theme before first paint so light-preference users don't
     // see a dark flash. The toolbar script below re-applies with UI state.
@@ -4955,7 +4955,7 @@
            data-preset-badge-blueprint="蓝图 / 修订 01"
            data-preset-badge-editorial="编辑风格 / 现场笔记">
         <div class="pulse-dot"></div>
-        <h1>M6 富化 agent · 内部结构</h1>
+        <h1>防护微服务 C4 · 内部结构（注入扫描 + PII 脱敏）</h1>
       </div>
     </div>
 
@@ -5004,8 +5004,8 @@
     <!-- Main Diagram -->
     <div class="diagram-container" data-detail-level="read"
          data-preset-badge-editorial-plate="ARCHIFY / 图版 04">
-      <svg viewBox="-270.19500000000005 -115.85000000000002 1794.39 834.6" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" preserveAspectRatio="none">
-        <title id="archify-diagram-title">M6 富化 agent · 内部结构</title>
+      <svg viewBox="-282 -91.16279069767444 1768 822.3255813953489" role="img" lang="zh-CN" aria-labelledby="archify-diagram-title archify-diagram-description" data-preset="classic" data-quality-profile="showcase" preserveAspectRatio="none">
+        <title id="archify-diagram-title">防护微服务 C4 · 内部结构（注入扫描 + PII 脱敏）</title>
         <desc id="archify-diagram-description">由 Archify 生成的架构图。</desc>
         <!-- Definitions -->
         <defs>
@@ -5030,167 +5030,181 @@
         <rect width="100%" height="100%" fill="url(#grid)" />
 
         <!-- Boundaries (behind everything) -->
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" x="220" y="34" width="1030" height="114" rx="12" class="c-region" stroke-width="1"/>
-
-        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="1" data-composition-frame-label="一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）" x="527.6644927290323" y="440.9" width="434.6710145419354" height="114" rx="12" class="c-region" stroke-width="1"/>
+        <rect data-graph-role="structural-frame" data-composition-frame-kind="region" data-composition-frame-id="0" data-composition-frame-label="compose guards :8001（C4 · Python FastAPI · 无状态）" x="360" y="100" width="830" height="496" rx="12" class="c-region" stroke-width="1"/>
 
         <!-- Connection paths (before components for correct z-order) -->
-        <path data-edge-from="m2" data-edge-to="loop" data-edge-key="0" data-edge-id="m2-to-loop" data-composition-points="200,94;250,94" d="M 200 94 L 250 94" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="loop" data-edge-to="tlpgate" data-edge-key="1" data-edge-id="loop-to-gate" data-composition-points="420,96;450,96" d="M 420 96 L 450 96" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="tlpgate" data-edge-to="runner" data-edge-label="放行" data-edge-key="2" data-edge-id="gate-to-runner" data-composition-points="620,96;650,96" d="M 620 96 L 650 96" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="runner" data-edge-to="analyzer" data-edge-label="拉起 microVM" data-edge-key="3" data-edge-id="runner-to-analyzer" data-composition-points="735,128;735,152;761,152;761,446.9;745,446.9;745,470.9" d="M 735 128 L 735 144 Q 735 152 743 152 L 753 152 Q 761 152 761 160 L 761 438.9 Q 761 446.9 753 446.9 L 753 446.9 Q 745 446.9 745 454.9 L 745 470.9" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="analyzer" data-edge-to="normalize" data-edge-label="化验结果" data-edge-key="4" data-edge-id="analyzer-to-normalize" data-composition-points="840,502.9;935,502.9;935,128" d="M 840 502.9 L 927 502.9 Q 935 502.9 935 494.9 L 935 128" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="normalize" data-edge-to="writeback" data-edge-key="5" data-edge-id="normalize-to-writeback" data-composition-points="1020,96;1050,96" d="M 1020 96 L 1050 96" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
-        <path data-edge-from="analyzer" data-edge-to="intel" data-edge-label="外联尝试 → 被拦" data-edge-key="6" data-edge-id="analyzer-to-intel" data-composition-points="650,502.9;626,502.9;626,518.9;224,518.9;224,500.9;200,500.9" d="M 650 502.9 L 634 502.9 Q 626 502.9 626 510.9 L 626 510.9 Q 626 518.9 618 518.9 L 232 518.9 Q 224 518.9 224 510.9 L 224 508.9 Q 224 500.9 216 500.9 L 200 500.9" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="agent" data-edge-to="api" data-edge-label="POST /scan/injection" data-edge-key="0" data-edge-id="agent-to-api-scan" data-composition-points="210,307;390,307" d="M 210 307 L 390 307" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="agent" data-edge-to="api" data-edge-label="POST /pii/anonymize" data-edge-key="1" data-edge-id="agent-to-api-pii" data-composition-points="210,307;390,307" d="M 210 307 L 390 307" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="m12" data-edge-to="api" data-edge-label="MCP 描述体检" data-edge-key="2" data-edge-id="m12-to-api" data-composition-points="210,530;330,530;330,307;390,307" d="M 210 530 L 322 530 Q 330 530 330 522 L 330 315 Q 330 307 338 307 L 390 307" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="api" data-edge-to="lguard" data-edge-label="text + channel" data-edge-key="3" data-edge-id="api-to-lguard" data-composition-points="510,271;510,166;900,166" d="M 510 271 L 510 174 Q 510 166 518 166 L 900 166" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="api" data-edge-to="presidio" data-edge-label="text + language" data-edge-key="4" data-edge-id="api-to-presidio" data-composition-points="510,343;510,436;940,436" d="M 510 343 L 510 428 Q 510 436 518 436 L 940 436" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="chanpol" data-edge-to="lguard" data-edge-label="动作策略" data-edge-key="5" data-edge-id="chanpol-to-lguard" data-composition-points="1000,240;1000,202" d="M 1000 240 L 1000 202" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="rfc1918" data-edge-to="presidio" data-edge-label="识别器挂载" data-edge-key="6" data-edge-id="rfc1918-to-presidio" data-composition-points="1050,520;1050,472" d="M 1050 520 L 1050 472" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+        <path data-edge-from="presidio" data-edge-to="mapstore" data-edge-label="写映射（仅内存）" data-edge-key="7" data-edge-id="presidio-to-mapstore" data-composition-points="1050,472;1050,510;860,510" d="M 1050 472 L 1050 502 Q 1050 510 1042 510 L 860 510" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+        <path data-edge-from="evalci" data-edge-to="lguard" data-edge-label="阈值标定 · 入 CI" data-edge-key="8" data-edge-id="evalci-to-lguard" data-composition-points="210,96;1000,96;1000,130" d="M 210 96 L 992 96 Q 1000 96 1000 104 L 1000 130" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
 
         <!-- Components -->
-        <g id="node-m2" data-node-id="m2" data-node-label="M2 案件后端" tabindex="0" role="button" aria-label="聚焦M2 案件后端，读 observables / 收 artifacts, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="读 observables / 收 artifacts" data-node-tag="数据地基" data-node-context="架构组件">
-          <title>M2 案件后端 · 读 observables / 收 artifacts · 架构组件 · 数据地基</title>
-          <rect x="20" y="64" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="20" y="64" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 70) scale(0.6875)">
+        <g id="node-evalci" data-node-id="evalci" data-node-label="M11 Eval / CI" tabindex="0" role="button" aria-label="聚焦M11 Eval / CI，标本集 · 阈值阶梯, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="标本集 · 阈值阶梯" data-node-tag="非运行时" data-node-context="架构组件">
+          <title>M11 Eval / CI · 标本集 · 阈值阶梯 · 架构组件 · 非运行时</title>
+          <rect x="40" y="60" width="170" height="72" rx="6" class="c-mask"/>
+          <rect x="40" y="60" width="170" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 66) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="110" y="92" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M2 案件后端</text>
-        <text data-detail="context" x="110" y="108" class="t-muted" font-size="9" text-anchor="middle">读 observables / 收 artifacts</text>
-        <text data-detail="fine" x="110" y="116" class="t-external" font-size="7" text-anchor="middle">数据地基</text>
+          <text data-node-label="" data-detail-anchor="" x="125" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M11 Eval / CI</text>
+        <text data-detail="context" x="125" y="110" class="t-muted" font-size="9" text-anchor="middle">标本集 · 阈值阶梯</text>
+        <text data-detail="fine" x="125" y="124" class="t-external" font-size="7" text-anchor="middle">非运行时</text>
         </g>
 
-        <g id="node-intel" data-node-id="intel" data-node-label="外部情报源" tabindex="0" role="button" aria-label="聚焦外部情报源，VT 等（沙箱外）, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="VT 等（沙箱外）" data-node-tag="投毒 analyzer 的靶子" data-node-context="架构组件">
-          <title>外部情报源 · VT 等（沙箱外） · 架构组件 · 投毒 analyzer 的靶子</title>
-          <rect x="20" y="470.9" width="180" height="60" rx="6" class="c-mask"/>
-          <rect x="20" y="470.9" width="180" height="60" rx="6" class="c-external" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(26 476.9) scale(0.6875)">
+        <g id="node-agent" data-node-id="agent" data-node-label="agent 服务（M3-M8）" tabindex="0" role="button" aria-label="聚焦agent 服务（M3-M8），LangGraph.js :3003, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="LangGraph.js :3003" data-node-tag="wrapUntrusted 在本体" data-node-context="架构组件">
+          <title>agent 服务（M3-M8） · LangGraph.js :3003 · 架构组件 · wrapUntrusted 在本体</title>
+          <rect x="40" y="271" width="170" height="72" rx="6" class="c-mask"/>
+          <rect x="40" y="271" width="170" height="72" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 277) scale(0.6875)">
             <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
             <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="110" y="498.9" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">外部情报源</text>
-        <text data-detail="context" x="110" y="514.9" class="t-muted" font-size="9" text-anchor="middle">VT 等（沙箱外）</text>
-        <text data-detail="fine" x="110" y="522.9" class="t-external" font-size="7" text-anchor="middle">投毒 analyzer 的靶子</text>
+          <text data-node-label="" data-detail-anchor="" x="125" y="305" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">agent 服务（M3-M8）</text>
+        <text data-detail="context" x="125" y="321" class="t-muted" font-size="9" text-anchor="middle">LangGraph.js :3003</text>
+        <text data-detail="fine" x="125" y="335" class="t-external" font-size="7" text-anchor="middle">wrapUntrusted 在本体</text>
         </g>
 
-        <g id="node-loop" data-node-id="loop" data-node-label="① enrich_loop" tabindex="0" role="button" aria-label="聚焦① enrich_loop，遍历案件 observables, services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="遍历案件 observables" data-node-tag="每个证物过一遍" data-node-context="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <title>① enrich_loop · 遍历案件 observables · services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起） · 每个证物过一遍</title>
-          <rect x="250" y="64" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="250" y="64" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(256 70) scale(0.6875)">
+        <g id="node-m12" data-node-id="m12" data-node-label="M12 MCP 体检 CLI" tabindex="0" role="button" aria-label="聚焦M12 MCP 体检 CLI，soc-mcp-audit（npm bin）, 架构组件" aria-pressed="false" data-node-kind="external" data-node-sublabel="soc-mcp-audit（npm bin）" data-node-tag="非运行时" data-node-context="架构组件">
+          <title>M12 MCP 体检 CLI · soc-mcp-audit（npm bin） · 架构组件 · 非运行时</title>
+          <rect x="40" y="500" width="170" height="60" rx="6" class="c-mask"/>
+          <rect x="40" y="500" width="170" height="60" rx="6" class="c-external" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="external" class="semantic-sigil s-external" transform="translate(46 506) scale(0.6875)">
+            <rect x="2.5" y="5" width="8.5" height="8" rx="1.5"/>
+            <path d="M8 2.5h5.5V8M13.5 2.5 7.5 8.5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="125" y="528" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">M12 MCP 体检 CLI</text>
+        <text data-detail="context" x="125" y="544" class="t-muted" font-size="9" text-anchor="middle">soc-mcp-audit（npm bin）</text>
+        <text data-detail="fine" x="125" y="552" class="t-external" font-size="7" text-anchor="middle">非运行时</text>
+        </g>
+
+        <g id="node-api" data-node-id="api" data-node-label="FastAPI 入口" tabindex="0" role="button" aria-label="聚焦FastAPI 入口，:8001 · /scan/injection + /pii/anonymize, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="backend" data-node-sublabel=":8001 · /scan/injection + /pii/anonymize" data-node-tag="无状态" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>FastAPI 入口 · :8001 · /scan/injection + /pii/anonymize · compose guards :8001（C4 · Python FastAPI · 无状态） · 无状态</title>
+          <rect x="390" y="271" width="240" height="72" rx="6" class="c-mask"/>
+          <rect x="390" y="271" width="240" height="72" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(396 277) scale(0.6875)">
             <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="335" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">① enrich_loop</text>
-        <text data-detail="context" x="335" y="110" class="t-muted" font-size="9" text-anchor="middle">遍历案件 observables</text>
-        <text data-detail="fine" x="335" y="120" class="t-backend" font-size="7" text-anchor="middle">每个证物过一遍</text>
+          <text data-node-label="" data-detail-anchor="" x="510" y="305" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">FastAPI 入口</text>
+        <text data-detail="context" x="510" y="321" class="t-muted" font-size="9" text-anchor="middle">:8001 · /scan/injection + /pii/anonymize</text>
+        <text data-detail="fine" x="510" y="335" class="t-backend" font-size="7" text-anchor="middle">无状态</text>
         </g>
 
-        <g id="node-tlpgate" data-node-id="tlpgate" data-node-label="② TLP/PAP 闸门" tabindex="0" role="button" aria-label="聚焦② TLP/PAP 闸门，工具包装层·确定性中间件, services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" aria-pressed="false" data-node-kind="security" data-node-sublabel="工具包装层·确定性中间件" data-node-tag="超限必拒·fail-closed" data-node-context="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <title>② TLP/PAP 闸门 · 工具包装层·确定性中间件 · services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起） · 超限必拒·fail-closed</title>
-          <rect x="450" y="64" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="450" y="64" width="170" height="64" rx="6" class="c-security" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(456 70) scale(0.6875)">
+        <g id="node-chanpol" data-node-id="chanpol" data-node-label="通道策略表" tabindex="0" role="button" aria-label="聚焦通道策略表，四通道 · alert/user/kb/tool_output, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="四通道 · alert/user/kb/tool_output" data-node-tag="block/剔除/仅标记" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>通道策略表 · 四通道 · alert/user/kb/tool_output · compose guards :8001（C4 · Python FastAPI · 无状态） · block/剔除/仅标记</title>
+          <rect x="890" y="240" width="220" height="56" rx="6" class="c-mask"/>
+          <rect x="890" y="240" width="220" height="56" rx="6" class="c-backend" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(896 246) scale(0.6875)">
+            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+          </g>
+          <text data-node-label="" data-detail-anchor="" x="1000" y="266" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">通道策略表</text>
+        <text data-detail="context" x="1000" y="282" class="t-muted" font-size="9" text-anchor="middle">四通道 · alert/user/kb/tool_output</text>
+        <text data-detail="fine" x="1000" y="288" class="t-backend" font-size="7" text-anchor="middle">block/剔除/仅标记</text>
+        </g>
+
+        <g id="node-lguard" data-node-id="lguard" data-node-label="llm-guard 注入扫描" tabindex="0" role="button" aria-label="聚焦llm-guard 注入扫描，PromptInjection scanner · 超时 2s, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="security" data-node-sublabel="PromptInjection scanner · 超时 2s" data-node-tag="复用路线 1-3 管线" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>llm-guard 注入扫描 · PromptInjection scanner · 超时 2s · compose guards :8001（C4 · Python FastAPI · 无状态） · 复用路线 1-3 管线</title>
+          <rect x="900" y="130" width="200" height="72" rx="6" class="c-mask"/>
+          <rect x="900" y="130" width="200" height="72" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(906 136) scale(0.6875)">
             <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
             <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="535" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">② TLP/PAP 闸门</text>
-        <text data-detail="context" x="535" y="110" class="t-muted" font-size="9" text-anchor="middle">工具包装层·确定性中间件</text>
-        <text data-detail="fine" x="535" y="120" class="t-security" font-size="7" text-anchor="middle">超限必拒·fail-closed</text>
+          <text data-node-label="" data-detail-anchor="" x="1000" y="164" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">llm-guard 注入扫描</text>
+        <text data-detail="context" x="1000" y="180" class="t-muted" font-size="9" text-anchor="middle">PromptInjection scanner · 超时 2s</text>
+        <text data-detail="fine" x="1000" y="194" class="t-security" font-size="7" text-anchor="middle">复用路线 1-3 管线</text>
         </g>
 
-        <g id="node-runner" data-node-id="runner" data-node-label="③ runner" tabindex="0" role="button" aria-label="聚焦③ runner，选 analyzer + 拉起沙箱, services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="选 analyzer + 拉起沙箱" data-node-tag="默认 mock·演示切真跑" data-node-context="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <title>③ runner · 选 analyzer + 拉起沙箱 · services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起） · 默认 mock·演示切真跑</title>
-          <rect x="650" y="64" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="650" y="64" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(656 70) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-presidio" data-node-id="presidio" data-node-label="Presidio 脱敏管道" tabindex="0" role="button" aria-label="聚焦Presidio 脱敏管道，/analyze + /anonymize · zh/en 实体集, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="security" data-node-sublabel="/analyze + /anonymize · zh/en 实体集" data-node-tag="EMAIL/PHONE/IP/PERSON" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>Presidio 脱敏管道 · /analyze + /anonymize · zh/en 实体集 · compose guards :8001（C4 · Python FastAPI · 无状态） · EMAIL/PHONE/IP/PERSON</title>
+          <rect x="940" y="400" width="220" height="72" rx="6" class="c-mask"/>
+          <rect x="940" y="400" width="220" height="72" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(946 406) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="735" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">③ runner</text>
-        <text data-detail="context" x="735" y="110" class="t-muted" font-size="9" text-anchor="middle">选 analyzer + 拉起沙箱</text>
-        <text data-detail="fine" x="735" y="120" class="t-backend" font-size="7" text-anchor="middle">默认 mock·演示切真跑</text>
+          <text data-node-label="" data-detail-anchor="" x="1050" y="434" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">Presidio 脱敏管道</text>
+        <text data-detail="context" x="1050" y="450" class="t-muted" font-size="9" text-anchor="middle">/analyze + /anonymize · zh/en 实体集</text>
+        <text data-detail="fine" x="1050" y="464" class="t-security" font-size="7" text-anchor="middle">EMAIL/PHONE/IP/PERSON</text>
         </g>
 
-        <g id="node-normalize" data-node-id="normalize" data-node-label="④ normalize" tabindex="0" role="button" aria-label="聚焦④ normalize，Cortex taxonomy 归一, services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Cortex taxonomy 归一" data-node-tag="未知 dataType 拒绝" data-node-context="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <title>④ normalize · Cortex taxonomy 归一 · services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起） · 未知 dataType 拒绝</title>
-          <rect x="850" y="64" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="850" y="64" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(856 70) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-rfc1918" data-node-id="rfc1918" data-node-label="自定义识别器" tabindex="0" role="button" aria-label="聚焦自定义识别器，RFC1918 内网白名单, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="security" data-node-sublabel="RFC1918 内网白名单" data-node-tag="内网 IP 不脱（决策 #8）" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>自定义识别器 · RFC1918 内网白名单 · compose guards :8001（C4 · Python FastAPI · 无状态） · 内网 IP 不脱（决策 #8）</title>
+          <rect x="940" y="520" width="220" height="56" rx="6" class="c-mask"/>
+          <rect x="940" y="520" width="220" height="56" rx="6" class="c-security" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="security" class="semantic-sigil s-security" transform="translate(946 526) scale(0.6875)">
+            <path d="M8 2.2 13 4v3.5c0 3.1-1.8 5.4-5 6.5-3.2-1.1-5-3.4-5-6.5V4Z"/>
+            <path d="m5.8 8 1.5 1.5 3-3"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="935" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">④ normalize</text>
-        <text data-detail="context" x="935" y="110" class="t-muted" font-size="9" text-anchor="middle">Cortex taxonomy 归一</text>
-        <text data-detail="fine" x="935" y="120" class="t-backend" font-size="7" text-anchor="middle">未知 dataType 拒绝</text>
+          <text data-node-label="" data-detail-anchor="" x="1050" y="546" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">自定义识别器</text>
+        <text data-detail="context" x="1050" y="562" class="t-muted" font-size="9" text-anchor="middle">RFC1918 内网白名单</text>
+        <text data-detail="fine" x="1050" y="568" class="t-security" font-size="7" text-anchor="middle">内网 IP 不脱（决策 #8）</text>
         </g>
 
-        <g id="node-writeback" data-node-id="writeback" data-node-label="⑤ writeback" tabindex="0" role="button" aria-label="聚焦⑤ writeback，artifacts 去重回写 M2, services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="artifacts 去重回写 M2" data-node-tag="dataType+data 去重" data-node-context="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <title>⑤ writeback · artifacts 去重回写 M2 · services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起） · dataType+data 去重</title>
-          <rect x="1050" y="64" width="170" height="64" rx="6" class="c-mask"/>
-          <rect x="1050" y="64" width="170" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(1056 70) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
+        <g id="node-mapstore" data-node-id="mapstore" data-node-label="脱敏映射表" tabindex="0" role="button" aria-label="聚焦脱敏映射表，服务端内存 · run 结束即弃, compose guards :8001（C4 · Python FastAPI · 无状态）" aria-pressed="false" data-node-kind="database" data-node-sublabel="服务端内存 · run 结束即弃" data-node-tag="不进审计" data-node-context="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <title>脱敏映射表 · 服务端内存 · run 结束即弃 · compose guards :8001（C4 · Python FastAPI · 无状态） · 不进审计</title>
+          <rect x="660" y="480" width="200" height="60" rx="6" class="c-mask"/>
+          <rect x="660" y="480" width="200" height="60" rx="6" class="c-database" stroke-width="1.5"/>
+          <g aria-hidden="true" data-semantic-sigil="database" class="semantic-sigil s-database" transform="translate(666 486) scale(0.6875)">
+            <ellipse cx="8" cy="4" rx="5" ry="2"/>
+            <path d="M3 4v8c0 1.1 2.2 2 5 2s5-.9 5-2V4M3 8c0 1.1 2.2 2 5 2s5-.9 5-2"/>
           </g>
-          <text data-node-label="" data-detail-anchor="" x="1135" y="94" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">⑤ writeback</text>
-        <text data-detail="context" x="1135" y="110" class="t-muted" font-size="9" text-anchor="middle">artifacts 去重回写 M2</text>
-        <text data-detail="fine" x="1135" y="120" class="t-backend" font-size="7" text-anchor="middle">dataType+data 去重</text>
-        </g>
-
-        <g id="node-analyzer" data-node-id="analyzer" data-node-label="analyzer 真脚本" tabindex="0" role="button" aria-label="聚焦analyzer 真脚本，Cortex 契约子集, 一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）" aria-pressed="false" data-node-kind="backend" data-node-sublabel="Cortex 契约子集" data-node-tag="至少一个真跑" data-node-context="一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）">
-          <title>analyzer 真脚本 · Cortex 契约子集 · 一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面） · 至少一个真跑</title>
-          <rect x="650" y="470.9" width="190" height="64" rx="6" class="c-mask"/>
-          <rect x="650" y="470.9" width="190" height="64" rx="6" class="c-backend" stroke-width="1.5"/>
-          <g aria-hidden="true" data-semantic-sigil="backend" class="semantic-sigil s-backend" transform="translate(656 476.9) scale(0.6875)">
-            <path d="M6 3 3 8l3 5M10 3l3 5-3 5"/>
-          </g>
-          <text data-node-label="" data-detail-anchor="" x="745" y="500.9" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">analyzer 真脚本</text>
-        <text data-detail="context" x="745" y="516.9" class="t-muted" font-size="9" text-anchor="middle">Cortex 契约子集</text>
-        <text data-detail="fine" x="745" y="526.9" class="t-backend" font-size="7" text-anchor="middle">至少一个真跑</text>
+          <text data-node-label="" data-detail-anchor="" x="760" y="508" class="t-primary" font-size="11" font-weight="600" text-anchor="middle">脱敏映射表</text>
+        <text data-detail="context" x="760" y="524" class="t-muted" font-size="9" text-anchor="middle">服务端内存 · run 结束即弃</text>
+        <text data-detail="fine" x="760" y="532" class="t-database" font-size="7" text-anchor="middle">不进审计</text>
         </g>
 
         <!-- Connection labels -->
-
-
-        <g data-detail="context" data-edge-from="tlpgate" data-edge-to="runner" data-edge-label="放行" data-edge-key="2" data-edge-id="gate-to-runner">
-          <rect x="620" y="76" width="30" height="14" rx="3" class="c-mask"/>
-          <text x="635" y="86" class="t-muted" font-size="8" text-anchor="middle">放行</text>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="api" data-edge-label="POST /scan/injection" data-edge-key="0" data-edge-id="agent-to-api-scan">
+          <rect x="217" y="268" width="106" height="14" rx="3" class="c-mask"/>
+          <text x="270" y="278" class="t-muted" font-size="8" text-anchor="middle">POST /scan/injection</text>
         </g>
-        <g data-detail="context" data-edge-from="runner" data-edge-to="analyzer" data-edge-label="拉起 microVM" data-edge-key="3" data-edge-id="runner-to-analyzer">
-          <rect x="714.2" y="132" width="67.6" height="14" rx="3" class="c-mask"/>
-          <text x="748" y="142" class="t-muted" font-size="8" text-anchor="middle">拉起 microVM</text>
+        <g data-detail="context" data-edge-from="agent" data-edge-to="api" data-edge-label="POST /pii/anonymize" data-edge-key="1" data-edge-id="agent-to-api-pii">
+          <rect x="219.4" y="312" width="101.2" height="14" rx="3" class="c-mask"/>
+          <text x="270" y="322" class="t-muted" font-size="8" text-anchor="middle">POST /pii/anonymize</text>
         </g>
-        <g data-detail="context" data-edge-from="analyzer" data-edge-to="normalize" data-edge-label="化验结果" data-edge-key="4" data-edge-id="analyzer-to-normalize">
-          <rect x="910.8" y="295.45" width="48.4" height="14" rx="3" class="c-mask"/>
-          <text x="935" y="305.45" class="t-muted" font-size="8" text-anchor="middle">化验结果</text>
+        <g data-detail="context" data-edge-from="m12" data-edge-to="api" data-edge-label="MCP 描述体检" data-edge-key="2" data-edge-id="m12-to-api">
+          <rect x="246.2" y="520" width="67.6" height="14" rx="3" class="c-mask"/>
+          <text x="280" y="530" class="t-messagebus" font-size="8" text-anchor="middle">MCP 描述体检</text>
         </g>
-
-        <g data-detail="context" data-edge-from="analyzer" data-edge-to="intel" data-edge-label="外联尝试 → 被拦" data-edge-key="6" data-edge-id="analyzer-to-intel">
-          <rect x="359" y="493.1" width="82" height="14" rx="3" class="c-mask"/>
-          <text x="400" y="503.1" class="t-messagebus" font-size="8" text-anchor="middle">外联尝试 → 被拦</text>
+        <g data-detail="context" data-edge-from="api" data-edge-to="lguard" data-edge-label="text + channel" data-edge-key="3" data-edge-id="api-to-lguard">
+          <rect x="661.4" y="156" width="77.2" height="14" rx="3" class="c-mask"/>
+          <text x="700" y="166" class="t-muted" font-size="8" text-anchor="middle">text + channel</text>
+        </g>
+        <g data-detail="context" data-edge-from="api" data-edge-to="presidio" data-edge-label="text + language" data-edge-key="4" data-edge-id="api-to-presidio">
+          <rect x="659" y="426" width="82" height="14" rx="3" class="c-mask"/>
+          <text x="700" y="436" class="t-muted" font-size="8" text-anchor="middle">text + language</text>
+        </g>
+        <g data-detail="context" data-edge-from="chanpol" data-edge-to="lguard" data-edge-label="动作策略" data-edge-key="5" data-edge-id="chanpol-to-lguard">
+          <rect x="975.8" y="211" width="48.4" height="14" rx="3" class="c-mask"/>
+          <text x="1000" y="221" class="t-messagebus" font-size="8" text-anchor="middle">动作策略</text>
+        </g>
+        <g data-detail="context" data-edge-from="rfc1918" data-edge-to="presidio" data-edge-label="识别器挂载" data-edge-key="6" data-edge-id="rfc1918-to-presidio">
+          <rect x="1121" y="486" width="58" height="14" rx="3" class="c-mask"/>
+          <text x="1150" y="496" class="t-messagebus" font-size="8" text-anchor="middle">识别器挂载</text>
+        </g>
+        <g data-detail="context" data-edge-from="presidio" data-edge-to="mapstore" data-edge-label="写映射（仅内存）" data-edge-key="7" data-edge-id="presidio-to-mapstore">
+          <rect x="896.6" y="496" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="940" y="506" class="t-muted" font-size="8" text-anchor="middle">写映射（仅内存）</text>
+        </g>
+        <g data-detail="context" data-edge-from="evalci" data-edge-to="lguard" data-edge-label="阈值标定 · 入 CI" data-edge-key="8" data-edge-id="evalci-to-lguard">
+          <rect x="516.6" y="86" width="86.8" height="14" rx="3" class="c-mask"/>
+          <text x="560" y="96" class="t-messagebus" font-size="8" text-anchor="middle">阈值标定 · 入 CI</text>
         </g>
 
         <!-- Boundary labels (foreground masks keep routes out of titles) -->
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）">
-          <rect data-graph-role="structural-frame-label-mask" x="224" y="44" width="398.8" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="228" y="57" class="t-cloud" font-size="9" font-weight="600">services/agent 内子模块 workers/enrichment（无独立 HTTP 面，由 M3 拉起）</text>
-        </g>
-
-        <g data-graph-role="structural-frame-label" data-composition-frame-id="1" data-composition-frame-kind="region" data-composition-frame-label="一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）">
-          <rect data-graph-role="structural-frame-label-mask" x="531.6644927290323" y="450.9" width="426.6710145419354" height="16" rx="3" class="c-mask"/>
-          <text data-boundary-label="" x="535.6644927290323" y="463.80322680645156" class="t-cloud" font-size="8.903226806451611" font-weight="600">一次性 microVM（microsandbox）：用完即毁；外联 / 读宿主 env 必拦（第四攻击面）</text>
+        <g data-graph-role="structural-frame-label" data-composition-frame-id="0" data-composition-frame-kind="region" data-composition-frame-label="compose guards :8001（C4 · Python FastAPI · 无状态）">
+          <rect data-graph-role="structural-frame-label-mask" x="364" y="110" width="290.8" height="16" rx="3" class="c-mask"/>
+          <text data-boundary-label="" x="368" y="123" class="t-cloud" font-size="9" font-weight="600">compose guards :8001（C4 · Python FastAPI · 无状态）</text>
         </g>
 
         <!-- Legend -->
-        <g data-legend="" data-legend-bridge="">
-          <text x="40" y="606" class="t-primary" font-size="12" font-weight="650">图例</text>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="后端" data-legend-x="40" data-legend-baseline="626" data-legend-width="63">
-            <rect x="40" y="617" width="16" height="10" rx="2.5" class="c-backend" stroke-width="1"/>
-            <text x="62" y="626" class="t-muted" font-size="10" font-weight="500">后端</text>
-          </g>
-          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="安全" data-legend-x="125" data-legend-baseline="626" data-legend-width="63">
-            <rect x="125" y="617" width="16" height="10" rx="2.5" class="c-security" stroke-width="1"/>
-            <text x="147" y="626" class="t-muted" font-size="10" font-weight="500">安全</text>
-          </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="外部系统" data-legend-x="210" data-legend-baseline="626" data-legend-width="83">
-            <rect x="210" y="617" width="16" height="10" rx="2.5" class="c-external" stroke-width="1"/>
-            <text x="232" y="626" class="t-muted" font-size="10" font-weight="500">外部系统</text>
-          </g>
-        </g>
+
       </svg>
       <p class="intent-trace-status no-print" id="intent-trace-status" role="status" aria-live="polite" aria-atomic="true"></p>
       <div class="share-chapter-cue no-print" id="share-chapter-cue" hidden role="status" aria-live="polite">
@@ -5383,9 +5397,9 @@
           <h3>技术栈</h3>
         </div>
         <ul>
-          <li>&bull; analyzer 是 Cortex 契约子集的真脚本（v1.1 变更：至少一个沙箱内真跑，不再是纯 mock）</li>
-          <li>&bull; TLP/PAP 闸门在工具包装层——确定性中间件，数据分密级（CLEAR/GREEN/AMBER/RED），不靠模型自觉</li>
-          <li>&bull; 结果按 Cortex taxonomy 归一，artifacts 进 M2 供后续分诊/调查提速</li>
+          <li>&bull; Python + FastAPI :8001（C4，可同服务多端点）；llm-guard PromptInjection scanner（路线 1-3 实测管线复用），扫描超时默认 2s</li>
+          <li>&bull; Presidio：默认 zh/en 实体集（EMAIL/PHONE/IP/PERSON）+ RFC1918 内网网段白名单自定义识别器（决策 #8）</li>
+          <li>&bull; 无状态服务：脱敏映射仅服务端内存、run 结束即弃；通道策略表按通道配动作（block/剔除/仅标记）</li>
         </ul>
       </div>
 
@@ -5395,9 +5409,9 @@
           <h3>部署</h3>
         </div>
         <ul>
-          <li>&bull; microsandbox 非常驻服务：每次富化按需拉起一次性 microVM，用完即毁</li>
-          <li>&bull; 默认 mock（fixture 表，CI 快）；演示第四攻击面时切真跑</li>
-          <li>&bull; 结果能出沙箱（回 normalize），恶意外联不能出——方向不对称是设计本意</li>
+          <li>&bull; compose 单容器 guards :8001；调用方 = agent（M4/M5 prompt 装配前扫描、M8 输入预检、LLM 出域前脱敏）+ M12 CLI（决策 #11 可降级本地规则内嵌）</li>
+          <li>&bull; 出域边界唯一：原始数据内网留存（SQLite 原文），只在与 LLM 之间脱敏；先脱敏后凭证注入（与 S1 同层不同序）</li>
+          <li>&bull; 扫描结果与处置进审计（M2 AuditEntry）；攻击 fixture 四注入位（srcuser/full_log/url/previous_output）拦截率 100% 入 eval</li>
         </ul>
       </div>
 
@@ -5407,9 +5421,9 @@
           <h3>铁律</h3>
         </div>
         <ul>
-          <li>&bull; TLP/PAP 超限 → 拒绝 + DENIED 审计；fail-closed，不降级不外发</li>
-          <li>&bull; 投毒 analyzer 尝试外联 / 读宿主 env → 沙箱拦截（attack/sandbox/01 验收）</li>
-          <li>&bull; 未知 dataType 拒绝；情报未命中 = no-record 不是错误；artifacts 按 dataType+data 去重合并</li>
+          <li>&bull; fail-closed：服务不可达/超时（2s）一律不放行——不可信段不进 prompt、告警转人工；可配置切「仅标记」降级，演示默认 fail-closed</li>
+          <li>&bull; 间接注入是主攻面：四通道全覆盖（告警字段/用户输入/KB 内容/工具输出），外部来的文字进 prompt 前统一扫描 + 统一打不可信标记</li>
+          <li>&bull; 标定流程：正例=毒种家族、负例=善意句式/高熵串/中文短语；0.1–0.9 阈值阶梯误/漏率表选定工作阈值，标本集入 CI 不得劣化</li>
         </ul>
       </div>
     </div>
@@ -14818,12 +14832,6 @@
       }
     });
   </script>
-
-
-
-
-
-
 <!-- arch-nodepop:begin -->
 <style>
   [data-node-id]{cursor:pointer}
