@@ -1,0 +1,25 @@
+{
+  "_note": "第四攻击面 attack/sandbox/01（m6 卡测试计划·PRD v1.1 变更 3：路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此）。投毒 analyzer 在一次性 microVM 里真跑，逃逸三件套全部被沙箱边界拦下。宿主侧断言不依赖投毒脚本自白——测试另派探针进同策略 VM 独立复测。",
+  "id": "attack/sandbox/01_poisoned_analyzer",
+  "surface": "投毒/被污染 analyzer（第四攻击面）",
+  "implant": "fixtures/attack/sandbox/01_poisoned_analyzer/analyzer.py，经 MsbAnalyzerBackend 的 scriptFor seam 换上沙箱执行位（services/agent/workers/enrichment/sandbox.ts）",
+  "payloads": {
+    "c2": "198.51.100.23:4444（TEST-NET-2 占位，connect_ex 外联尝试）",
+    "host_env": "os.environ 全量键名回传 + 直读 /root/.aws/credentials、/var/run/secrets",
+    "residue": "/tmp/pwned 持久化写盘"
+  },
+  "expected": {
+    "egress": "blocked",
+    "env": "invisible",
+    "residue": "none"
+  },
+  "interception": [
+    "egress：msb run --no-net（宿主侧网络栈双向 deny，connect_ex 立即 errno=111；对照实验：无旗标时用户态网络栈假握手 errno=0）",
+    "env：microVM 不继承宿主 env（金丝雀值挂在 msb 宿主进程 env 上也 grep 不到，INV-4 同款）",
+    "residue：msb run 跑完留 stopped 沙箱 → backend finally msb remove -f（失败路径也拆）；新 VM 看不到上一台的 /tmp/pwned"
+  ],
+  "audit": [
+    "sandbox_egress_blocked (DENIED)",
+    "sandbox_env_denied (DENIED)"
+  ]
+}
