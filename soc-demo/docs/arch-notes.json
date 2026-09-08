@@ -33,7 +33,7 @@
  },
  "m8-copilot": {
   "title": "M8 对话 Copilot —— 值班员的自然语言入口",
-  "body": "<p><b>干什么：</b>登录角色会话 → RBAC 可见工具 → 输入预检 → 意图闸 → 执行 → SSE 流式回答。复用 M3 的 chat_flow。</p><ul><li><b>可见性由角色决定</b>：什么身份看得见什么工具（ContextForge RBAC），soc1 发起 L2 意图 100% deny</li><li><b>注入拒答</b>：命中注入拒答 + 审计；置信度低澄清反问</li><li><b>接口</b>：POST /api/v1/chat（SSE）；4 预置身份登录</li></ul>"
+  "body": "<p><b>干什么：</b>登录角色会话 → 输入预检 → 意图闸 → 执行 → SSE 流式回答。复用 M3 的 chat_flow（同进程同运行时）。</p><p><b>上下游：</b>上游 = Web 对话页（走 agent 的 REST 面，web→M3「全量消费」那条边就含 POST /chat）；下游 = guards（输入预检·直接注入通道）→ gateway（RBAC 可见性 + OpenFGA 意图三态裁决，审批通过后铸 ApprovalToken）；追问数据从 M2 只读面来（主图由 web→M2 只读边代表）。</p><ul><li><b>意图三态</b>：allow 只读直查 / require_approval 转 L2 审批卡 / deny 拒绝并解释（soc1 发 L2 意图 100% deny）</li><li><b>注入拒答</b>：命中注入拒答 + 审计；<b>防伪造历史</b>：只验签名 ApprovalToken，不信对话文本</li><li><b>接口</b>：POST /api/v1/chat（SSE）；4 预置身份登录（铸门票①）</li></ul>"
  },
  "web": {
   "title": "M10 Web 演示窗 —— 薄客户端",

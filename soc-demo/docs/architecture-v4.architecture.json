@@ -395,8 +395,8 @@
    "fromSide": "right",
    "toSide": "left",
    "labelAt": [
-    985,
-    426
+    1010,
+    538
    ]
   },
   {
@@ -455,7 +455,7 @@
    "id": "web-to-m3",
    "from": "web",
    "to": "m3-supervisor",
-   "label": "REST + SSE 全量消费",
+   "label": "REST + SSE 全量消费（对话 /chat 走 M8）",
    "fromSide": "right",
    "toSide": "top",
    "labelAt": [
@@ -558,6 +558,32 @@
    "labelAt": [
     736,
     428
+   ]
+  },
+  {
+   "id": "m8-to-gateway",
+   "from": "m8-copilot",
+   "to": "gateway",
+   "label": "RBAC 可见性 + FGA 三态裁决",
+   "fromSide": "right",
+   "toSide": "bottom",
+   "via": [
+    [
+     990,
+     467
+    ],
+    [
+     990,
+     300
+    ],
+    [
+     1112,
+     300
+    ]
+   ],
+   "labelAt": [
+    1050,
+    300
    ]
   }
  ],
