@@ -1,11 +1,184 @@
 import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
+import type { DB } from "./db.js";
+import { openDb } from "./db.js";
+import {
+  JtiExistsError,
+  MergeTargetClosedError,
+  NotFoundError,
+  VerdictRequiredError,
+  addTimelineEntry,
+  closeAlert,
+  closeCase,
+  createCaseFromAlert,
+  createCaseManual,
+  findActiveCases,
+  getAlert,
+  getCaseDetail,
+  listAlerts,
+  listCases,
+  listTimeline,
+  lookupUsedToken,
+  mergeAlertIntoCase,
+  patchCase,
+  pollEvents,
+  queryAudit,
+  registerUsedToken,
+  reopenAlert,
+  type Ctx,
+} from "./store.js";
+import { InvalidTransitionError } from "./statemachine.js";
 
-// 阶段 0.3：把"建应用"和"起服务"拆开。buildApp 是纯工厂——测试用 app.inject 直接打请求，
-// 不需要真开端口；index.ts 只负责监听。这就是 seam：测试打在 buildApp 这个接口上。
-export function buildApp() {
+// buildApp 是纯工厂（seam，阶段 0.3 拆分沿用）：测试注入 :memory: db，生产注入文件 db。
+// REST 面照 PRD §6-M2 接口契约；另有四个薄出口，决策记录见票 03 实现记录：
+// GET /cases/:id（三结局要读 observables/tasks）、POST /alerts/:id/reopen（FR-M2.1 重开）、
+// GET /api/v1/events（outbox 轮询 seam）、/internal/used-tokens（m9 焚毁表读写口）。
+export function buildApp(opts: { db?: DB } = {}) {
+  const db = opts.db ?? openDb(":memory:");
   const app = Fastify();
 
   app.get("/healthz", () => ({ ok: true, service: "case-backend" }));
+
+  // M2 信任内网调用方传入的 actor（PRD 职责与边界）；requestId 串联一次请求的全部审计
+  function ctxOf(h: Record<string, unknown>): Ctx {
+    const actorId = (h["x-actor-id"] as string) ?? "system";
+    return {
+      actor: {
+        type: (h["x-actor-type"] as string) ?? (actorId.startsWith("agent:") ? "agent" : "user"),
+        id: actorId,
+      },
+      requestId: (h["x-request-id"] as string) ?? randomUUID(),
+    };
+  }
+
+  app.setErrorHandler((err, _req, reply) => {
+    if (
+      err instanceof InvalidTransitionError ||
+      err instanceof VerdictRequiredError ||
+      err instanceof MergeTargetClosedError ||
+      err instanceof JtiExistsError ||
+      err instanceof NotFoundError
+    ) {
+      return reply.status(err.httpStatus).send({ error: err.code });
+    }
+    return reply.status(500).send({ error: "internal_error" });
+  });
+
+  // ---- alerts ----
+  app.get("/api/v1/alerts", (req) => {
+    const q = req.query as { status?: string; host?: string };
+    return listAlerts(db, { status: q.status, host: q.host });
+  });
+
+  app.get("/api/v1/alerts/:id", (req, reply) => {
+    const alert = getAlert(db, (req.params as { id: string }).id);
+    if (!alert) return reply.status(404).send({ error: "not_found" });
+    return alert;
+  });
+
+  app.post("/api/v1/alerts/:id/create-case", (req, reply) => {
+    const { id } = req.params as { id: string };
+    return reply
+      .status(201)
+      .send(createCaseFromAlert(db, id, (req.body ?? {}) as object, ctxOf(req.headers)));
+  });
+
+  app.post("/api/v1/alerts/:id/merge/:caseId", (req) => {
+    const { id, caseId } = req.params as { id: string; caseId: string };
+    return mergeAlertIntoCase(db, id, caseId, ctxOf(req.headers));
+  });
+
+  app.post("/api/v1/alerts/:id/close", (req) => {
+    const { id } = req.params as { id: string };
+    return closeAlert(db, id, (req.body ?? {}) as { verdict?: string }, ctxOf(req.headers));
+  });
+
+  app.post("/api/v1/alerts/:id/reopen", (req) => {
+    const { id } = req.params as { id: string };
+    return reopenAlert(db, id, ctxOf(req.headers));
+  });
+
+  // ---- cases（/active 是静态段，注册在 :id 之前更稳）----
+  app.get("/api/v1/cases/active", (req) => {
+    const q = req.query as { host?: string; within_hours?: string };
+    return findActiveCases(db, q.host ?? "", Number(q.within_hours ?? "24"));
+  });
+
+  app.get("/api/v1/cases", (req) => {
+    const q = req.query as { status?: string };
+    return listCases(db, { status: q.status });
+  });
+
+  app.post("/api/v1/cases", (req, reply) => {
+    const body = (req.body ?? {}) as {
+      title?: string; description?: string; severity?: number; assignee?: string; tags?: string[];
+    };
+    if (!body.title) return reply.status(400).send({ error: "title_required" });
+    return reply.status(201).send(createCaseManual(db, { ...body, title: body.title }, ctxOf(req.headers)));
+  });
+
+  app.get("/api/v1/cases/:id", (req, reply) => {
+    const detail = getCaseDetail(db, (req.params as { id: string }).id);
+    if (!detail) return reply.status(404).send({ error: "not_found" });
+    return detail;
+  });
+
+  app.patch("/api/v1/cases/:id", (req) => {
+    const { id } = req.params as { id: string };
+    return patchCase(db, id, (req.body ?? {}) as Record<string, unknown>, ctxOf(req.headers));
+  });
+
+  app.post("/api/v1/cases/:id/close", (req) => {
+    const { id } = req.params as { id: string };
+    return closeCase(
+      db, id,
+      (req.body ?? {}) as { verdict?: string; verdictNote?: string },
+      ctxOf(req.headers),
+    );
+  });
+
+  app.get("/api/v1/cases/:id/timeline", (req) =>
+    listTimeline(db, (req.params as { id: string }).id));
+
+  app.post("/api/v1/cases/:id/timeline", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { kind?: string; author?: string; body?: string };
+    if (!body.kind || !body.author) {
+      return reply.status(400).send({ error: "kind_and_author_required" });
+    }
+    return reply.status(201).send(
+      addTimelineEntry(
+        db, id,
+        { kind: body.kind, author: body.author, body: body.body ?? "" },
+        ctxOf(req.headers),
+      ),
+    );
+  });
+
+  // ---- audit / events / internal ----
+  app.get("/api/v1/audit", (req) => {
+    const q = req.query as { objectId?: string; requestId?: string };
+    return queryAudit(db, q);
+  });
+
+  app.get("/api/v1/events", (req) => {
+    const q = req.query as { after?: string; limit?: string };
+    return { events: pollEvents(db, Number(q.after ?? "0"), Number(q.limit ?? "100")) };
+  });
+
+  app.post("/internal/used-tokens", (req, reply) => {
+    const body = (req.body ?? {}) as { jti?: string; source?: string };
+    if (!body.jti) return reply.status(400).send({ error: "jti_required" });
+    return reply
+      .status(201)
+      .send(registerUsedToken(db, body as { jti: string; source?: string }, ctxOf(req.headers)));
+  });
+
+  app.get("/internal/used-tokens/:jti", (req, reply) => {
+    const hit = lookupUsedToken(db, (req.params as { jti: string }).jti);
+    if (!hit) return reply.status(404).send({ error: "not_found" });
+    return hit;
+  });
 
   return app;
 }
