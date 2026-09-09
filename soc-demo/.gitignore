@@ -17,3 +17,6 @@ services/gateway/plugins/fga_ids.json
 
 # m11 eval 运行产物（evals/ 每次跑测重新生成，latest.json 供 m10 Eval 页读取）
 eval-results/
+
+# 票 48：gen:tool 脚手架的默认生成物目录（演示产物不入库，入库的是生成器本身）
+generated-tools/

@@ -1,0 +1,33 @@
+{
+  "_readme": "工具登记单一来源（票 48，ADR 0004-2 裁决 2）。字段：name（全仓唯一的工具名）/ tier（L0 只读免验 / L1 写需任务票 / L2 高危需审批铸票）/ family（A.2 四族）/ owner_card（负责的模块卡 m1-m12）/ description。三方法律：本文件 ≡ PRD 附录 A.1 清单 ≡ 各 worker TOOLS 常量，由 services/agent/src/tools-manifest.test.ts 咬死；family/tier 与 gateway FGA 矩阵（services/gateway/fga/matrix.json）的互锁由 services/gateway/test_fga_matrix.py 咬死。新增工具先在本文件登记（或 pnpm gen:tool 生成脚手架顺带登记），再谈持票——未登记的工具过不了闸。",
+  "policy": {
+    "unregistered_tier": "L1",
+    "unregistered_note": "未登记工具一律按 L1 对待——fail-closed 更严口径（FR-S2.1 / 遗留 G2-4 / ADR 0004-2）：L0 的免验与 L2 的审批都是登记后才享有的待遇，没登记就只剩「持任务票才可动」这一条路，无票一律 403 no_ticket。验票闸（verify-ticket.ts）的分级读本文件的 tier 字段，默认级读本字段。"
+  },
+  "tools": [
+    { "name": "kb_lookup", "tier": "L0", "family": "readonly_query", "owner_card": "m4", "description": "查内网资产/网段/用户清单（仅 approved 条目；分诊/调查/对话共用读）" },
+    { "name": "search_cases_by_host", "tier": "L0", "family": "readonly_query", "owner_card": "m4", "description": "同主机历史案件归并查询（FR-M2.4）" },
+    { "name": "get_alert", "tier": "L0", "family": "readonly_query", "owner_card": "m4", "description": "读一条告警（分诊/调查/一键关单共用读）" },
+    { "name": "create_case", "tier": "L1", "family": "case_write", "owner_card": "m4", "description": "TP 建案" },
+    { "name": "merge_alert", "tier": "L1", "family": "case_write", "owner_card": "m4", "description": "并入旧案（数据自动转移）" },
+    { "name": "close_alert", "tier": "L1", "family": "case_write", "owner_card": "m4", "description": "关单（必填 verdict；票 39 close_flow 的执行件）" },
+    { "name": "siem_query", "tier": "L0", "family": "readonly_query", "owner_card": "m5", "description": "SIEM pivot 查询，强制 time_window 参数（调查/对话共用读）" },
+    { "name": "related_alerts", "tier": "L0", "family": "readonly_query", "owner_card": "m5", "description": "同实体关联告警查询" },
+    { "name": "kb_verify", "tier": "L0", "family": "readonly_query", "owner_card": "m5", "description": "KB 核验（调查复核既有知识条目）" },
+    { "name": "add_timeline_entry", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "timeline 写入（调查报告/富化报告共用写）" },
+    { "name": "add_task_log", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "任务日志写入" },
+    { "name": "vt_lookup", "tier": "L0", "family": "readonly_query", "owner_card": "m6", "description": "VirusTotal 风格信誉查询（analyzer 只读 flavor，max_tlp=2/max_pap=2 闸门）" },
+    { "name": "ip_reputation", "tier": "L0", "family": "readonly_query", "owner_card": "m6", "description": "IP 信誉查询（analyzer 只读 flavor，同上闸门）" },
+    { "name": "add_observable", "tier": "L1", "family": "case_write", "owner_card": "m6", "description": "analyzer 提取的 observable 回写案件（按 dataType+data 去重合并）" },
+    { "name": "extract_knowledge", "tier": "L0", "family": "readonly_query", "owner_card": "m7", "description": "产出 KBEntry 草稿（不落库）" },
+    { "name": "kb_propose", "tier": "L1", "family": "case_write", "owner_card": "m7", "description": "提交 proposed 提案（人审入库前的暂存面）" },
+    { "name": "kb_write", "tier": "L2", "family": "kb_write", "owner_card": "m7", "description": "写入 Chroma 检索面（L2：人审铸 ApprovalToken，INV-5 入库唯一通道）" },
+    { "name": "isolate_host", "tier": "L2", "family": "incident_response", "owner_card": "m9", "description": "mock EDR 隔离（无任何 worker 持票，仅审批回路铸票后执行）" },
+    { "name": "block_ip", "tier": "L2", "family": "incident_response", "owner_card": "m9", "description": "mock 防火墙封禁（同上）" },
+    { "name": "deisolate_host", "tier": "L2", "family": "incident_response", "owner_card": "m9", "description": "隔离回滚（同等级审批）" },
+    { "name": "unblock_ip", "tier": "L2", "family": "incident_response", "owner_card": "m9", "description": "封禁回滚（同等级审批）" },
+    { "name": "case_assign", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "案件指派（参数级升降级示例：severity 上调至 4 时升 L2）" },
+    { "name": "case_update", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "案件更新（同上参数级规则）" },
+    { "name": "get_case", "tier": "L1", "family": "readonly_query", "owner_card": "m7", "description": "读案件详情（票 17 引入的沉淀读案面；更严口径按 L1 过任务票，不做免验。A.1 表暂未列——已知偏差，见票 48 出入①）" }
+  ]
+}

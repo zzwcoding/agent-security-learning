@@ -60,6 +60,27 @@ def test_every_a1_tool_in_exactly_one_family():
     assert len(seen) == len(set(seen)), "一个工具只能属于一个族"
 
 
+def load_tool_manifest():
+    return json.loads((GW.parent.parent / "fixtures" / "tools.manifest.json").read_text(encoding="utf-8"))
+
+
+def test_tool_manifest_matches_matrix_families():
+    """票 48（ADR 0004-2）：fixtures/tools.manifest.json 是工具分级/族的登记单一来源；
+    matrix.json 是族→角色的 FGA 授权面。两个机读面的族归属与分级必须逐字一致：
+    矩阵里的每个工具在 manifest 同名同族同级；manifest 比矩阵多出的登记必须单独
+    点名（当前唯一：get_case，票 17 引入的沉淀读案工具，A.1/矩阵暂未收——记票 48 出入①）。"""
+    entries = {t["name"]: t for t in load_tool_manifest()["tools"]}
+    fams = load_matrix()["families"]
+    matrix_tools = {t for fam in fams.values() for t in fam["tools"]}
+    for fam, spec in fams.items():
+        for tool in spec["tools"]:
+            assert tool in entries, f"矩阵工具 {tool} 未在 manifest 登记（先登记后授权）"
+            assert entries[tool]["family"] == fam, f"{tool} family 与矩阵漂移"
+            assert entries[tool]["tier"] == spec["tier"], f"{tool} tier 与矩阵漂移"
+    extra = set(entries) - matrix_tools
+    assert extra == {"get_case"}, f"manifest 比矩阵多出的登记须点名复核：{sorted(extra)}"
+
+
 def test_no_direct_grant_on_l2_anywhere():
     """A.2 的「需审批/审批回路」= 走审批铸 ApprovalToken，不经 FGA 直接放行——
     所以 4 角色 × L2 两族的直接授权必须为空（D7/INV-3 的 FGA 面）。"""

@@ -79,16 +79,12 @@ export interface ApprovalClaims {
   used: boolean;
 }
 
-// 工具分级最小静态表（FR-S2.1 教学版）：L0 只读免验 / L1 写需任务票 / L2 高危需审批铸票。
-// 未登记工具一律按 L1 对待——fail-closed：没票就不许动；ToolManifest 机制由后续票接手。
-const L0_TOOLS = new Set(["siem_query", "kb_search"]);
-const L2_TOOLS = new Set(["isolate_host", "kb_write"]);
-
-function levelOf(tool: string): 0 | 1 | 2 {
-  if (L0_TOOLS.has(tool)) return 0;
-  if (L2_TOOLS.has(tool)) return 2;
-  return 1;
-}
+// 工具分级（FR-S2.1）：分级知识住在 fixtures/tools.manifest.json 登记表（票 48，
+// ADR 0004-2——原票 07 的手写小表已退役）。tierOf：L0 只读免验 / L1 写需任务票 /
+// L2 高危需审批铸票；未登记工具按登记表 policy 的默认级对待——fail-closed 更严口径
+// （默认 L1）：没登记就没票可用，无票一律 403。manifest 读不到/JSON 坏 → tierOf 抛
+// → 落进下面闸体的 try 收进 403（INV-1：闸的粮草病了也绝不放行）。
+import { tierOf } from "./tools-manifest.js";
 
 function deny(reason: DenyReason): VerifyResult {
   return { allow: false, code: 403, reason };
@@ -203,9 +199,9 @@ export function verifyTicket(
 
     // 闸控制流：手里什么签名票都没有（no_ticket/require_approval 不是票面状态，
     // 不由票面 fixture 覆盖——README「reason 枚举」节）
-    if (levelOf(toolCall.name) === 0) return { allow: true, reason: "allow" }; // L0 只读免验
-    if (levelOf(toolCall.name) === 2) return deny("require_approval"); // L2 必须经人审批铸票（FR-S2.4）
-    return deny("no_ticket"); // L1 写工具没带票
+    if (tierOf(toolCall.name) === 0) return { allow: true, reason: "allow" }; // L0 只读免验
+    if (tierOf(toolCall.name) === 2) return deny("require_approval"); // L2 必须经人审批铸票（FR-S2.4）
+    return deny("no_ticket"); // L1 写工具（含未登记默认级）没带票
   } catch {
     return deny("signature_invalid");
   }

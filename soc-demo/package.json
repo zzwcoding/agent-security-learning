@@ -12,6 +12,7 @@
     "test:eval": "pnpm -C evals test:eval",
     "replay": "tsx scripts/replay.ts",
     "wazuh:feed": "tsx scripts/wazuh-logtest-feed.ts",
+    "gen:tool": "node tools/gen-tool.mjs",
     "check:boundary": "python3 tools/check_boundary.py --self-test && python3 tools/check_boundary.py ."
   },
   "devDependencies": {
