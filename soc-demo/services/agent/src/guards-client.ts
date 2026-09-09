@@ -5,7 +5,16 @@
 
 export const DEFAULT_TIMEOUT_MS = 2000;
 
-export type ScanChannel = "alert_field" | "user_input" | "kb" | "tool_output";
+// 通道枚举的运行时名单（票 32 形状锁；票 31 events.ts 先例：类型是编译期注记，
+// 测试摸不到——数组才是能与 fixtures/guards/contract.json 对暗号的运行时事实）。
+export const SCAN_CHANNELS = [
+  "alert_field",
+  "user_input",
+  "kb",
+  "tool_output",
+] as const;
+
+export type ScanChannel = (typeof SCAN_CHANNELS)[number];
 export type ScanAction = "allow" | "block" | "strip" | "flag" | "fail_closed";
 
 export interface ScanDecision {
