@@ -14,3 +14,7 @@
 - 好：PRD 三处"设计了没做"（queued 状态、FR-S2.1 ToolManifest、FR-S4.2 mapstore）全部兑现；演示动线升级（审批有真实截止、新增工具有脚手架、反查有入口）。
 - 代价：票 47 是 M 级（波及 evals 33 用例的同步假设与 web 等待形态——SSE 补发使 web 改动很小）；48/49 为 S/M。
 - 拆票：47 异步化+审批保质期（M）、48 ToolManifest+脚手架（M）、49 mapstore+反查（M），依赖无环，串行派发。
+
+## 追认（2026-09-09，票 49 落地后 L0 追认）
+
+裁决 3 的反查归属按方案 a 落地并追认：`POST /api/v1/pii/reveal` 走 agent 端点级角色白名单（duty_lead/admin，soc1/redteam 403），**不进 FGA 工具矩阵**——反查是人的平台动作而非 worker 工具调用，A.2 矩阵的粒度是工具授权；端点白名单有正反测试锚。映射表属敏感面的金丝雀口径（原文不进日志/SSE/审计 details）随票 49 落地。
