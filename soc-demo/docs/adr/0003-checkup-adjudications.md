@@ -18,3 +18,7 @@
 - 好：三类对账的全部"承诺悬空"项有了正式去向（本 ADR 三条裁决 + 票 28-44 的补齐票），文档与实现不再有两头不一致的存活状态。
 - 代价：边界规则节与闸（票 28）落地后，CI 将对现存越界真实报警——票 28 必须在同一提交内完成清偿，避免主干红灯窗口。
 - 风险：豁免清单第 1 条若被 subsequent 票当作"evals 可以随便 import"的口子，边界将腐烂——靠每轮体检第四条回收复核兜底。
+
+## 追认（2026-09-09，票 44 落地后 L0 追认，票 45 在案）
+
+裁决 3 允许清单**延伸**：票 44 把 scenarios.ts（1334 行）按 facet 拆进 `evals/src/rigs/` 七文件（shared/approval/replay/chat/investigation/triage/attack.ts），属纯机械搬移——新文件继承组装入口豁免角色，语义不变：仍限组装入口性质符号、仍禁触 case-backend `db.ts`/`store.ts` 写路径、仍受每轮体检第四条复核。原五文件（runner/scenarios/judge/assertions/suite.test.ts）豁免不变。

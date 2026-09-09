@@ -391,7 +391,7 @@
 | 禁止 | 例外 | 理由 |
 |---|---|---|
 | `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；现存违例 testkit.ts 由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
-| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——**ADR 0003 允许清单扩展与本次例外列变更待 L0 追认（票 45）**）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
+| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——**ADR 0003 允许清单扩展与本次例外列变更ADR 0003 追认（票 45，2026-09-09）**）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
 | `scripts/`、`tools/` 中立层 import services/evals/packages 内部 | （无） | 中立层保持可独立执行（票 09 replay 三铁律同源） |
 | services 测试反引仓库级 `scripts/`（replay 类走子进程） | （无；现存违例由票 28 清偿） | scripts 不在模块图内 |
 | `packages/mcp-audit` import 任何 workspace 包（独立 CLI） | （无） | m12 卡独立交付（ADR 0002 票 25 沿革） |
