@@ -5,6 +5,11 @@ services:
   ingest:
     build: { context: ., dockerfile: services/ingest/Dockerfile }
     ports: ["3001:3001"]
+    # 缺它 m2client 回退 127.0.0.1:3002——容器里指 ingest 自己，webhook 必 500
+    environment:
+      CASE_BACKEND_URL: http://case-backend:3002
+    depends_on:
+      case-backend: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/healthz"]
       interval: 5s
@@ -35,6 +40,8 @@ services:
       # 出站，真凭证只活在网关进程（SECRETS_* 挂 gateway 不挂 agent）；本机离线开发显式
       # AGENT_LLM=fake 切回伪 LLM。上游病了 → worker 降级 uncertain + 人工（fail-closed）。
       AGENT_LLM: ${AGENT_LLM:-real}
+      # 验票/会话 HMAC 钥（与 gateway 同一枚，经 .env 注入；缺省 fail-closed 拒登录）
+      SOC_HMAC_KEY: ${SOC_HMAC_KEY:-}
       LLM_MODEL: ${LLM_MODEL:-minimax-m2} # PRD 决策 #7
       SOC_LLM_PROXY_URL: ${SOC_LLM_PROXY_URL:-http://gateway:8002/proxy/llm}
       # 票 17：KB 检索面 = 真 chroma 容器（分诊 kb_check 经 ChromaKb 查 approved 条目，
@@ -74,6 +81,9 @@ services:
     # 部署时同口径以环境变量注入
     environment:
       SOC_LLM_UPSTREAM: ${SOC_LLM_UPSTREAM:-https://api.minimaxi.com}
+      # HMAC 钥（铸票/会话签名，与 agent 共享同一枚）经 .env / 部署环境注入；
+      # 不给默认值——缺它铸票 fail-closed（票 06 口径，INV-1）
+      SOC_HMAC_KEY: ${SOC_HMAC_KEY:-}
       SECRETS_LLM_API_KEY: ${SECRETS_LLM_API_KEY:-}
       SECRETS_VT_KEY: ${SECRETS_VT_KEY:-canary-vt-key-teaching-fake}
       SECRETS_SIEM_TOKEN: ${SECRETS_SIEM_TOKEN:-canary-siem-token-teaching-fake}

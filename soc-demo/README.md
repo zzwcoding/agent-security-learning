@@ -3,7 +3,19 @@
 为被告警淹没的 SOC 提供一名"数字员工"：自动分诊告警、调查取证、沉淀知识，危险动作永远等人点头。
 
 - 需求与验收口径：`specs/` 与 PRD（见下方文档地图）
-- 一键启动：`docker compose up`（阶段 0.2 起可用）
+
+## 启动（2026-09-09 实测口径）
+
+```bash
+cp .env.example .env          # 教学假值可跑；真部署按票 06 口径由环境注入真值
+docker compose up -d --build  # 首次或代码更新后带 --build
+bash scripts/setup-openfga.sh # 幂等重建 FGA 授权世界（openfga 是内存存储，容器重启后需重跑）
+pnpm replay                   # 告警 fixture 走 ingest webhook 正门（同 web 告警页回放按钮）
+```
+
+打开 http://localhost:5173 选脸登录（无密码，四预置身份）。LLM 切换在 `.env`：
+`AGENT_LLM=fake`（离线确定性）或 `real` + `SECRETS_LLM_API_KEY=…`（真出站，key 只挂
+gateway，票 27）。演示动线：PRD §8 六幕剧本。
 
 ## 文档地图
 
