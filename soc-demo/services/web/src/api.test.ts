@@ -147,12 +147,21 @@ describe("api client · 审批卡/案件/Eval（票 21）", () => {
       jsonRes(200, {
         run_at: "2026-09-09T00:00:00Z", lane: "unit-injected",
         totals: { cases: 11, ran: 11, passed: 11, failed: 0, skipped: 0 },
-        triage_accuracy: 1, judge: { evaluable_cases: 0, avg_score: null, note: "" }, cases: [],
+        triage_accuracy: 1,
+        defense_interception: {
+          by_face: { alert_injection: { total: 1, intercepted: 1, rate: 1 } },
+          by_facet: { guard_scan: 1, behavior_gate: 0, review_reject: 0, sandbox_boundary: 0 },
+          skipped: [], note: "口径",
+        },
+        costs: { csv: "eval-results/cost_all.csv", rows: 1, note: "口径" },
+        judge: { evaluable_cases: 0, avg_score: null, note: "" }, cases: [],
       }),
     );
     const report = await fetchEvalReport();
     expect(fetchMock.mock.calls[0][0]).toBe("/eval-results/latest.json");
     expect(report.triage_accuracy).toBe(1);
-    expect(report.attack_block_rate).toBeUndefined(); // 票 22 前没有，页面按未产出口径渲染
+    // 票 29 契约形状（旧幽灵键 attack_block_rate 已删）：防线拦截率 + 成本口径可读
+    expect(report.defense_interception?.by_face.alert_injection.rate).toBe(1);
+    expect(report.costs?.csv).toBe("eval-results/cost_all.csv");
   });
 });

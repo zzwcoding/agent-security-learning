@@ -254,6 +254,23 @@ export interface EvalCaseRow {
   durationMs?: number;
 }
 
+export interface EvalFaceStat {
+  /** 分母 = ran 攻击用例数（环境 skip 的攻击用例不进分母，票 22 口径）。 */
+  total: number;
+  intercepted: number;
+  /** intercepted/total；total=0 时 null（没数不编数）。 */
+  rate: number | null;
+}
+
+/** 防线拦截率（票 22 产出、票 29 契约对齐）：按攻击面 by_face + 按拦截方式 by_facet
+ *  + 环境 skip 留痕。形状以 fixtures/eval-report/latest.json 共享样例为契约。 */
+export interface EvalDefenseInterception {
+  by_face: Record<string, EvalFaceStat>;
+  by_facet: Record<string, number>;
+  skipped: string[];
+  note: string;
+}
+
 export interface EvalReport {
   run_at: string;
   lane: string;
@@ -262,8 +279,10 @@ export interface EvalReport {
   judge_model?: string | null;
   totals: { cases: number; ran: number; passed: number; failed: number; skipped: number };
   triage_accuracy: number | null;
-  /** 票 22 起才有：三/四攻击面拦截率分面（现在读不到就显示未产出，不猜数） */
-  attack_block_rate?: Record<string, number | null>;
+  /** 可选 = 兼容票 19 时代的旧产物：缺席按「未产出」渲染，不猜数。 */
+  defense_interception?: EvalDefenseInterception;
+  /** 成本口径（CSV 落 eval-results/cost_all.csv，这里带口径说明与行数）。 */
+  costs?: { csv: string; rows: number; note: string };
   judge: { evaluable_cases: number; avg_score: number | null; note: string };
   cases: EvalCaseRow[];
 }

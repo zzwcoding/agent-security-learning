@@ -886,11 +886,21 @@ pnpm test:eval -- --tags regression  # 回归子集（每 commit）
 ITERATIONS=10 pnpm test:eval         # 多次取稳定通过率
 ```
 ```json
-// eval-results/latest.json（M10 Eval 页数据源）
-{"run_at":"2026-09-04T15:00:00Z","triage_accuracy":0.83,
- "attack_block_rate":{"injection":1.0,"privesc":1.0,"rag_poison":1.0},
- "cases":[{"name":"triage/01_ssh_bruteforce_tp","score":1,"iterations":3,"tokens":41200,"duration_s":38}],
- "cost_csv":"eval-results/cost_all.csv"}
+// eval-results/latest.json（M10 Eval 页数据源）。票 29 按票 22 实现修正本样例
+// （旧样例 attack_block_rate/cost_csv 是三方漂移的旧形状）；机器锁 = 双端契约
+// 测试共读 fixtures/eval-report/latest.json（evals report.contract.test.ts ×
+// web eval.test.ts），权威形状以该样例为准，下面是节选。
+{"run_at":"2026-09-04T15:00:00.000Z","lane":"unit-injected","tags":["regression"],
+ "totals":{"cases":31,"ran":31,"passed":31,"failed":0,"skipped":0},
+ "triage_accuracy":0.83,
+ "defense_interception":{"by_face":{"alert_injection":{"total":8,"intercepted":8,"rate":1.0},
+   "privesc":{"total":3,"intercepted":3,"rate":1.0},"rag":{"total":1,"intercepted":1,"rate":1.0}},
+  "by_facet":{"guard_scan":9,"behavior_gate":3,"review_reject":1,"sandbox_boundary":1},
+  "skipped":[],"note":"拦截率=ran 攻击用例上 intercepted 占比；环境 skip 不计入分母"},
+ "cases":[{"fullName":"triage/01_ssh_bruteforce_tp","domain":"triage","ran":true,
+   "passed":true,"toolCalls":4,"tokens":41200,"durationMs":38000}],
+ "costs":{"csv":"eval-results/cost_all.csv","rows":15,"note":"估算成本口径说明"},
+ "judge":{"evaluable_cases":3,"avg_score":0.9,"note":"judge 只进报告不进门禁"}}
 ```
 
 **异常与边界**：judge 模型不可用 → 该用例标 `not_evaluable` 不算失败（ASP「Not evaluable」口径，不合成总分）；抖动 → ITERATIONS 取稳定率，单次失败不阻断 CI 但记录在案。

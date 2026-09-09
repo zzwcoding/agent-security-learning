@@ -1,9 +1,11 @@
 // Eval 结果页的数据映射（FR-M10.6 的纯函数层，React 之外可单测）。
 // 数据源 = m11 产物 eval-results/latest.json（vite 静态面原样读，不加工不代理）。
-// 票 19 的骨架只有「分诊准确率 + totals + 逐用例 token/耗时」；攻击面拦截率分面
-// （attack_block_rate）和成本 CSV 是票 22 的产出——映射按「有什么渲染什么」：
-// 没有的维度返回空并标 hasAttackData=false，绝不合成分面数字（零特权原则的
-// 数据版：页面只能展示产物里真实存在的字段）。
+// 票 29：对齐票 22 产物的真实形状 defense_interception（by_face 拦截率 + by_facet
+// 分面计数 + skipped 留痕）——旧键 attack_block_rate 是 PRD 早期样例的第三种形状，
+// 三方漂移的幽灵键（体检 A1），已删；契约由 fixtures/eval-report/latest.json
+// 两端共读锁定（evals 侧 report.contract.test.ts 是另一半）。
+// 映射仍按「有什么渲染什么」：字段缺席（票 19 时代的旧产物）返回空并标
+// hasAttackData=false，绝不合成分面数字（零特权原则的数据版）。
 import type { EvalReport } from "./api";
 
 /** 0-1 比例 → 整数百分比文案；null/undefined → null（没数不编数）。 */
@@ -12,27 +14,64 @@ export function pct(v: number | null | undefined): string | null {
   return `${Math.round(v * 100)}%`;
 }
 
+// 攻击面键 = test_case.yaml 的 attack 字段（runner 照抄产物，别处不造）。没见过的
+// 键原样当标签——后端加维度，页面不用改就能显示。
 const FACE_LABELS: Record<string, string> = {
-  injection: "注入",
+  alert_injection: "告警注入",
+  rag: "RAG 投毒",
   privesc: "越权",
-  rag_poison: "RAG 投毒",
+  sandbox: "沙箱",
+  chat_injection: "对话注入",
 };
 
 export interface AttackFace {
   key: string;
   label: string;
+  /** 分母 = ran 攻击用例数（skipped 不进分母——生产端口径，页面只负责说清）。 */
+  total: number;
+  intercepted: number;
   pct: string | null;
 }
 
-/** 攻击面拦截率分面（票 22 起才有数据）。没见过的攻击面键原样当标签——
- *  后端加维度，页面不用改就能显示。 */
+/** 攻击面拦截率（by_face：拦截率按攻击面分别计）。 */
 export function attackFaces(report: EvalReport): AttackFace[] {
-  const rate = report.attack_block_rate ?? {};
-  return Object.entries(rate).map(([key, v]) => ({
+  const byFace = report.defense_interception?.by_face ?? {};
+  return Object.entries(byFace).map(([key, s]) => ({
     key,
     label: FACE_LABELS[key] ?? key,
-    pct: pct(v),
+    total: s.total,
+    intercepted: s.intercepted,
+    pct: pct(s.rate),
   }));
+}
+
+// 拦截方式键 = InterceptFacet 词表（FR-M11.4：扫描拦与行为兜底分别计）。
+const FACET_LABELS: Record<string, string> = {
+  guard_scan: "扫描拦 D2",
+  behavior_gate: "行为兜底 403/无票",
+  review_reject: "人审驳回 D8",
+  sandbox_boundary: "沙箱边界",
+};
+
+export interface FacetCount {
+  key: string;
+  label: string;
+  count: number;
+}
+
+/** 拦截方式分面计数（by_facet：这道防线各拦了几次）。 */
+export function interceptFacets(report: EvalReport): FacetCount[] {
+  const byFacet = report.defense_interception?.by_facet ?? {};
+  return Object.entries(byFacet).map(([key, count]) => ({
+    key,
+    label: FACET_LABELS[key] ?? key,
+    count,
+  }));
+}
+
+/** 环境原因显式 skip 的攻击用例（不冒充拦截成功，也不算拦截失败——只留痕）。 */
+export function attackSkipped(report: EvalReport): string[] {
+  return report.defense_interception?.skipped ?? [];
 }
 
 export interface CostTotals {
@@ -42,7 +81,7 @@ export interface CostTotals {
 }
 
 /** 成本口径的账面合计：逐用例 tokens/耗时/工具调用求和（M507 cost_all.csv 的
- *  合计栏精神；票 22 落 CSV 后页面可再挂下载，不在本票范围）。 */
+ *  合计栏精神；CSV 行数/口径说明走 costs 字段，页面只挂数字不搬文件）。 */
 export function costTotals(report: EvalReport): CostTotals {
   return report.cases.reduce<CostTotals>(
     (acc, c) => ({
@@ -62,13 +101,17 @@ export interface EvalView {
   passRate: string | null;
   totals: EvalReport["totals"];
   faces: AttackFace[];
+  facets: FacetCount[];
+  skipped: string[];
+  defenseNote: string;
   hasAttackData: boolean;
   cost: CostTotals;
+  costs?: EvalReport["costs"];
   cases: EvalReport["cases"];
   judgeNote: string;
 }
 
-/** latest.json → 页面视图模型（三维：准确率 / 攻击面拦截 / 成本耗时）。 */
+/** latest.json → 页面视图模型（三维：准确率 / 防线拦截 / 成本耗时）。 */
 export function evalView(report: EvalReport): EvalView {
   const faces = attackFaces(report);
   return {
@@ -79,8 +122,12 @@ export function evalView(report: EvalReport): EvalView {
     passRate: report.totals.ran > 0 ? pct(report.totals.passed / report.totals.ran) : null,
     totals: report.totals,
     faces,
+    facets: interceptFacets(report),
+    skipped: attackSkipped(report),
+    defenseNote: report.defense_interception?.note ?? "",
     hasAttackData: faces.length > 0,
     cost: costTotals(report),
+    costs: report.costs,
     cases: report.cases,
     judgeNote: report.judge?.note ?? "",
   };

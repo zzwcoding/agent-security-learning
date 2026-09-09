@@ -302,7 +302,7 @@ describe("CasePage", () => {
 });
 
 describe("EvalPage", () => {
-  it("最近一次跑分三维：准确率 100%、攻击面标未产出（票 22 前）、逐用例成本表", async () => {
+  it("最近一次跑分三维真渲染：准确率 / 攻击面拦截率分面 + skipped 口径 / 成本合计", async () => {
     fetchMock.mockImplementation((url: string) => {
       expect(String(url)).toBe("/eval-results/latest.json");
       return Promise.resolve(
@@ -312,6 +312,16 @@ describe("EvalPage", () => {
           tested_model: "FakeTriageLlm（单测级注入，确定性）",
           totals: { cases: 11, ran: 11, passed: 11, failed: 0, skipped: 0 },
           triage_accuracy: 1,
+          defense_interception: {
+            by_face: {
+              alert_injection: { total: 2, intercepted: 2, rate: 1 },
+              chat_injection: { total: 3, intercepted: 1, rate: 1 / 3 },
+            },
+            by_facet: { guard_scan: 2, behavior_gate: 1, review_reject: 0, sandbox_boundary: 0 },
+            skipped: ["attack/09_sandbox: msb 不可用"],
+            note: "拦截率=ran 攻击用例上 intercepted 占比；环境 skip 显式留痕不计入分母",
+          },
+          costs: { csv: "eval-results/cost_all.csv", rows: 5, note: "口径" },
           judge: { evaluable_cases: 0, avg_score: null, note: "judge 分数不进门禁（PRD 决策 #7）" },
           cases: [
             { fullName: "triage/01_ssh_bruteforce_tp", domain: "triage", ran: true, passed: true, toolCalls: 4, tokens: 64, durationMs: 123 },
@@ -321,11 +331,38 @@ describe("EvalPage", () => {
     });
 
     render(<EvalPage />);
-    await waitFor(() => expect(screen.getByText("100%")).toBeTruthy());
-    expect(screen.getByText("未产出")).toBeTruthy();
-    expect(screen.getByText(/attack_block_rate 分面由票 22/)).toBeTruthy();
+    // 准确率 100% 与告警注入拦截率 100% 各渲染一处
+    await waitFor(() => expect(screen.getAllByText("100%").length).toBe(2));
+    // 攻击面拦截率真渲染：分面率 + 拦得几次的分母 + 拦截方式计数 + skipped 留痕
+    expect(screen.getByText("告警注入拦截率")).toBeTruthy();
+    expect(screen.getByText("（2/2）")).toBeTruthy();
+    expect(screen.getByText("对话注入拦截率")).toBeTruthy();
+    expect(screen.getByText("（1/3）")).toBeTruthy();
+    expect(screen.getByText("扫描拦 D2 2")).toBeTruthy();
+    expect(screen.getByText("行为兜底 403/无票 1")).toBeTruthy();
+    expect(screen.getByText(/skip 1 例不计入/)).toBeTruthy();
+    // 成本口径与逐用例表
+    expect(screen.getByText(/cost_all.csv 5 行/)).toBeTruthy();
     expect(screen.getByText("triage/01_ssh_bruteforce_tp")).toBeTruthy();
     expect(screen.getByText(/judge 分数不进门禁/)).toBeTruthy();
+  });
+
+  it("旧产物没有 defense_interception：攻击面如实标未产出，不猜数", async () => {
+    fetchMock.mockImplementation(() =>
+      Promise.resolve(
+        jsonRes2(200, {
+          run_at: "2026-09-09T00:02:06.390Z",
+          lane: "unit-injected",
+          totals: { cases: 11, ran: 11, passed: 11, failed: 0, skipped: 0 },
+          triage_accuracy: 1,
+          judge: { evaluable_cases: 0, avg_score: null, note: "" },
+          cases: [],
+        }),
+      ),
+    );
+    render(<EvalPage />);
+    await waitFor(() => expect(screen.getByText("未产出")).toBeTruthy());
+    expect(screen.getByText(/defense_interception 由 m11 攻击维用例产出/)).toBeTruthy();
   });
 });
 

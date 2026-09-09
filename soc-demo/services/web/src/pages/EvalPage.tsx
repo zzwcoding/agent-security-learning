@@ -69,16 +69,34 @@ export default function EvalPage() {
             </Card>
             <Card style={{ flex: "1 1 320px", minWidth: 320 }}>
               {view.hasAttackData ? (
-                <Space size={24} wrap>
-                  {view.faces.map((f) => (
-                    <Statistic key={f.key} title={`${f.label}拦截率`} value={f.pct ?? "—"} />
-                  ))}
-                </Space>
+                <>
+                  <Space size={24} wrap>
+                    {view.faces.map((f) => (
+                      <Statistic
+                        key={f.key}
+                        title={`${f.label}拦截率`}
+                        value={f.pct ?? "—"}
+                        suffix={f.pct ? `（${f.intercepted}/${f.total}）` : ""}
+                      />
+                    ))}
+                  </Space>
+                  <div style={{ marginTop: 8 }}>
+                    {view.facets.map((fc) => (
+                      <Tag key={fc.key} style={{ marginBottom: 4 }}>
+                        {fc.label} {fc.count}
+                      </Tag>
+                    ))}
+                  </div>
+                  <Typography.Text type="secondary">
+                    分母=ran 攻击用例{view.skipped.length > 0 ? `，skip ${view.skipped.length} 例不计入` : ""}
+                    {view.defenseNote ? ` · ${view.defenseNote}` : ""}
+                  </Typography.Text>
+                </>
               ) : (
                 <>
                   <Statistic title="攻击面拦截率" value="未产出" />
                   <Typography.Text type="secondary">
-                    attack_block_rate 分面由票 22（攻击/审批/replay/对话维）产出
+                    defense_interception 由 m11 攻击维用例产出（跑 pnpm test:eval 刷新产物）
                   </Typography.Text>
                 </>
               )}
@@ -89,7 +107,9 @@ export default function EvalPage() {
                 <Statistic title="耗时合计" value={(view.cost.durationMs / 1000).toFixed(1)} suffix="s" />
                 <Statistic title="工具调用合计" value={view.cost.toolCalls} />
               </Space>
-              <Typography.Text type="secondary">逐用例成本口径见下表（票 22 落 cost_all.csv）</Typography.Text>
+              <Typography.Text type="secondary">
+                逐用例成本口径见下表{view.costs ? ` · cost_all.csv ${view.costs.rows} 行` : ""}
+              </Typography.Text>
             </Card>
           </Space>
 
