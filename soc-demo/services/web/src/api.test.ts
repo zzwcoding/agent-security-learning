@@ -70,6 +70,14 @@ describe("api client", () => {
     expect(out.runId).toBe("run_9");
   });
 
+  it("startRun 带 actorId：x-actor-id 头随行（票 39 确认人进审计，INV-8）", async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes(202, { run_id: "run_c1" }));
+    await startRun("close_flow", "al_1", { actorId: "soc1@soc.local" });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(JSON.parse(init.body)).toEqual({ kind: "close_flow", alert_id: "al_1" });
+    expect(init.headers).toMatchObject({ "x-actor-id": "soc1@soc.local" });
+  });
+
   it("replayAlert：把 Wazuh payload POST 进 ingest webhook 正门，回传 dedup", async () => {
     fetchMock.mockResolvedValueOnce(jsonRes(200, { alert_id: "al_2", dedup: true }));
     const out = await replayAlert({ rule: { id: "5710" } });

@@ -30,9 +30,11 @@ import type { RunRow } from "./runs.js";
 // 400，不给「什么都接」留口子。knowledge_flow = 票 17 沉淀子图（案件关闭 → 提炼 →
 // kb_write 人审闸）；chat_flow = 票 18 对话 Copilot（用户触发，公开面走 POST /api/v1/chat，
 // 这里放行是为编排侧调试/测试同路进柴）；case_flow = 票 36 调查+富化链（TP 建案后的
-// 下半场，PRD §4.2 步骤 7-8——直拉入口，alert_flow 链上见 index.ts 的 makeNodes）。
-const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow", "case_flow"]);
-// 吃 case_id（无 alert）的 kind：alert_flow 之外的两种
+// 下半场，PRD §4.2 步骤 7-8——直拉入口，alert_flow 链上见 index.ts 的 makeNodes）；
+// close_flow = 票 39 SOC1 一键确认关单（FR-M4.5 演示口径：FP/BTP 建议的执行下半场，
+// web 告警页确认 → 最小任务票过闸执行 close_alert）。
+const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow", "case_flow", "close_flow"]);
+// 吃 case_id（无 alert）的 kind：alert_flow/close_flow 之外的两种
 const CASE_KINDS = new Set(["knowledge_flow", "chat_flow", "case_flow"]);
 
 // chat 流的 SSE wire 只出对话语义帧（PRD §6-M8 的 data.type 枚举 + 审批过程可见）；
@@ -67,6 +69,9 @@ const TICKET_SPECS: Record<string, { sub: string; scope: string[]; allowedTools:
     scope: ["case:read", "case:write"],
     allowedTools: [...new Set([...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
   },
+  // 票 39：一键确认关单的最小票——工具面只有本动作用到的两件（L0 读定 verdict +
+  // L1 写落关单），scope 只有 alert:update（INV-3：无任何 L2，也不会碰到案件实体）。
+  close_flow: { sub: "agent:triage", scope: ["alert:update"], allowedTools: ["get_alert", "close_alert"] },
 };
 
 // buildApp 纯工厂（全仓 seam 约定）：测试注入 :memory: db + MemoryAuditSink + 假铸票，
@@ -79,8 +84,14 @@ export function buildApp(opts: {
   nodes?: FlowNode[];
   /** 每-run 图工厂（票 13）：alert_flow 拉起时先向 gateway 铸任务票（PRD FR-M3.4：
    *  worker 拉起即申领任务级最小 scope 票），再把票交进图工厂组 triage 子图。
-   *  不传 = 用静态 nodes（薄径/审批演示），也不铸票。 */
-  makeNodes?: (run: RunRow, ticket: string) => FlowNode[] | Promise<FlowNode[]>;
+   *  不传 = 用静态 nodes（薄径/审批演示），也不铸票。
+   *  票 39：第三参带调用方 actor（/internal/runs 的 x-actor-id 派生）——close_flow
+   *  的确认审计要记到确认人头上（INV-8）；既有工厂不读它，零影响。 */
+  makeNodes?: (
+    run: RunRow,
+    ticket: string,
+    ctx?: { actor?: { type: string; id: string } },
+  ) => FlowNode[] | Promise<FlowNode[]>;
   /** 铸 ApprovalToken 的出站 seam（m9 卡：铸票调 gateway）。 */
   mint?: MintClient;
   /** 执行后的焚毁登记口（INV-2，M2 used_tokens）。 */
@@ -286,6 +297,14 @@ export function buildApp(opts: {
     const spec = TICKET_SPECS[body.kind];
     const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
     const actorId = (req.headers["x-actor-id"] as string) ?? "internal";
+    // 票 39：actor 类型诚实派生（照 M2 ctxOf 的内网信任口径——不猜，缺头按 internal
+    // 系统记）：带了 x-actor-id 的调用方，agent:* 是执行体，其余按发起用户记。
+    // 既有调用（无头）行为不变：{type:"system", id:"internal"}。
+    const actorType =
+      actorId === "internal"
+        ? "system"
+        : ((req.headers["x-actor-type"] as string) ?? (actorId.startsWith("agent:") ? "agent" : "user"));
+    const actor = { type: actorType, id: actorId };
     const run = createRun(
       db,
       CASE_KINDS.has(body.kind)
@@ -294,7 +313,7 @@ export function buildApp(opts: {
       {
         audit,
         requestId,
-        actor: { type: "system", id: actorId },
+        actor,
       },
     );
     if (body.kind === "chat_flow") {
@@ -316,7 +335,7 @@ export function buildApp(opts: {
           scope: [...spec.scope],
           allowedTools: [...spec.allowedTools],
         });
-        nodes = await opts.makeNodes(run, minted.token);
+        nodes = await opts.makeNodes(run, minted.token, { actor });
       } catch {
         return reply.status(502).send({ error: "mint_failed" });
       }

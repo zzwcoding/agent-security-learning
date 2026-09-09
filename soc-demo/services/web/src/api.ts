@@ -90,9 +90,14 @@ export interface RunHandle {
   runId: string;
 }
 
-export function startRun(kind: string, alertId: string): Promise<RunHandle> {
+export function startRun(kind: string, alertId: string, opts: { actorId?: string } = {}): Promise<RunHandle> {
+  // 票 39：确认类动作带 x-actor-id（agent 侧按 user 记审计，INV-8 确认人可回放）。
+  // request() 的 init 展开会整体覆盖默认 headers，这里自己补齐 content-type。
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (opts.actorId) headers["x-actor-id"] = opts.actorId;
   return request("/internal/runs", {
     method: "POST",
+    headers,
     body: JSON.stringify({ kind, alert_id: alertId }),
   }).then((r) => ({ runId: (r as { run_id: string }).run_id }));
 }

@@ -87,7 +87,12 @@ describe("AlertsPage", () => {
       ]),
     );
     const go = vi.fn();
-    render(<AlertsPage go={go} />);
+    // 票 39 起 AlertsPage 读登录态（确认关单按钮按角色/建议显隐）——挂上 AuthProvider
+    render(
+      <AuthProvider>
+        <AlertsPage go={go} />
+      </AuthProvider>,
+    );
 
     // dedup 标记：al_2 重复×3，al_1 首次接入
     await waitFor(() => expect(screen.getByText("重复×3")).toBeTruthy());
@@ -100,6 +105,173 @@ describe("AlertsPage", () => {
     fireEvent.click(screen.getAllByText("发起分诊")[1]);
     expect(go).toHaveBeenCalledWith("pipeline?alert_id=al_2");
     expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/alerts");
+  });
+});
+
+// ---- 票 39：SOC1 一键确认关单（FR-M4.5·G2-7）----
+
+// ReconnectingSse 缺省工厂用全局 EventSource——测试里换 FakeES（与 sse.test.ts 同款），
+// 并把实例攒下来由用例驱动「SSE 补发终态事件」。
+class FakeES {
+  readyState = 0;
+  closed = false;
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
+  static instances: FakeES[] = [];
+  private listeners = new Map<string, ((ev: { data: string; lastEventId: string }) => void)[]>();
+
+  constructor(public url: string) {
+    FakeES.instances.push(this);
+  }
+
+  addEventListener(type: string, cb: (ev: { data: string; lastEventId: string }) => void): void {
+    const arr = this.listeners.get(type) ?? [];
+    arr.push(cb);
+    this.listeners.set(type, arr);
+  }
+
+  close(): void {
+    this.closed = true;
+  }
+
+  emit(type: string, id: number, payload: Record<string, unknown> = {}): void {
+    this.listeners.get(type)?.forEach((cb) =>
+      cb({ data: JSON.stringify({ type, ...payload }), lastEventId: String(id) }),
+    );
+  }
+}
+
+function primeRoleSession(role: string, username: string, roleLabel: string): void {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      token: "a.b",
+      sessionId: "ses_1",
+      username,
+      role,
+      roleLabel,
+      visibleTools: ["close_alert"],
+      expiresAt: Math.floor(Date.now() / 1000) + 3600,
+    }),
+  );
+}
+
+// fp + close 建议的一条告警（verdict_ai wire 形状照 worker outcome 写回）
+const FP_ALERT = {
+  id: "al_fp", title: "Web server 500 error code (CGI Error).", source: "wazuh", sourceRef: "31103",
+  severity: 2, status: "New",
+  verdictAi: { verdict: "fp", confidence: 0.75, rationale: "运维噪声", recommended_action: "close" },
+  tags: [], date: 1, lastSeen: 1, occurrences: 1,
+};
+
+describe("AlertsPage 一键确认关单（票 39）", () => {
+  beforeEach(() => {
+    FakeES.instances = [];
+    vi.stubGlobal("EventSource", FakeES as unknown as typeof EventSource);
+  });
+
+  it("soc1 对带 close 建议的告警看到确认按钮；确认 → POST close_flow 带 x-actor-id，SSE 终态成功提示", async () => {
+    primeRoleSession("soc1", "soc1@soc.local", "SOC1 分析师");
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u === "/api/v1/alerts") return Promise.resolve(jsonRes2(200, [FP_ALERT]));
+      if (u === "/internal/runs") {
+        expect(JSON.parse(String(init!.body))).toEqual({ kind: "close_flow", alert_id: "al_fp" });
+        expect(init!.headers).toMatchObject({ "x-actor-id": "soc1@soc.local" });
+        return Promise.resolve(jsonRes2(202, { run_id: "run_c1" }));
+      }
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+
+    render(
+      <AuthProvider>
+        <AlertsPage go={() => {}} />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("确认关单")).toBeTruthy());
+
+    fireEvent.click(screen.getByText("确认关单"));
+    fireEvent.click(await screen.findByText("确认执行关单"));
+
+    // run 拉起后页面订阅该 run 的 SSE（INV-7 同一落盘总线）
+    await waitFor(() => expect(FakeES.instances.some((es) => es.url.includes("run_id=run_c1"))).toBe(true));
+    // 后端同步执行已终态：SSE 补发的 audit 镜像宣告 completed → 成功人话 + 列表刷新
+    const es = FakeES.instances.find((x) => x.url.includes("run_id=run_c1"))!;
+    es.onopen?.();
+    es.emit("audit", 7, { action: "update", status: { from: "running", to: "completed" } });
+
+    await screen.findByText(/关单完成/);
+    await waitFor(() =>
+      expect(fetchMock.mock.calls.filter((c) => String(c[0]) === "/api/v1/alerts").length).toBeGreaterThanOrEqual(2),
+    );
+  });
+
+  it("run 失败路径：error 事件 → 人话提示（409/已关语义），不弹原始错误", async () => {
+    primeRoleSession("soc1", "soc1@soc.local", "SOC1 分析师");
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u === "/api/v1/alerts") return Promise.resolve(jsonRes2(200, [FP_ALERT]));
+      if (u === "/internal/runs") return Promise.resolve(jsonRes2(202, { run_id: "run_x" }));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+
+    render(
+      <AuthProvider>
+        <AlertsPage go={() => {}} />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("确认关单")).toBeTruthy());
+    fireEvent.click(screen.getByText("确认关单"));
+    fireEvent.click(await screen.findByText("确认执行关单"));
+
+    await waitFor(() => expect(FakeES.instances.some((es) => es.url.includes("run_id=run_x"))).toBe(true));
+    const es = FakeES.instances.find((x) => x.url.includes("run_id=run_x"))!;
+    es.onopen?.();
+    es.emit("error", 3, { code: "node_error", node: "execute_close", message: "m2_close_failed:InvalidTransition" });
+
+    await screen.findByText(/409/);
+  });
+
+  it("redteam 看不到确认按钮（A.2：close_alert 属案件写入族，红队全 —）", async () => {
+    primeRoleSession("redteam", "redteam@soc.local", "红队（演示）");
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url) === "/api/v1/alerts") return Promise.resolve(jsonRes2(200, [FP_ALERT]));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+
+    render(
+      <AuthProvider>
+        <AlertsPage go={() => {}} />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("发起分诊")).toBeTruthy());
+    expect(screen.queryByText("确认关单")).toBeNull();
+  });
+
+  it("没有关单建议的告警（tp/human）不出现确认按钮", async () => {
+    primeRoleSession("soc1", "soc1@soc.local", "SOC1 分析师");
+    fetchMock.mockImplementation((url: string) => {
+      if (String(url) === "/api/v1/alerts") {
+        return Promise.resolve(
+          jsonRes2(200, [
+            {
+              ...FP_ALERT,
+              id: "al_tp",
+              verdictAi: { verdict: "tp", confidence: 0.85, rationale: "攻击证据", recommended_action: "create_case" },
+            },
+          ]),
+        );
+      }
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+
+    render(
+      <AuthProvider>
+        <AlertsPage go={() => {}} />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("发起分诊")).toBeTruthy());
+    expect(screen.queryByText("确认关单")).toBeNull();
   });
 });
 

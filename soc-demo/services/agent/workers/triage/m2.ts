@@ -45,6 +45,10 @@ export interface TriageM2 {
   findActiveCases(host: string, withinHours: number): Promise<{ id: string; title: string }[]>;
   createCase(alertId: string): Promise<{ caseId: string }>;
   mergeAlert(alertId: string, caseId: string): Promise<{ caseId: string }>;
+  /** 票 39（FR-M4.5 演示口径）：A.1 的 L1 close_alert 工具落地点 = POST /close 带
+   *  verdict。状态机不合法（如 Closed→Closed）→ {ok:false, reason:"InvalidTransition"}，
+   *  由 worker 折成 failReason，web 侧有人话提示。 */
+  closeAlert(alertId: string, verdict: string): Promise<PatchResult>;
 }
 
 export class HttpTriageM2 implements TriageM2 {
@@ -100,6 +104,11 @@ export class HttpTriageM2 implements TriageM2 {
     const { status, json } = await this.call("POST", `/api/v1/alerts/${alertId}/merge/${caseId}`);
     if (status >= 300) throw new Error(`m2 merge_alert failed: HTTP ${status} ${JSON.stringify(json)}`);
     return { caseId };
+  }
+
+  async closeAlert(alertId: string, verdict: string): Promise<PatchResult> {
+    const { status, json } = await this.call("POST", `/api/v1/alerts/${alertId}/close`, { verdict });
+    return status < 300 ? { ok: true } : { ok: false, reason: String(json.error ?? `http_${status}`) };
   }
 }
 

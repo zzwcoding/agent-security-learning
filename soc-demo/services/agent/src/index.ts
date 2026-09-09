@@ -8,6 +8,7 @@ import { openDb } from "./db.js";
 import { HttpUsedTokenReader } from "./token-ports.js";
 import { APPROVAL_DEMO_FLOW } from "./graph.js";
 import { makeTriageFlow } from "../workers/triage/flow.js";
+import { makeCloseFlow } from "../workers/triage/close.js";
 import { HttpTriageM2 } from "../workers/triage/m2.js";
 import { MemoryKb } from "../workers/triage/kb.js";
 import { FakeTriageLlm } from "../workers/triage/llm.js";
@@ -94,7 +95,7 @@ const audit = lfMirror ? new TeeAuditSink([m2Audit, lfMirror]) : m2Audit;
 const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : undefined;
 const makeNodes = nodes
   ? undefined
-  : (run: { id: string; kind: string; caseId: string | null }, ticket: string) => {
+  : (run: { id: string; kind: string; caseId: string | null }, ticket: string, ctx?: { actor?: { type: string; id: string } }) => {
     // 票 36 调查+富化链的装配（B4 清偿）：真件 = M2 REST + fixture SIEM 语料 + fixture
     // TI 情报表 + guards scanInjection（GUARDS_URL，compose 服务名可达）；调查 LLM 照
     // AGENT_LLM 切 fake/real。case_id 不在组图时给定——直拉来自 run 行（executeRun
@@ -163,6 +164,18 @@ const makeNodes = nodes
     if (run.kind === "case_flow") {
       // 直拉入口（票 36）：POST /internal/runs {kind:"case_flow", case_id} → 链两交接节点
       return caseChain(run.id);
+    }
+    if (run.kind === "close_flow") {
+      // 票 39：SOC1 一键确认关单（FR-M4.5 演示口径）——最小票的两节点子图；确认人
+      // （x-actor-id 派生）随 ctx 进审计（INV-8：确认动作记到人头上）。
+      return makeCloseFlow({
+        runId: run.id,
+        requestId: `launch_${run.id}`,
+        ticket,
+        m2: new HttpTriageM2(),
+        audit,
+        actor: ctx?.actor,
+      });
     }
     // alert_flow：分诊六节点 + 链上调查+富化（票 36·B4 清偿，PRD §4.2 步骤 7-8）。
     // 只有 TP 的 create_case 分支会把 case_id 写进交接态——FP/merge 等分支链空转跳过。
