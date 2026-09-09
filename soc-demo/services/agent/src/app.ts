@@ -15,7 +15,7 @@ import { decideApproval, listApprovals, requireApproval, toWire, type DecideInpu
 import { TamperedCheckpointError } from "./envelope.js";
 import { NotFoundError, UnauthorizedError } from "./errors.js";
 import { MemoryAuditSink, type AuditSink } from "./audit.js";
-import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner } from "./token-ports.js";
+import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner, type UsedTokenReader } from "./token-ports.js";
 import type { BurnRegistry } from "./verify-ticket.js";
 import { TRIAGE_TOOLS } from "../workers/triage/prompt.js";
 import { KNOWLEDGE_TOOLS } from "../workers/knowledge/prompt.js";
@@ -66,8 +66,11 @@ export function buildApp(opts: {
   mint?: MintClient;
   /** 执行后的焚毁登记口（INV-2，M2 used_tokens）。 */
   burn?: TokenBurner;
-  /** 验票闸重放读口（不传 = 闸不查焚毁表，见 verify-ticket 的 seam 说明）。 */
+  /** 验票闸重放读口（进程内真相；不传 = 闸不查，见 verify-ticket 的 seam 说明）。 */
   used?: BurnRegistry;
+  /** 票 34：跨进程焚毁真相读口（M2 GET /internal/used-tokens/:jti）。不传 = 不查跨进程
+   *  真相（既有测试口径不变）；生产 index.ts 显式装配 HttpUsedTokenReader（INV-2）。 */
+  usedReader?: UsedTokenReader;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY）。 */
   hmacKey?: string;
 } = {}) {
@@ -87,6 +90,7 @@ export function buildApp(opts: {
     requestId: (headers["x-request-id"] as string) ?? randomUUID(),
     burn,
     used: opts.used,
+    usedReader: opts.usedReader,
     hmacKey: opts.hmacKey,
   });
 

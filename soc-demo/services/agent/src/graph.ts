@@ -33,7 +33,7 @@ import {
   type ApprovalClaims,
   type BurnRegistry,
 } from "./verify-ticket.js";
-import type { TokenBurner } from "./token-ports.js";
+import type { TokenBurner, UsedTokenReader } from "./token-ports.js";
 import { InvalidRunTransitionError } from "./statemachine.js";
 
 /** 节点执行上下文：worker/确定性节点拿到的全部能力。emit 供 tool_call/tool_result 事件用；
@@ -117,14 +117,15 @@ export const APPROVAL_DEMO_FLOW: FlowNode[] = [
   },
   {
     name: "execute_action",
-    run: (ctx) => {
-      const out = ctx.executeApproved(
+    // 票 34 起 executeApproved 决定已决的执行路径带跨进程焚毁查询（异步）——节点须
+    // await（与 knowledge/chat worker 的 async 节点同款；挂起仍由同步段同步抛出）。
+    run: async (ctx) => {
+      ctx.state.execution = await ctx.executeApproved(
         "isolate_host",
         { host: "centos7" },
         { reason: "调查报告建议遏制" },
         (p) => ({ mock_edr: "isolated", host: (p as { host: string }).host }),
       );
-      ctx.state.execution = out;
     },
   },
 ];
@@ -136,8 +137,14 @@ export interface ExecuteOpts {
   requestId?: string;
   /** L2 执行后的焚毁登记口（INV-2；生产 = HttpTokenBurner → M2 used_tokens）。 */
   burn?: TokenBurner;
-  /** L2 执行前验票闸的重放读口（INV-2；不传 = 不查，测试便利，生产接 M2 后换 adapter）。 */
+  /** L2 执行前验票闸的重放读口（INV-2 进程内真相；不传 = 闸不查，测试便利）。
+   *  票 34 起与 usedReader 并存时取「或」：任一路说已焚即拒（装填是叠加不是替换）。 */
   used?: BurnRegistry;
+  /** 票 34：跨进程焚毁真相读口（M2 GET /internal/used-tokens/:jti，INV-2 生产装配）。
+   *  查询在进闸【前】异步完成——闸本体保持同步（票 07 契约测试面 + interrupt 同步抛出
+   *  契约都不动）；查询失败时读口哑掉，闸内 has() 抛异常归 signature_invalid
+   *  （INV-1 fail-closed：查不到真相 ≠ 真相是没有，拒绝执行而不是放行）。 */
+  usedReader?: UsedTokenReader;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY，与闸同口径）。 */
   hmacKey?: string;
   /** 票 18：交接态覆写。chat_flow 的消息/角色不在 run 行里（它是用户触发不是内部触发），
@@ -151,6 +158,7 @@ interface DriveDeps {
   budget: RunBudget;
   burn?: TokenBurner;
   used?: BurnRegistry;
+  usedReader?: UsedTokenReader;
   hmacKey?: string;
 }
 
@@ -165,6 +173,7 @@ function makeDeps(opts: ExecuteOpts): DriveDeps {
     budget: opts.budget ?? budgetFromEnv(),
     burn: opts.burn,
     used: opts.used,
+    usedReader: opts.usedReader,
     hmacKey: opts.hmacKey,
   };
 }
@@ -223,9 +232,51 @@ function compileFlowGraph(plan: CompilePlan) {
     }
   };
 
+  // 票 34：从 wire 票解 payload.jti（未验签）——只作跨进程焚毁查询的键，不作信任依据：
+  // 伪造/篡改票在闸的验签步就会被拒，装填结果根本轮不到被读。解不出（坏票）→ 不查询，
+  // 闸照常按 signature_invalid 拒。
+  const jtiFromWire = (token: string): string | null => {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    try {
+      const payload = JSON.parse(Buffer.from(parts[1]!, "base64url").toString("utf8")) as Record<string, unknown>;
+      return typeof payload.jti === "string" ? payload.jti : null;
+    } catch {
+      return null;
+    }
+  };
+
+  // 闸前的读口装填（票 34）：把 M2 跨进程焚毁真相并进一个一次性 BurnRegistry 再进闸。
+  // 合并取「或」：M2 说已焚 → true；否则问本地表（进程内真相，如 MemoryBurnRegistry）——
+  // 叠加不是替换，任何一路说已焚都必须拒。查询失败 → 哑读口：闸内 has() 抛异常，
+  // 落进闸的 fail-closed 桶 signature_invalid（INV-1：查不到真相 ≠ 真相是没有）。
+  const resolveUsed = async (token: string): Promise<BurnRegistry | undefined> => {
+    if (!deps.used && !deps.usedReader) return undefined; // 两路都没接 = 不查（既有测试便利口径）
+    if (!deps.usedReader) return deps.used;
+    let burned: boolean | null = null;
+    let failure: unknown = null;
+    const wireJti = jtiFromWire(token);
+    if (wireJti !== null) {
+      try {
+        burned = await deps.usedReader.lookup(wireJti);
+      } catch (e) {
+        failure = e; // INV-1：读口病了闸必须病
+      }
+    }
+    const local = deps.used;
+    return {
+      has: (jti: string) => {
+        if (failure !== null) throw failure;
+        if (burned === true && jti === wireJti) return true;
+        return local ? local.has(jti) : false;
+      },
+    };
+  };
+
   const executeApproved: NodeCtx["executeApproved"] = (tool, params, opts, action) => {
-    // 注意：这里刻意不是 async 函数——awaitApproval 里的 interrupt() 必须同步抛出，
-    // sync 节点（approval_demo）不 await 本调用时挂起语义才成立（票 11 契约）。
+    // 同步段：awaitApproval 里的 interrupt() 必须同步抛出——本函数刻意不是 async 函数，
+    // async 节点（票 17 起 worker 全体）与 sync 节点（approval_demo）都先原样走完这段
+    // （票 11 契约）。
     const decision = awaitApproval(tool, params, opts);
     if (!decision.approved || !decision.token) {
       return { executed: false, outcome: "rejected", approvalId: decision.approvalId };
@@ -236,43 +287,50 @@ function compileFlowGraph(plan: CompilePlan) {
       params_hash: paramsHash(params),
       approval_id: decision.approvalId,
     });
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { approvalToken: decision.token, caseId: opts.caseId, used: deps.used },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      // 闸拒 = 授权链有缺口（票过期/参数被换/重放），fail-closed：审计 DENIED 后强杀
-      deps.ctx.audit.record({
-        action: "deny",
-        actor,
-        objectId: decision.approvalId,
-        objectType: "approval",
-        details: { tool, reason: verdict.reason, params_hash: paramsHash(params) },
-        requestId: deps.ctx.requestId,
-        result: "DENIED",
-        createdAt: Date.now(),
-      });
-      throw new Error(`approval_gate_denied:${verdict.reason}`);
-    }
-    const jti = (verdict.payload as ApprovalClaims).jti;
-    // 票 17：动作允许异步（kb_write 出站 chroma）。收尾（焚毁/执行标记/tool_result）
-    // 统一走 finish——同步动作原地收尾（与票 11 逐字节同序），异步动作由节点 await。
-    const finish = (result: Record<string, unknown>): ExecutionOutcome => {
-      deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
-      markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
-      emitEvent(db, runId, "tool_result", {
-        node: cursor.node,
-        tool,
-        ok: true,
-        approval_id: decision.approvalId,
-        result,
-      });
-      return { executed: true, approvalId: decision.approvalId, jti, result };
-    };
-    const out = action(params);
-    return out instanceof Promise ? out.then(finish) : finish(out);
+    // 异步尾段（票 34）：决定已落、后面不再有 interrupt——先把 M2 焚毁真相装进读口
+    // （含网络 RTT），再进同步闸。调用方（决定已决路径）拿到 Promise，节点须 await。
+    // token 收窄进局部 const（闭包内 TS 不追踪 decision.token 的非空收窄）。
+    const token = decision.token;
+    return (async () => {
+      const used = await resolveUsed(token);
+      const verdict = verifyTicket(
+        { name: tool, params },
+        { approvalToken: token, caseId: opts.caseId, used },
+        Math.floor(Date.now() / 1000),
+        { hmacKey: deps.hmacKey },
+      );
+      if (!verdict.allow) {
+        // 闸拒 = 授权链有缺口（票过期/参数被换/重放/读口不可达），fail-closed：
+        // 审计 DENIED 后强杀
+        deps.ctx.audit.record({
+          action: "deny",
+          actor,
+          objectId: decision.approvalId,
+          objectType: "approval",
+          details: { tool, reason: verdict.reason, params_hash: paramsHash(params) },
+          requestId: deps.ctx.requestId,
+          result: "DENIED",
+          createdAt: Date.now(),
+        });
+        throw new Error(`approval_gate_denied:${verdict.reason}`);
+      }
+      const jti = (verdict.payload as ApprovalClaims).jti;
+      // 票 17：动作允许异步（kb_write 出站 chroma）。收尾（焚毁/执行标记/tool_result）
+      // 统一走 finish——同步动作原地收尾（与票 11 逐字节同序），异步动作由节点 await。
+      const finish = (result: Record<string, unknown>): ExecutionOutcome => {
+        deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
+        markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
+        emitEvent(db, runId, "tool_result", {
+          node: cursor.node,
+          tool,
+          ok: true,
+          approval_id: decision.approvalId,
+          result,
+        });
+        return { executed: true, approvalId: decision.approvalId, jti, result };
+      };
+      return finish(await action(params));
+    })();
   };
 
   const nctx: NodeCtx = {

@@ -73,8 +73,10 @@ function l2Flow(views: {
     },
     {
       name: "execute_action",
-      run: (ctx) => {
-        const out = ctx.executeApproved(
+      // 票 34 起 executeApproved 决定已决路径带跨进程焚毁查询（异步）——节点须 await
+      // （生产 worker 的 async 节点同款，票 17/23；挂起仍由同步段同步抛出，票 11 契约不变）。
+      run: async (ctx) => {
+        ctx.state.execution = await ctx.executeApproved(
           "isolate_host",
           paramsRef.current,
           { reason: "调查报告建议遏制" },
@@ -84,7 +86,6 @@ function l2Flow(views: {
             return { mock_edr: "isolated", host: params.host };
           },
         );
-        ctx.state.execution = out;
       },
     },
   ];

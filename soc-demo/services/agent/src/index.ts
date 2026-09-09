@@ -3,6 +3,7 @@ import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
 import { openDb } from "./db.js";
+import { HttpUsedTokenReader } from "./token-ports.js";
 import { APPROVAL_DEMO_FLOW } from "./graph.js";
 import { makeTriageFlow } from "../workers/triage/flow.js";
 import { HttpTriageM2 } from "../workers/triage/m2.js";
@@ -116,6 +117,17 @@ const makeNodes = nodes
 
 // 审计 sink 当前是 ConsoleAuditSink（进 compose 日志可观察）+ SSE 里的 audit 镜像事件
 // （run_events 落盘）；M2 开出审计写入口后换 HttpAuditSink 汇入同一 audit_entries 表。
-buildApp({ db: openDb(dbPath), audit, nodes, makeNodes })
+//
+// 跨进程焚毁读口（票 34·G2-1 清偿）：生产装配把 M2 used_tokens 读口接进验票闸——
+// 跨进程 ApprovalToken 重放第二次必 403 token_used（INV-2），不再只靠 executed_at +
+// 300s TTL 兜底；读口不可达 fail-closed 拒绝执行（INV-1）。写侧（用后焚毁登记）仍是
+// buildApp 缺省的 HttpTokenBurner（fire-and-forget POST 同一张 used_tokens 表）。
+buildApp({
+  db: openDb(dbPath),
+  audit,
+  nodes,
+  makeNodes,
+  usedReader: new HttpUsedTokenReader(),
+})
   .listen({ port: PORT, host: "0.0.0.0" })
   .then(() => console.log(`agent listening on :${PORT}, db=${dbPath}`));

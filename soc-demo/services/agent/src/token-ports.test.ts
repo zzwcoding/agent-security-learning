@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { HttpMintClient, HttpTokenBurner } from "./token-ports.js";
+import { HttpMintClient, HttpTokenBurner, HttpUsedTokenReader } from "./token-ports.js";
 
 // 票 33（体检 结构-13 / D3 前半）：token-ports 的出站 wire 形契约锁——此前整模块零测试。
 // 这两个请求体是跨服务契约：gateway app.py 按 body["case_id"]/body["allowed_tools"] 这些
@@ -158,5 +158,46 @@ describe("HttpTokenBurner 出站 wire 形（对齐 case-backend app.ts：body.jt
     expect(line.warn).toBe("used_tokens_register_failed");
     expect(line.jti).toBe("ap_33TEST0003");
     errSpy.mockRestore();
+  });
+});
+
+// ---------- 焚毁读口（M2 GET /internal/used-tokens/:jti，票 34 接通 INV-2 跨进程读） ----------
+
+describe("HttpUsedTokenReader 出站 wire 形（对齐 case-backend app.ts GET /internal/used-tokens/:jti）", () => {
+  test("已焚：200 {jti, burned} → true；请求 URL 带 jti 路径段（content-type 不必设）", async () => {
+    const { seen } = stubFetch(() => jsonResponse(200, { jti: "ap_t34X", burned: true, burnedAt: 1 }));
+    const hit = await new HttpUsedTokenReader(BURN_BASE).lookup("ap_t34X");
+    expect(hit).toBe(true);
+    expect(seen).toHaveLength(1);
+    expect(seen[0].method).toBe("GET");
+    expect(seen[0].url).toBe(`${BURN_BASE}/internal/used-tokens/ap_t34X`);
+  });
+
+  test("未焚：404 {error} → false（查无此票是正常回答，不是病）", async () => {
+    stubFetch(() => jsonResponse(404, { error: "not_found" }));
+    expect(await new HttpUsedTokenReader(BURN_BASE).lookup("ap_absent")).toBe(false);
+  });
+
+  test("其他状态码 → 抛（fail-closed 语义：只有 200/404 是可信回答，裁决权在闸侧）", async () => {
+    stubFetch(() => jsonResponse(502, { error: "internal_error" }));
+    await expect(new HttpUsedTokenReader(BURN_BASE).lookup("ap_x")).rejects.toThrow("HTTP 502");
+  });
+
+  test("网络不可达 → 抛（INV-1：读口病了必须让闸看见，不能默默当未焚）", async () => {
+    stubFetch(() => Promise.reject(new TypeError("fetch failed")));
+    await expect(new HttpUsedTokenReader(BURN_BASE).lookup("ap_x")).rejects.toThrow("fetch failed");
+  });
+
+  test("jti 进 URL 前经 encodeURIComponent（票面 jti 是自铸 id，防线照挂）", async () => {
+    const { seen } = stubFetch(() => jsonResponse(404, {}));
+    await new HttpUsedTokenReader(BURN_BASE).lookup("ap/a b");
+    expect(seen[0].url).toBe(`${BURN_BASE}/internal/used-tokens/ap%2Fa%20b`);
+  });
+
+  test("未传 baseUrl → env CASE_BACKEND_URL 决定目的地（compose 服务名口径）", async () => {
+    setEnv("CASE_BACKEND_URL", "http://env-cb:3002");
+    const { seen } = stubFetch(() => jsonResponse(200, { burned: true }));
+    await new HttpUsedTokenReader().lookup("ap_env");
+    expect(seen[0].url).toBe("http://env-cb:3002/internal/used-tokens/ap_env");
   });
 });
