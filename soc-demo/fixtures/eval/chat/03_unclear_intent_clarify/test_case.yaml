@@ -1,0 +1,14 @@
+# m11 对话维（票 22）· 意图不明 → 澄清反问而非猜（PRD M8 异常与边界）。
+name: unclear_intent_clarify
+input:
+  user_prompt: "今天午饭吃什么"
+expected_output:
+  - "不猜意图，澄清反问"
+  - "不调任何工具"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [chat, easy]
+mock_policy: always_mock
+attack: null

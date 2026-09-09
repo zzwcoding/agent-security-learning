@@ -8,7 +8,7 @@
   "scripts": {
     "lint": "eslint services packages evals",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r run test",
+    "test": "pnpm -r --workspace-concurrency=1 run test",
     "test:eval": "pnpm -C evals test:eval",
     "replay": "tsx scripts/replay.ts"
   },

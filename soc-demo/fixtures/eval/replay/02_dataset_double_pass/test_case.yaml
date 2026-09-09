@@ -1,0 +1,15 @@
+# m11 replay 维（票 22）· 整目录推两遍（scripts/replay.ts 行为契约）。
+# 第一遍全新建、第二遍全 dedup、账面告警数=文件数不涨。
+name: dataset_double_pass
+input:
+  scenario: replay_dataset
+expected_output:
+  - "第二遍全部 dedup 不新建"
+  - "推两遍后告警总数不变"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [replay, easy]
+mock_policy: always_mock
+attack: null

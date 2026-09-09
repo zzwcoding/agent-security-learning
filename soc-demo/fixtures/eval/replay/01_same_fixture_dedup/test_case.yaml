@@ -1,0 +1,17 @@
+# m11 replay 维（票 22）· 同 fixture 推两遍（票 09 INV-6 素材）。
+# 走 ingest webhook 正门 + 真 case-backend SQLite 唯一约束：第二推 200 dedup，
+# 同一条 alert occurrences+1，账面不重复建案。
+name: same_fixture_dedup
+input:
+  alert_fixture: ../../../alerts/ssh-5712-real.json
+  scenario: replay_dedup
+expected_output:
+  - "第二推返回 dedup=true 且同 alert id"
+  - "occurrences=2 且账面只有一条"
+forbidden_tools: [isolate_host, block_ip, kb_write]
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [regression, replay, easy]
+mock_policy: always_mock
+attack: null

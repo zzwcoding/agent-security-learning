@@ -1,0 +1,81 @@
+# eval-slow（决策 #10：CI 快慢两道的慢道）——每日 + 手动触发的全栈 compose 评测。
+#
+# 与 ci.yml（PR 快道，<5min，单测级注入）的分工：
+#   快道 = 每 PR 必跑，evals 走进程内确定性假件，judge 不可用即 not_evaluable 留痕；
+#   慢道 = 每日 schedule + workflow_dispatch 手动，先把全栈 compose 拉起来（fail-soft），
+#          再跑 pnpm test:eval 全维（确定性门槛照旧是硬门禁），报告与成本 CSV 归档成 artifact。
+#
+# 「能跑的跑、跑不了的显式 skip 留痕」的落点：
+#   - GitHub runner 没有 KVM → 沙箱攻击面用例由 msbProbe 显式 skip（原因写进 latest.json）；
+#   - 没有真 LLM key → judge not_evaluable（只评分不进门禁，决策 #7 本来就不拿它挡门）；
+#   - compose 服务起不来 → compose 步骤 continue-on-error，不红得没头绪，summary 里标注降级。
+name: eval-slow
+
+on:
+  schedule:
+    - cron: "17 21 * * *" # 每日 21:17 UTC（避开整点高峰）
+  workflow_dispatch: {} # 手动全栈评测入口
+
+jobs:
+  fullstack-eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: soc-demo
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # 版本读根 package.json 的 packageManager 字段
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: soc-demo/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+
+      - name: 全栈 compose 拉起（fail-soft：能跑的跑）
+        continue-on-error: true
+        run: |
+          docker compose up -d 2>&1 | tail -20
+          echo "--- compose ps ---"
+          docker compose ps
+
+      - name: eval 全维（确定性门槛 = 硬门禁；judge/sandbox 能力缺失各自显式留痕）
+        run: pnpm test:eval
+
+      - name: 归档评测报告（latest.json + cost_all.csv）
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-results-${{ github.run_id }}
+          path: |
+            soc-demo/eval-results/latest.json
+            soc-demo/eval-results/cost_all.csv
+          if-no-files-found: warn
+
+      - name: 评测摘要（always：skip 原因上墙，scheduled job 不红得没头绪）
+        if: always()
+        run: |
+          {
+            echo "## eval-slow 摘要"
+            if [ -f eval-results/latest.json ]; then
+              python3 - <<'PY'
+          import json
+          r = json.load(open("eval-results/latest.json"))
+          t = r["totals"]
+          print(f"- 用例：{t['ran']} ran / {t['passed']} passed / {t['failed']} failed / {t['skipped']} skipped")
+          print(f"- 分诊准确率：{r['triage_accuracy']}")
+          di = r["defense_interception"]
+          for face, v in di["by_face"].items():
+              rate = "n/a" if v["rate"] is None else f"{v['rate']:.0%}"
+              print(f"- 拦截率 {face}: {v['intercepted']}/{v['total']}（{rate}）")
+          print(f"- 分面计数：{di['by_facet']}")
+          for s in di["skipped"]:
+              print(f"- skip：{s}")
+          print(f"- judge：{r['judge_model']}（avg={r['judge']['avg_score']}，不进门禁）")
+          print(f"- 成本 CSV 行数：{r['costs']['rows']}")
+          PY
+            else
+              echo "- latest.json 不存在：eval 步骤未产出（看上方步骤日志定位）"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -11,13 +11,14 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import type { EvalCase, MockPolicy, TestCaseYaml, TriVerdict } from "./types.js";
+import type { EvalCase, InterceptFacet, MockPolicy, TestCaseYaml, TriVerdict } from "./types.js";
 
 /** fixtures/eval 根（soc-demo/fixtures/eval，与 evals/ 代码分家：用例是数据，框架是代码）。 */
 export const FIXTURES_EVAL_DIR = fileURLToPath(new URL("../../fixtures/eval", import.meta.url));
 
 const VERDICTS: readonly TriVerdict[] = ["fp", "btp", "tp", "uncertain"];
 const MOCK_POLICIES: readonly MockPolicy[] = ["inherit", "never_mock", "always_mock"];
+const FACETS: readonly InterceptFacet[] = ["guard_scan", "behavior_gate", "review_reject", "sandbox_boundary"];
 
 const isStrArr = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");
@@ -46,9 +47,14 @@ function parseCase(domain: string, dirName: string, dir: string): EvalCase {
 
   const input = y.input;
   if (typeof input !== "object" || input === null || Array.isArray(input)) {
-    bad("缺 input（alert_fixture 或 user_prompt）");
+    bad("缺 input（alert_fixture / user_prompt / scenario 三选一）");
   }
   const inputObj = (input ?? {}) as Record<string, unknown>;
+
+  // 票 22：input 第三种形态——scenario（具名行为布景）。三种至少给一种（fail-closed）。
+  if (inputObj.scenario !== undefined && typeof inputObj.scenario !== "string") {
+    bad("input.scenario 必须是字符串（具名布景，如 approve_resume_execute）");
+  }
 
   // alert 流用例：相对路径以 yaml 所在目录为基准落定成绝对路径（§5.11 示例口径）
   let alertFixturePath: string | null = null;
@@ -57,13 +63,28 @@ function parseCase(domain: string, dirName: string, dir: string): EvalCase {
     const p = isAbsolute(rel) ? rel : resolve(dir, rel);
     if (!existsSync(p) || !statSync(p).isFile()) bad(`alert_fixture 不存在：${rel}`);
     else alertFixturePath = p;
-  } else if (typeof inputObj.user_prompt !== "string") {
-    bad("input 里既无 alert_fixture 也无 user_prompt");
+  } else if (typeof inputObj.user_prompt !== "string" && typeof inputObj.scenario !== "string") {
+    bad("input 里 alert_fixture / user_prompt / scenario 全缺");
   }
 
-  const expected_verdict = y.expected_verdict;
-  if (typeof expected_verdict !== "string" || !(VERDICTS as readonly string[]).includes(expected_verdict)) {
-    bad(`expected_verdict 非法（${String(expected_verdict)}），应为 fp/btp/tp/uncertain`);
+  // 人工标注 verdict：分诊评估用例（alert_fixture 且无 scenario）必填——FR-M11.4 准确率
+  // 的对照口径；行为流用例（对话/审批/replay/沙箱）可省——硬造一个 verdict 标注反而是假数据。
+  let expected_verdict: TriVerdict | undefined;
+  const triageShaped = alertFixturePath !== null && inputObj.scenario === undefined;
+  if (triageShaped || y.expected_verdict !== undefined) {
+    expected_verdict = y.expected_verdict as TriVerdict | undefined;
+    if (typeof expected_verdict !== "string" || !(VERDICTS as readonly string[]).includes(expected_verdict)) {
+      bad(`expected_verdict 非法（${String(expected_verdict)}），应为 fp/btp/tp/uncertain`);
+    }
+  }
+
+  // 攻击用例的预期拦截分面（有 attack 标注时校验；报告分面计数的预期口径）
+  let expected_facet: InterceptFacet | undefined;
+  if (y.expected_facet !== undefined) {
+    expected_facet = y.expected_facet as InterceptFacet;
+    if (!(FACETS as readonly string[]).includes(expected_facet)) {
+      bad(`expected_facet 非法（${String(expected_facet)}），应为 ${FACETS.join("/")}`);
+    }
   }
   if (!isStrArr(y.expected_output) || y.expected_output.length === 0) {
     bad("expected_output（judge strict 要点）必须是非空字符串数组");
@@ -88,7 +109,8 @@ function parseCase(domain: string, dirName: string, dir: string): EvalCase {
   const spec: TestCaseYaml = {
     name: name as string,
     input: inputObj as TestCaseYaml["input"],
-    expected_verdict: expected_verdict as TriVerdict,
+    expected_verdict,
+    expected_facet,
     expected_output: y.expected_output as string[],
     forbidden_tools: (y.forbidden_tools as string[] | undefined) ?? [],
     expected_approvals: (y.expected_approvals as string[] | undefined) ?? [],

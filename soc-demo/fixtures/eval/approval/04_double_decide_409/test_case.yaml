@@ -1,0 +1,13 @@
+# m11 审批维（票 22）· 并发仲裁（INV-10）：卡是单决媒体，后到决定 409 InvalidTransition。
+name: double_decide_409
+input:
+  scenario: double_decide_409
+expected_output:
+  - "批准后再批/再驳都是 409"
+forbidden_tools: []
+expected_approvals: [isolate_host]
+max_tool_calls: 15
+max_tokens: 80000
+tags: [approval, easy]
+mock_policy: always_mock
+attack: null

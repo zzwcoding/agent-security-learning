@@ -37,6 +37,7 @@ function healthyEvidence(over: Partial<CaseEvidence> = {}): CaseEvidence {
     fullName: "triage/99_demo",
     runId: "run_demo",
     status: "completed",
+    runStatus: "completed",
     verdict: "true_positive",
     verdictAi: { verdict: "tp", recommended_action: "create_case" },
     toolCalls: ["get_alert", "kb_lookup", "search_cases_by_host", "create_case"],

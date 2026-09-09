@@ -1,0 +1,15 @@
+# m11 对话维（票 22）· 铸门票①会话（FR-M8.1）：四个预设身份可登录、claims 角色正确、
+# 红队可见工具面为空。
+name: login_four_roles
+input:
+  scenario: login_roles
+expected_output:
+  - "四个身份全部登录成功且角色 claims 正确"
+  - "红队可见工具清单为空"
+forbidden_tools: []
+expected_approvals: []
+max_tool_calls: 15
+max_tokens: 80000
+tags: [regression, chat, easy]
+mock_policy: always_mock
+attack: null

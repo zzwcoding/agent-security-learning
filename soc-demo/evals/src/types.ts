@@ -12,12 +12,22 @@ export type TriVerdict = "fp" | "btp" | "tp" | "uncertain";
 
 export type MockPolicy = "inherit" | "never_mock" | "always_mock";
 
-/** PRD §5.11 EvalCase（test_case.yaml）。 */
+/** 防线拦截率分面（FR-M11.4 第二维）：拦截按「怎么拦的」分别计数——
+ *  guard_scan = D2 扫描拦（guards block，含 chat 输入通道）；
+ *  behavior_gate = 行为兜底（验票/审批闸 403、无票不可执行，D4/D5/D7）；
+ *  review_reject = D8 人审驳回；sandbox_boundary = 票 16 沙箱边界（第四攻击面）。 */
+export type InterceptFacet = "guard_scan" | "behavior_gate" | "review_reject" | "sandbox_boundary";
+
+/** PRD §5.11 EvalCase（test_case.yaml）。票 22 扩维：alert_fixture / user_prompt 之外的
+ *  第三种 input —— scenario（具名行为布景，审批/replay/沙箱等非「一条告警」的用例）；
+ *  expected_verdict 对告警流用例必填（准确率对照口径），行为流用例可省。 */
 export interface TestCaseYaml {
   name: string;
-  input: { alert_fixture?: string; user_prompt?: string };
-  /** 人工标注 verdict（本票新增列：FR-M11.4 准确率的对照口径；确定性断言，进门禁）。 */
-  expected_verdict: TriVerdict;
+  input: { alert_fixture?: string; user_prompt?: string; scenario?: string };
+  /** 人工标注 verdict（FR-M11.4 准确率的对照口径；确定性断言，进门禁；告警流必填）。 */
+  expected_verdict?: TriVerdict;
+  /** 攻击用例的预期拦截分面（FR-M11.4 分面计数的预期口径；有 attack 才有意义）。 */
+  expected_facet?: InterceptFacet;
   /** judge strict 要点列表（FR-M11.2；全部命中才 1 分，分数不进门禁）。 */
   expected_output: string[];
   forbidden_tools: string[];
@@ -28,6 +38,14 @@ export interface TestCaseYaml {
   mock_policy: MockPolicy;
   /** 攻击用例标注攻击面（§7），如 alert_injection；常规用例 null。 */
   attack: string | null;
+}
+
+/** 一次 LLM 消费用量的取证快照（M507 cost_all.csv 口径的 input/cache-read/output 三列）。 */
+export interface UsageSnapshot {
+  calls: number;
+  inputTokens: number;
+  cacheReadTokens: number;
+  outputTokens: number;
 }
 
 /** 扫描 fixtures/eval 得到的一条用例（yaml 解析 + 相对路径落定后）。 */
@@ -60,9 +78,12 @@ export interface M2AuditRow {
 export interface CaseEvidence {
   fullName: string;
   runId: string;
-  /** run 终态（completed/failed/...）。 */
+  /** 场景级完成度：run 自然跑完 or 布景走到预期终点（如审批仍挂起是 03 用例的预期）。
+   *  triage/对话用例 = run 终态；scenario 用例由执行器落定。 */
   status: string;
-  /** M2 终值 verdict（"true_positive" 等，TO_M2_VERDICT 的 wire 形态）。 */
+  /** run 行的真实终态（awaiting_approval/failed/...）；scenario 取证用。 */
+  runStatus: string;
+  /** M2 终值 verdict（"true_positive" 等，TO_M2_VERDICT 的 wire 形态）；非告警流为 null。 */
   verdict: string | null;
   verdictAi: unknown;
   /** 按序去重的工具名（tool_call 事件）；toolCallCount 是不去重总数（max_tool_calls 口径）。 */
@@ -88,8 +109,18 @@ export interface CaseEvidence {
   }[];
   auditM2: M2AuditRow[];
   durationMs: number;
+  /** LLM 消费用量取证（M507 成本口径三列的来源）；告警流用例才有（UsageProbeLlm 在缝上量）。 */
+  usage?: UsageSnapshot;
   /** 交给 judge 的执行记录渲染文本（FR-M11.2 的评分对象）。 */
   transcript: string;
+}
+
+/** 攻击用例的拦截取证（runner 从证据推导，报告分面计数的数据源）。 */
+export interface AttackEvidence {
+  facet: InterceptFacet;
+  /** true = 该道防线真拦住了（分面计「拦截」）；false = 遗漏报红。 */
+  intercepted: boolean;
+  detail: string;
 }
 
 /** 一条确定性检查的结论。 */
@@ -120,4 +151,15 @@ export interface CaseResult {
   toolCalls: number;
   tokens: number;
   durationMs: number;
+  /** 攻击用例的拦截结论（非攻击用例 null）；防线拦截率分面计数的数据源。 */
+  attack: { kind: string; facet: InterceptFacet; intercepted: boolean } | null;
+  /** M507 成本口径的一行（非告警流 / skipped 用例没有）。 */
+  cost?: {
+    model: string;
+    inputTokens: number;
+    cacheReadTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    estCostUsd: number;
+  };
 }
