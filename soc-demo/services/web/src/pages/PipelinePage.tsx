@@ -32,12 +32,12 @@ function stepStatus(s: "pending" | "running" | "done"): "wait" | "process" | "fi
   return s === "pending" ? "wait" : s === "running" ? "process" : "finish";
 }
 
-export default function PipelinePage({ alertId }: { alertId?: string }) {
+export default function PipelinePage({ alertId, runId: deepRunId }: { alertId?: string; runId?: string }) {
   const { session } = useAuth();
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [selected, setSelected] = useState<string | undefined>(alertId);
   const [runIdInput, setRunIdInput] = useState("");
-  const [runId, setRunId] = useState<string | null>(null);
+  const [activeRun, setActiveRun] = useState<string | null>(null);
   const [launching, setLaunching] = useState(false);
   const [pipeline, setPipeline] = useState<PipelineState>(() => initPipeline("alert_flow"));
   const [sseStatus, setSseStatus] = useState<SseStatus | null>(null);
@@ -53,7 +53,7 @@ export default function PipelinePage({ alertId }: { alertId?: string }) {
   // 订阅一条 run 的 SSE；换 run / 卸载时把旧连接关干净（组件不引状态库，全靠这把 ref）
   const subscribe = useCallback((id: string) => {
     sseRef.current?.close();
-    setRunId(id);
+    setActiveRun(id);
     setPipeline(initPipeline(kindRef.current));
     const sse = new ReconnectingSse({
       runId: id,
@@ -65,6 +65,15 @@ export default function PipelinePage({ alertId }: { alertId?: string }) {
   }, []);
 
   useEffect(() => () => sseRef.current?.close(), []);
+
+  // 审批卡页「run 流水」深链（#/pipeline?run_id=…）：进来直接接上那条 run。
+  // 来路是审批 resume 的 run，图未知 → 不猜骨架，节点从事件流动态发现。
+  useEffect(() => {
+    if (deepRunId) {
+      kindRef.current = null;
+      subscribe(deepRunId);
+    }
+  }, [deepRunId, subscribe]);
 
   const launch = async () => {
     if (!selected) return;
@@ -122,7 +131,7 @@ export default function PipelinePage({ alertId }: { alertId?: string }) {
       {status && (
         <Space style={{ marginBottom: 12 }} wrap>
           <Badge status={status.color} text={status.text} />
-          {runId && <Typography.Text code>run: {runId}</Typography.Text>}
+          {activeRun && <Typography.Text code>run: {activeRun}</Typography.Text>}
           {pipeline.runStatus && (
             <Tag color={RUN_STATUS_COLORS[pipeline.runStatus] ?? "default"}>{pipeline.runStatus}</Tag>
           )}

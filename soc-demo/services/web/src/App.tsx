@@ -1,29 +1,22 @@
 // Web 演示窗（m10）：薄客户端壳 = hash 路由 + 登录闸 + 布局菜单。
-// 路由范围锁死（m10 卡）：本票上告警列表/流水线视图/审计流三页，审批卡/案件时间线/
-// Eval 结果三页由票 21 收齐；之外不会有任何路由。不引路由库/状态库（2026-09-08 拍板）：
-// hash 解析 20 行 + React context 就够，演示窗的复杂度必须留在后端。
+// 路由范围锁死（m10 卡·决策 #6）：六个路由（ROUTES 唯一事实来源，routes.ts），
+// 之外不会有任何路由——菜单由表生成、页面开关由表驱动、快照断言在 routes.test.ts。
+// 不引路由库/状态库（2026-09-08 拍板）：hash 解析 20 行 + React context 就够，
+// 演示窗的复杂度必须留在后端。
 import { Button, Layout, Menu, Space, Tooltip, Typography } from "antd";
 import { useEffect, useState } from "react";
 import { AuthProvider, useAuth } from "./auth";
 import AlertsPage from "./pages/AlertsPage";
+import ApprovalsPage from "./pages/ApprovalsPage";
 import AuditPage from "./pages/AuditPage";
+import CasePage from "./pages/CasePage";
+import EvalPage from "./pages/EvalPage";
 import LoginPage from "./pages/LoginPage";
 import PipelinePage from "./pages/PipelinePage";
+import { isRouteName, parseHash, ROUTES, type RouteName } from "./routes";
 
-// ---- hash 路由：#/alerts、#/pipeline?alert_id=…、#/audit（支持 ?k=v 传参）----
-interface Route {
-  name: string;
-  params: URLSearchParams;
-}
-
-function parseHash(): Route {
-  const raw = window.location.hash.replace(/^#\/?/, "");
-  const [name, qs] = raw.split("?");
-  return { name: name || "", params: new URLSearchParams(qs ?? "") };
-}
-
-function useHashRoute(): { route: Route; go: (to: string) => void } {
-  const [route, setRoute] = useState<Route>(parseHash);
+function useHashRoute(): { route: ReturnType<typeof parseHash>; go: (to: string) => void } {
+  const [route, setRoute] = useState<ReturnType<typeof parseHash>>(parseHash);
   useEffect(() => {
     const onChange = () => setRoute(parseHash());
     window.addEventListener("hashchange", onChange);
@@ -35,15 +28,17 @@ function useHashRoute(): { route: Route; go: (to: string) => void } {
   return { route, go };
 }
 
-const MENU_KEY = { alerts: "alerts", pipeline: "pipeline", audit: "audit" } as const;
+const DEFAULT_ROUTE: RouteName = "alerts";
 
 function Shell() {
   const { session, logout } = useAuth();
   const { route, go } = useHashRoute();
 
-  if (!session) return <LoginPage onDone={() => go(MENU_KEY.alerts)} />;
+  if (!session) return <LoginPage onDone={() => go(DEFAULT_ROUTE)} />;
 
-  const active = route.name in MENU_KEY ? route.name : MENU_KEY.alerts;
+  // 表外名字一律兜底回告警列表：六页面之外无路由的渲染面最后一道锁
+  const active = isRouteName(route.name) ? route.name : DEFAULT_ROUTE;
+  const param = (k: string): string | undefined => route.params.get(k) ?? undefined;
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -56,11 +51,7 @@ function Shell() {
           mode="horizontal"
           selectedKeys={[active]}
           onClick={(e) => go(e.key)}
-          items={[
-            { key: MENU_KEY.alerts, label: "告警列表" },
-            { key: MENU_KEY.pipeline, label: "流水线视图" },
-            { key: MENU_KEY.audit, label: "审计流" },
-          ]}
+          items={ROUTES.map((r) => ({ key: r.key, label: r.label }))}
           style={{ flex: 1, minWidth: 320 }}
         />
         <Space size={12} style={{ whiteSpace: "nowrap" }}>
@@ -81,19 +72,19 @@ function Shell() {
         </Space>
       </Layout.Header>
       <Layout.Content style={{ padding: 16 }}>
-        {active === MENU_KEY.pipeline ? (
-          <PipelinePage alertId={route.params.get("alert_id") ?? undefined} />
-        ) : active === MENU_KEY.audit ? (
-          <AuditPage />
-        ) : (
-          <AlertsPage go={go} />
-        )}
+        {active === "pipeline" && <PipelinePage alertId={param("alert_id")} runId={param("run_id")} />}
+        {active === "approvals" && <ApprovalsPage go={go} />}
+        {active === "cases" && <CasePage caseId={param("case_id")} alertId={param("alert_id")} />}
+        {active === "audit" && <AuditPage />}
+        {active === "eval" && <EvalPage />}
+        {active === "alerts" && <AlertsPage go={go} />}
       </Layout.Content>
     </Layout>
   );
 }
 
-// 阶段 20.1 跑通：登录 → 告警列表 → 流水线 → 审计流，三页数据全部来自公开 REST + SSE
+// 阶段 21 跑通：登录 → 六页面全齐（告警/流水线/审批卡/案件时间线/审计流/Eval），
+// 数据全部来自公开 REST + SSE + 静态产物，无 Web 特权接口
 export default function App() {
   return (
     <AuthProvider>

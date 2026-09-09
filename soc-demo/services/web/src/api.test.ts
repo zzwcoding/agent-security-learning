@@ -1,7 +1,10 @@
 // API client 测试：fetch 用 vi.stubGlobal 打桩，断言「方法 → 正确的路径/方法/参数体」
 // 与错误传播。Web 是薄客户端，它的 seam 就是这几个公开 REST 面（M2/M3/ingest）。
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, listAlerts, listAudit, login, replayAlert, startRun } from "./api";
+import {
+  ApiError, decideApproval, fetchEvalReport, findCaseIdByAlert,
+  listAlerts, listApprovals, listAudit, login, replayAlert, startRun,
+} from "./api";
 
 const fetchMock = vi.fn();
 
@@ -85,5 +88,71 @@ describe("api client", () => {
     });
     fetchMock.mockResolvedValueOnce(jsonRes(404, { error: "not_found" }));
     await expect(startRun("alert_flow", "missing")).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe("api client · 审批卡/案件/Eval（票 21）", () => {
+  it("listApprovals：GET /api/v1/approvals?status=pending，wire snake → 卡片命名", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, {
+        approvals: [
+          {
+            id: "apr_1", run_id: "run_1", node: "execute_action", tool: "isolate_host",
+            params: { host: "centos7" }, params_hash: "h1", case_id: "case_000001",
+            reason: "建议遏制", status: "pending", approver: null, reject_reason: null,
+            executed: false, created_at: 100, decided_at: null,
+          },
+        ],
+      }),
+    );
+    const cards = await listApprovals("pending");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/approvals?status=pending");
+    expect(cards[0]).toMatchObject({ id: "apr_1", runId: "run_1", caseId: "case_000001", executed: false });
+    // 不带 status：拉全量（时间线页要把案件的已裁决卡也拼进时间线）
+    fetchMock.mockResolvedValueOnce(jsonRes(200, { approvals: [] }));
+    await listApprovals();
+    expect(fetchMock.mock.calls[1][0]).toBe("/api/v1/approvals");
+  });
+
+  it("decideApproval：approve/reject 两路 POST，approver 必填进 body", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, { approval_id: "apr_1", approval_token: "tok", run_id: "run_1", run_status: "completed" }),
+    );
+    const ok = await decideApproval("apr_1", { approve: true, approver: "duty_lead@soc.local" });
+    let [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/v1/approvals/apr_1/approve");
+    expect(JSON.parse(init.body)).toEqual({ approver: "duty_lead@soc.local" });
+    expect(ok).toMatchObject({ runId: "run_1", runStatus: "completed", approvalToken: "tok" });
+
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, { approval_id: "apr_1", decision: "rejected", run_id: "run_1", run_status: "completed" }),
+    );
+    await decideApproval("apr_1", { approve: false, approver: "duty_lead@soc.local", reason: "证据不足" });
+    [url, init] = fetchMock.mock.calls[1];
+    expect(url).toBe("/api/v1/approvals/apr_1/reject");
+    expect(JSON.parse(init.body)).toEqual({ approver: "duty_lead@soc.local", reason: "证据不足" });
+  });
+
+  it("findCaseIdByAlert：在 linkedAlerts 里反查案件 id；找不到返回 null", () => {
+    const cases = [
+      { id: "case_000001", number: 1, title: "t", severity: 2, status: "Open", linkedAlerts: ["al_1"], startDate: 1 },
+      { id: "case_000002", number: 2, title: "t", severity: 3, status: "Open", linkedAlerts: ["al_2", "al_3"], startDate: 2 },
+    ];
+    expect(findCaseIdByAlert(cases, "al_3")).toBe("case_000002");
+    expect(findCaseIdByAlert(cases, "al_404")).toBeNull();
+  });
+
+  it("fetchEvalReport：读 vite 静态面 /eval-results/latest.json（与磁盘路径同 URL）", async () => {
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, {
+        run_at: "2026-09-09T00:00:00Z", lane: "unit-injected",
+        totals: { cases: 11, ran: 11, passed: 11, failed: 0, skipped: 0 },
+        triage_accuracy: 1, judge: { evaluable_cases: 0, avg_score: null, note: "" }, cases: [],
+      }),
+    );
+    const report = await fetchEvalReport();
+    expect(fetchMock.mock.calls[0][0]).toBe("/eval-results/latest.json");
+    expect(report.triage_accuracy).toBe(1);
+    expect(report.attack_block_rate).toBeUndefined(); // 票 22 前没有，页面按未产出口径渲染
   });
 });

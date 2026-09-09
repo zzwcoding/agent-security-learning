@@ -11,6 +11,10 @@ RUN pnpm install --frozen-lockfile --filter @soc-demo/web...
 # 把 fixture POST 进 ingest webhook 正门（src/fixtures.ts）
 COPY fixtures/ fixtures/
 
+# 票 21：eval-results/ 打包进镜像——vite 静态面 /eval-results/latest.json
+# （FR-M10.6 Eval 页数据源；vite.config.ts evalResultsStatic 插件读这里）
+COPY eval-results/ eval-results/
+
 COPY tsconfig.base.json ./
 COPY services/web/ services/web/
 

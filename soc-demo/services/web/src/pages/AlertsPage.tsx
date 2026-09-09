@@ -4,7 +4,7 @@
 import { Button, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
-import { listAlerts, replayAlert, type AlertRow } from "../api";
+import { findCaseIdByAlert, listAlerts, listCases, replayAlert, type AlertRow } from "../api";
 import { FIXTURE_ALERTS } from "../fixtures";
 
 const SEVERITY = [
@@ -26,7 +26,21 @@ const VERDICT_COLORS: Record<string, string> = {
   benign_true_positive: "green",
   true_positive: "red",
   uncertain: "orange",
+  // 短别名：M2 verdict_ai 存的是 worker 的原始判定对象（verdict 字段是短标签）
+  tp: "red",
+  btp: "green",
+  fp: "default",
 };
+
+/** verdict_ai 的真实 wire 形状是 worker 的原始判定对象（{verdict:"tp",...}），
+ *  老数据/下游也可能给字符串——两态都归一成可渲染的标签，页面不吃 Object 崩溃。 */
+function verdictLabel(v: unknown): string | null {
+  if (typeof v === "string") return v;
+  if (typeof v === "object" && v !== null && "verdict" in v) {
+    return String((v as { verdict: unknown }).verdict);
+  }
+  return null;
+}
 
 function fmtTime(ms: number): string {
   return ms ? new Date(ms).toLocaleString("zh-CN", { hour12: false }) : "-";
@@ -72,6 +86,18 @@ export default function AlertsPage({ go }: { go: (route: string) => void }) {
     }
   };
 
+  // 时间线页入口（FR-M10.4）：告警 → 案件反查（linkedAlerts 里找它）。
+  // 没建案就明说，不猜——案件是分诊 TP 后由 outcome 节点自动建的。
+  const openCase = async (alertId: string) => {
+    try {
+      const found = findCaseIdByAlert(await listCases(), alertId);
+      if (found) go(`cases?case_id=${found}`);
+      else message.info("这条告警还没有案件（分诊判 TP 后自动建案，或先在流水线视图发起分诊）");
+    } catch (e) {
+      message.error(`查案件失败：${e instanceof Error ? e.message : String(e)}（case-backend 未起？）`);
+    }
+  };
+
   const columns: ColumnsType<AlertRow> = [
     {
       title: "标题",
@@ -106,8 +132,10 @@ export default function AlertsPage({ go }: { go: (route: string) => void }) {
       title: "AI 分诊",
       dataIndex: "verdictAi",
       width: 150,
-      render: (v: string | null) =>
-        v ? <Tag color={VERDICT_COLORS[v] ?? "default"}>{v}</Tag> : <Tag>未分诊</Tag>,
+      render: (v: unknown) => {
+        const label = verdictLabel(v);
+        return label ? <Tag color={VERDICT_COLORS[label] ?? "default"}>{label}</Tag> : <Tag>未分诊</Tag>;
+      },
     },
     {
       title: "去重",
@@ -125,11 +153,16 @@ export default function AlertsPage({ go }: { go: (route: string) => void }) {
     {
       title: "操作",
       key: "act",
-      width: 110,
+      width: 170,
       render: (_, r) => (
-        <Button size="small" onClick={() => go(`pipeline?alert_id=${r.id}`)}>
-          发起分诊
-        </Button>
+        <Space size={4}>
+          <Button size="small" onClick={() => go(`pipeline?alert_id=${r.id}`)}>
+            发起分诊
+          </Button>
+          <Button size="small" type="link" onClick={() => void openCase(r.id)}>
+            查案件
+          </Button>
+        </Space>
       ),
     },
   ];
