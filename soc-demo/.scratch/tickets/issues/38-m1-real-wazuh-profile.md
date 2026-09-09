@@ -24,8 +24,12 @@
 （55000 落在 macOS/Linux 临时端口段，同 langfuse 13000 口径）；agent 接入口
 1514/1515/514 不开——本地不收 agent。`API_USERNAME/API_PASSWORD` 用 Docker Hub 官方
 镜像文档的教学假值当金丝雀（contextforge JWT_SECRET_KEY 同口径，真部署由环境注入）；
-`ulimits.nofile 65536` 照官方 compose（ossec-analysisd 开规则文件多）；不挂数据卷
-（logtest 无状态，容器一停即没，重跑 up 幂等）。机器断言：compose-topology.test.ts
+`ulimits.nofile 65536` 照官方 compose（ossec-analysisd 开规则文件多）；只读挂载定制
+`ossec.conf`（`deploy/wazuh-manager/ossec.conf`，源=官方镜像原版仅关两段：
+**vulnerability-detection enabled=no**——否则每次启动自动下全量 CVE 库 5-8GB，正是
+前一窗口磁盘满事故的根因；indexer 连接器 enabled=no。实测 4.14.7：VD 彻底不下载，
+连接器受 s6 已知行为影响仍起（wazuh/wazuh#35264）但有界，LMDB 约 110MB 见顶）。
+不挂数据卷（logtest 无状态，容器一停即没，重跑 up 幂等）。机器断言：compose-topology.test.ts
 票 38 组 6 例——静态 4（服务存在+profiles 含 real-wazuh+digest 钉+不 build；只露
 55000 不露 1514/1515/514；默认 11 服务全都不许 depends_on wazuh-manager（依赖会隐式
 激活 profile，票 37 同坑）；喂数脚本不进 compose）+ 语义 2（daemon 探测 skip 先例：
