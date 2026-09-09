@@ -17,25 +17,16 @@ import { NotFoundError, UnauthorizedError } from "./errors.js";
 import { MemoryAuditSink, type AuditSink } from "./audit.js";
 import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner, type UsedTokenReader } from "./token-ports.js";
 import type { BurnRegistry } from "./verify-ticket.js";
-import { TRIAGE_TOOLS } from "../workers/triage/prompt.js";
-import { KNOWLEDGE_TOOLS } from "../workers/knowledge/prompt.js";
-import { INVESTIGATION_TOOLS } from "../workers/investigation/prompt.js";
-import { ENRICHMENT_TOOLS } from "../workers/enrichment/tools.js";
-import { CHAT_READONLY_TOOLS, THIN_CHAT_FLOW } from "../workers/chat/flow.js";
+import { THIN_CHAT_FLOW } from "../workers/chat/flow.js";
 import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "../workers/chat/session.js";
 import { visibleTools } from "../workers/chat/visible-tools.js";
 import type { RunRow } from "./runs.js";
+import { requireRunKind, runKindOf, type RunGraphFactory } from "./run-kinds.js";
 
-// 本票放行的 run kind。chat_flow（票 18）到票再放——fail-closed：不认识的 kind 直接
-// 400，不给「什么都接」留口子。knowledge_flow = 票 17 沉淀子图（案件关闭 → 提炼 →
-// kb_write 人审闸）；chat_flow = 票 18 对话 Copilot（用户触发，公开面走 POST /api/v1/chat，
-// 这里放行是为编排侧调试/测试同路进柴）；case_flow = 票 36 调查+富化链（TP 建案后的
-// 下半场，PRD §4.2 步骤 7-8——直拉入口，alert_flow 链上见 index.ts 的 makeNodes）；
-// close_flow = 票 39 SOC1 一键确认关单（FR-M4.5 演示口径：FP/BTP 建议的执行下半场，
-// web 告警页确认 → 最小任务票过闸执行 close_alert）。
-const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow", "case_flow", "close_flow"]);
-// 吃 case_id（无 alert）的 kind：alert_flow/close_flow 之外的两种
-const CASE_KINDS = new Set(["knowledge_flow", "chat_flow", "case_flow"]);
+// run kind 的放行/拉起实体/票面规格全部在 src/run-kinds.ts 注册表（票 44：一处注册
+// 处处消费；原 RUN_KINDS/CASE_KINDS/TICKET_SPECS 三张平行表由此删除）。本文件只保留
+// chat_flow 的公开 SSE 面路由（launchChatRun）——那是 app 层的 wire 形态，不是 kind
+// 元数据。fail-closed 口径不变：不在册的 kind 直接 400，不给「什么都接」留口子。
 
 // chat 流的 SSE wire 只出对话语义帧（PRD §6-M8 的 data.type 枚举 + 审批过程可见）；
 // node_enter/node_exit/audit 是流水线视图的帧（/events/stream 原样给全量），对话流里
@@ -45,34 +36,7 @@ export const CHAT_WIRE_TYPES = new Set([
   "token", "tool_call", "tool_result", "approval_required", "approval_decided", "denied", "done",
 ]);
 
-// 每-kind 的任务票规格（FR-M3.4 worker 拉起即申领最小 scope 票；INV-3：票面永不含 L2
-// ——kb_write 不在 knowledge 的 allowed_tools 里，L2 走审批卡铸 ApprovalToken）。
-const TICKET_SPECS: Record<string, { sub: string; scope: string[]; allowedTools: string[] }> = {
-  // 票 36（B4 清偿）：alert_flow 的 TP 建案分支后【同一 run 内】链上调查+富化，而任务票
-  // 在拉起时铸、verdict 要跑到中途才知道——allowed_tools 取分诊∪调查∪富化三个 L1 工具族
-  // 的并集（拉起时刻能证明需要的最小超集）。FP/merge 分支用不到链上工具：票里没执行的
-  // 授权不等于执行（闸仍 fail-closed，且并集不含任何 L2——INV-3 依旧）。两票方案（链段
-  // 单独铸票）要动 makeNodes 票务 seam，留待真需要时再说。
-  alert_flow: {
-    sub: "agent:triage",
-    scope: ["alert:update", "case:write"],
-    allowedTools: [...new Set([...TRIAGE_TOOLS, ...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
-  },
-  knowledge_flow: { sub: "agent:knowledge", scope: ["case:read", "kb:propose"], allowedTools: [...KNOWLEDGE_TOOLS] },
-  // chat 票面 = 只读四件（FR-M8.4 allow 态的全部执行面）；动作意图的执行票是审批铸的
-  // ApprovalToken，不经这张任务票（INV-3：对话 worker 同样物理无 L2 任务票）。
-  chat_flow: { sub: "agent:chat", scope: ["case:read"], allowedTools: [...CHAT_READONLY_TOOLS] },
-  // 票 36：case_flow 的链上两 worker（调查 m5 + 富化 m6）同 run 共票——allowed_tools =
-  // 两个 L1 工具族的并集（INV-3 依旧：并集里没有任何 L2），scope 只含案件读写。
-  case_flow: {
-    sub: "agent:case_flow",
-    scope: ["case:read", "case:write"],
-    allowedTools: [...new Set([...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
-  },
-  // 票 39：一键确认关单的最小票——工具面只有本动作用到的两件（L0 读定 verdict +
-  // L1 写落关单），scope 只有 alert:update（INV-3：无任何 L2，也不会碰到案件实体）。
-  close_flow: { sub: "agent:triage", scope: ["alert:update"], allowedTools: ["get_alert", "close_alert"] },
-};
+// 每-kind 的任务票规格移入注册表（run-kinds.ts 的 ticket 格，票 44）。
 
 // buildApp 纯工厂（全仓 seam 约定）：测试注入 :memory: db + MemoryAuditSink + 假铸票，
 // 生产注入文件 db + HttpMintClient/HttpTokenBurner。REST 只是壳——审批卡领域在
@@ -87,11 +51,7 @@ export function buildApp(opts: {
    *  不传 = 用静态 nodes（薄径/审批演示），也不铸票。
    *  票 39：第三参带调用方 actor（/internal/runs 的 x-actor-id 派生）——close_flow
    *  的确认审计要记到确认人头上（INV-8）；既有工厂不读它，零影响。 */
-  makeNodes?: (
-    run: RunRow,
-    ticket: string,
-    ctx?: { actor?: { type: string; id: string } },
-  ) => FlowNode[] | Promise<FlowNode[]>;
+  makeNodes?: RunGraphFactory;
   /** 铸 ApprovalToken 的出站 seam（m9 卡：铸票调 gateway）。 */
   mint?: MintClient;
   /** 执行后的焚毁登记口（INV-2，M2 used_tokens）。 */
@@ -211,7 +171,7 @@ export function buildApp(opts: {
     let nodes: FlowNode[] = THIN_CHAT_FLOW;
     if (opts.makeNodes) {
       try {
-        const spec = TICKET_SPECS.chat_flow;
+        const spec = requireRunKind("chat_flow").ticket;
         const minted = await mint.mintTaskTicket({
           jti: `tk_${randomUUID()}`,
           sub: spec.sub,
@@ -278,23 +238,24 @@ export function buildApp(opts: {
   app.post("/internal/runs", async (req, reply) => {
     const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; message?: string; role?: string };
     if (!body.kind) return reply.status(400).send({ error: "kind_required" });
-    if (!RUN_KINDS.has(body.kind)) {
+    // 拉起校验全部读注册表（票 44）：不在册 400；intake 决定吃 alert_id 还是 case_id；
+    // requiresMessage 是 chat_flow 的「没消息就没有图可跑」——缺 message 直接 400，不造空 run。
+    const desc = runKindOf(body.kind);
+    if (!desc) {
       return reply.status(400).send({ error: "unknown_kind", details: [body.kind] });
     }
-    // alert_flow 吃 alert_id；knowledge_flow/chat_flow 吃 case_id（票 17/18）
-    if (CASE_KINDS.has(body.kind)) {
+    if (desc.intake === "case") {
       if (!body.case_id) return reply.status(400).send({ error: "case_id_required" });
     } else if (!body.alert_id) {
       return reply.status(400).send({ error: "kind_and_alert_id_required" });
     }
-    if (body.kind === "chat_flow") {
-      // 对话 run 没有消息就没有图可跑——缺 message 直接 400，不造空 run
+    if (desc.requiresMessage) {
       if (typeof body.message !== "string" || !body.message.trim()) {
         return reply.status(400).send({ error: "message_required" });
       }
     }
     const chatMessage = typeof body.message === "string" ? body.message.trim() : "";
-    const spec = TICKET_SPECS[body.kind];
+    const spec = desc.ticket;
     const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
     const actorId = (req.headers["x-actor-id"] as string) ?? "internal";
     // 票 39：actor 类型诚实派生（照 M2 ctxOf 的内网信任口径——不猜，缺头按 internal
@@ -307,7 +268,7 @@ export function buildApp(opts: {
     const actor = { type: actorType, id: actorId };
     const run = createRun(
       db,
-      CASE_KINDS.has(body.kind)
+      desc.intake === "case"
         ? { kind: body.kind, caseId: body.case_id ?? null }
         : { kind: body.kind, alertId: body.alert_id },
       {
@@ -368,7 +329,7 @@ export function buildApp(opts: {
   async function rebuildResumeNodes(runId: string): Promise<FlowNode[] | undefined> {
     if (opts.nodes || !opts.makeNodes) return opts.nodes;
     const run = requireRun(db, runId);
-    const spec = TICKET_SPECS[run.kind];
+    const spec = requireRunKind(run.kind).ticket;
     const minted = await mint.mintTaskTicket({
       jti: `tk_${randomUUID()}`,
       sub: spec.sub,

@@ -36,7 +36,10 @@ export interface PipelineState {
 const LOG_CAP = 200;
 
 /** 预置节点骨架：alert_flow = triage 六节点；case_flow = 调查+富化链（票 36，
- *  FR-M10.2）。名单与 fixtures/sse-events.json flow_nodes 两端契约锁。
+ *  FR-M10.2）。web 不能 import agent 源码（边界规则 R6）——本名单是手抄，与 agent
+ *  侧唯一事实来源（services/agent/src/run-kinds.ts 注册表的 pipelineNodes 格，票 44）
+ *  靠同一份 fixtures/sse-events.json flow_nodes 样品契约锁：两端测试各读本表咬对端
+ *  （票 31 先例；agent 产出侧闸 = run-kinds.test.ts）。
  *  其余 kind（chat/knowledge）节点未知 → 空骨架动态发现（不超前猜图）。 */
 export const FLOW_NODES: Record<string, string[]> = {
   alert_flow: ["load_alert", "kb_check", "merge_check", "self_audit_checkpoint", "verdict_llm", "outcome"],

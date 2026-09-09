@@ -15,32 +15,19 @@ import {
   startAutorun,
 } from "./autorun.js";
 import { APPROVAL_DEMO_FLOW } from "./graph.js";
-import { makeTriageFlow } from "../workers/triage/flow.js";
-import { makeCloseFlow } from "../workers/triage/close.js";
-import { HttpTriageM2 } from "../workers/triage/m2.js";
+import {
+  requireRunKind,
+  runKindOf,
+  type RunGraphFactory,
+  type RunKindGraphDeps,
+} from "./run-kinds.js";
 import { MemoryKb } from "../workers/triage/kb.js";
-import { FakeTriageLlm } from "../workers/triage/llm.js";
-import { RealTriageLlm } from "../workers/triage/llm-real.js";
-import { GatewayLlmClient } from "./llm-client.js";
-import { HttpInvestigationM2 } from "../workers/investigation/m2.js";
 import { FixtureSiem } from "../workers/investigation/siem.js";
-import { FakeInvestigationLlm } from "../workers/investigation/llm.js";
-import { RealInvestigationLlm } from "../workers/investigation/llm-real.js";
-import { HttpEnrichmentM2 } from "../workers/enrichment/m2.js";
 import { FixtureAnalyzerTable } from "../workers/enrichment/analyzers.js";
-import { makeCaseFlow } from "../workers/case-flow.js";
-import { scanInjection } from "./guards-client.js";
-import { makeChatFlow } from "../workers/chat/flow.js";
-import { FakeChatLlm } from "../workers/chat/llm.js";
-import { RealChatLlm } from "../workers/chat/llm-real.js";
-import { makeFgaChecker } from "./fga-client.js";
-import { makeKnowledgeFlow } from "../workers/knowledge/flow.js";
-import { HttpKnowledgeM2 } from "../workers/knowledge/m2.js";
-import { FakeKnowledgeLlm } from "../workers/knowledge/llm.js";
-import { RealKnowledgeLlm } from "../workers/knowledge/llm-real.js";
 import { RealChromaClient, MemoryVectorStore } from "../workers/knowledge/vector-store.js";
 import type { VectorStore } from "../workers/knowledge/vector-store.js";
 import { ChromaKb } from "../workers/knowledge/kb.js";
+import { makeFgaChecker } from "./fga-client.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 // 编排侧自己的库（runs/run_events/checkpoints/approvals）落 soc-demo/data；
@@ -55,8 +42,8 @@ const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite"
 // 票 18 起 chat_flow 接 m8 对话 Copilot；票 36 起 case_flow 接 m5+m6 调查富化链，
 // alert_flow 的 TP 建案分支后同一 run 内链上同一条链——B4 清偿，PRD §4.2 步骤 7-8）：
 //   AGENT_FLOW=approval_demo → 带 L2 动作的演示图（curl 走通审批回路，票 11）
-//   其余按 run.kind 组图：alert_flow=triage+case 链 / knowledge_flow=knowledge /
-//   chat_flow=chat / case_flow=investigate→enrich。
+//   其余按 run.kind 查注册表（票 44：src/run-kinds.ts）取图工厂组图——kind 的分支
+//   不再写在这里，本文件只剩「真件从哪来」的装配。
 //   makeNodes 在每个 run 拉起时被调：app.ts 先按 kind 向 gateway 铸任务票（INV-3：
 //   票面无 L2），票交进来组图。
 //
@@ -69,10 +56,9 @@ const kbStore: VectorStore = KB_CHROMA_URL
   ? new RealChromaClient({ baseUrl: KB_CHROMA_URL })
   : new MemoryVectorStore();
 const kbForTriage = KB_CHROMA_URL ? new ChromaKb(kbStore) : new MemoryKb();
-// chat 的只读面（票 18）：M2 REST + fixture SIEM 语料（m5 worker 同款 adapter 直用）。
+// 调查/对话的只读面（票 18）：M2 REST + fixture SIEM 语料（m5 worker 同款 adapter 直用）。
 // 票 36 起 case_flow 的调查子图共用同一语料与 M2 adapter（fixture 表当 mock SIEM）。
 const fixtureSiem = new FixtureSiem(fileURLToPath(new URL("../../../fixtures/alerts/", import.meta.url)));
-const siemForChat = fixtureSiem;
 // case_flow 富化面的 analyzer backend（票 15：fixtures/ti 情报表 mock；microsandbox
 // 真跑切换见 workers/enrichment/sandbox.ts——compose 攻击演示切真跑，不在本票范围）
 const analyzers = new FixtureAnalyzerTable(fileURLToPath(new URL("../../../fixtures/ti/", import.meta.url)));
@@ -102,106 +88,25 @@ const audit = lfMirror ? new TeeAuditSink([m2Audit, lfMirror]) : m2Audit;
 // approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
 // 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
 const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : undefined;
-const makeNodes = nodes
+// 生产装配件（票 44 起注入 run kind 注册表——图工厂本体在 src/run-kinds.ts 按 kind
+// 注册，本文件只负责「真件从哪来」：env 决定的 KB/LLM/FGA/SIEM/analyzer 单例）。
+const RUN_KIND_DEPS: RunKindGraphDeps = {
+  audit,
+  kb: kbForTriage,
+  kbStore,
+  siem: fixtureSiem,
+  analyzers,
+  fga: fgaForChat,
+  llmMode: LLM_MODE,
+};
+// 每-run 组图 = 查注册表取本 kind 的图工厂（票 44）。在册 kind 的 makeGraph 由
+// 注册表完整性测试保证在位；真缺（不该发生）就炸响，绝不静默换图。
+const makeNodes: RunGraphFactory | undefined = nodes
   ? undefined
-  : (run: { id: string; kind: string; caseId: string | null }, ticket: string, ctx?: { actor?: { type: string; id: string } }) => {
-    // 票 36 调查+富化链的装配（B4 清偿）：真件 = M2 REST + fixture SIEM 语料 + fixture
-    // TI 情报表 + guards scanInjection（GUARDS_URL，compose 服务名可达）；调查 LLM 照
-    // AGENT_LLM 切 fake/real。case_id 不在组图时给定——直拉来自 run 行（executeRun
-    // 拼进交接态），alert_flow 链上来自 outcome 的 create_case 运行态写入。
-    const caseChain = (runId: string) => {
-      const requestId = `launch_${runId}`;
-      return makeCaseFlow({
-        invest: {
-          runId,
-          requestId,
-          ticket,
-          m2: new HttpInvestigationM2(),
-          siem: fixtureSiem,
-          kb: kbForTriage,
-          llm: LLM_MODE === "fake"
-            ? new FakeInvestigationLlm()
-            : new RealInvestigationLlm(new GatewayLlmClient({ requestId, actor: "agent:investigation" })),
-          scan: scanInjection,
-          audit,
-        },
-        enrich: {
-          runId,
-          requestId,
-          ticket,
-          m2: new HttpEnrichmentM2(),
-          analyzers,
-          scan: scanInjection,
-          audit,
-        },
-      });
-    };
-    if (run.kind === "knowledge_flow") {
-      return makeKnowledgeFlow({
-        runId: run.id,
-        requestId: `launch_${run.id}`,
-        ticket,
-        caseId: run.caseId ?? "",
-        m2: new HttpKnowledgeM2(),
-        store: kbStore,
-        llm: LLM_MODE === "fake"
-          ? new FakeKnowledgeLlm()
-          : new RealKnowledgeLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:knowledge" })),
-        audit,
-      });
-    }
-    if (run.kind === "chat_flow") {
-      // m8 对话 Copilot（票 18）：只读面 = investigation 的 M2/SIEM adapter；
-      // 意图闸 FGA = 真 openfga 容器（票 12）；LLM 照 AGENT_LLM 切 fake/real；
-      // guards 预检走 guards-client 默认 HTTP（GUARDS_URL，compose 服务名可达）。
-      const requestId = `launch_${run.id}`;
-      return makeChatFlow({
-        runId: run.id,
-        requestId,
-        caseId: run.caseId,
-        ticket,
-        m2: new HttpInvestigationM2(),
-        siem: siemForChat,
-        kb: kbForTriage,
-        llm: LLM_MODE === "fake"
-          ? new FakeChatLlm()
-          : new RealChatLlm(new GatewayLlmClient({ requestId, actor: "agent:chat" })),
-        fga: fgaForChat,
-        audit,
-      });
-    }
-    if (run.kind === "case_flow") {
-      // 直拉入口（票 36）：POST /internal/runs {kind:"case_flow", case_id} → 链两交接节点
-      return caseChain(run.id);
-    }
-    if (run.kind === "close_flow") {
-      // 票 39：SOC1 一键确认关单（FR-M4.5 演示口径）——最小票的两节点子图；确认人
-      // （x-actor-id 派生）随 ctx 进审计（INV-8：确认动作记到人头上）。
-      return makeCloseFlow({
-        runId: run.id,
-        requestId: `launch_${run.id}`,
-        ticket,
-        m2: new HttpTriageM2(),
-        audit,
-        actor: ctx?.actor,
-      });
-    }
-    // alert_flow：分诊六节点 + 链上调查+富化（票 36·B4 清偿，PRD §4.2 步骤 7-8）。
-    // 只有 TP 的 create_case 分支会把 case_id 写进交接态——FP/merge 等分支链空转跳过。
-    return [
-      ...makeTriageFlow({
-        runId: run.id,
-        requestId: `launch_${run.id}`,
-        ticket,
-        m2: new HttpTriageM2(),
-        kb: kbForTriage,
-        llm: LLM_MODE === "fake"
-          ? new FakeTriageLlm()
-          : new RealTriageLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:triage" })),
-        audit,
-      }),
-      ...caseChain(run.id),
-    ];
+  : (run, ticket, ctx) => {
+    const make = requireRunKind(run.kind).makeGraph;
+    if (!make) throw new Error(`run kind ${run.kind} 注册表缺图工厂（见 src/run-kinds.ts）`);
+    return make(RUN_KIND_DEPS)(run, ticket, ctx);
   };
 
 // 跨进程焚毁读口（票 34·G2-1 清偿）：生产装配把 M2 used_tokens 读口接进验票闸——
@@ -231,7 +136,9 @@ app
       return;
     }
     const launch: Parameters<typeof startAutorun>[0]["launch"] = async (req) => {
-      const payload = req.kind === "alert_flow"
+      // 拉起 payload 的实体字段按注册表 intake 定（票 44）：alert = alert_id，case = case_id
+      // ——原来「kind === alert_flow 特判」的手抄口径收敛进注册表一格。
+      const payload = runKindOf(req.kind)?.intake === "alert"
         ? { kind: req.kind, alert_id: req.alertId }
         : { kind: req.kind, case_id: req.caseId };
       const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
