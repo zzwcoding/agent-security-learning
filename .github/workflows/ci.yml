@@ -32,6 +32,8 @@ jobs:
           node-version: 22
           cache: pnpm
           cache-dependency-path: soc-demo/pnpm-lock.yaml
+      # 票 28 边界闸：specs「边界规则」节的机器消费（零依赖 python，无需装包）
+      - run: pnpm check:boundary
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck

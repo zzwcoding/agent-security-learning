@@ -10,7 +10,8 @@
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r --workspace-concurrency=1 run test",
     "test:eval": "pnpm -C evals test:eval",
-    "replay": "tsx scripts/replay.ts"
+    "replay": "tsx scripts/replay.ts",
+    "check:boundary": "python3 tools/check_boundary.py --self-test && python3 tools/check_boundary.py ."
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

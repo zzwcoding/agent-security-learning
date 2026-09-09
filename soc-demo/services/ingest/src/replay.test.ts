@@ -1,9 +1,16 @@
 import { expect, test } from "vitest";
 import { buildApp } from "./app.js";
 import { MemoryM2Client } from "./m2client.js";
-import { replay } from "../../../scripts/replay.js";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+
+// 票 28（E3 清偿）：不再 import scripts/replay.js（边界规则 R4：scripts 不在模块
+// 图内）——replay 改子进程执行，断言对象换成 CLI stdout 的行为面。
+const run = promisify(execFile);
+const TSX = fileURLToPath(new URL("../../../node_modules/.bin/tsx", import.meta.url));
+const REPLAY_TS = fileURLToPath(new URL("../../../scripts/replay.ts", import.meta.url));
 
 const SOC_ROOT = fileURLToPath(new URL("../../../", import.meta.url));
 const ALERTS_DIR = `${SOC_ROOT}fixtures/alerts`;
@@ -101,7 +108,7 @@ test("注入变体：载荷在 srcuser/full_log/url/UA 四个位置，入库即�
   await app.close();
 });
 
-// ---------- 端到端回放：replay.ts 对活着的 ingest 按速率推完整个目录 ----------
+// ---------- 端到端回放：子进程跑 replay.ts，对活着的 ingest 按速率推完整个目录 ----------
 
 test("replay 按速率推 fixtures/alerts 全目录：7 具名 + 4 注入变体全 201、无重复", async () => {
   const m2 = new MemoryM2Client();
@@ -109,10 +116,23 @@ test("replay 按速率推 fixtures/alerts 全目录：7 具名 + 4 注入变体�
   await app.listen({ port: 0, host: "127.0.0.1" });
   const port = (app.server.address() as { port: number }).port;
 
-  const records = await replay({ url: `http://127.0.0.1:${port}`, dir: ALERTS_DIR, rate: 1000 });
+  // 子进程执行（铁律口径的机器形态）：行为断言读 CLI 汇总行
+  // 「replay done: N pushed, C created, D dedup」与逐条 alert_id=…
+  const { stdout } = await run(
+    TSX,
+    [REPLAY_TS, "--url", `http://127.0.0.1:${port}`, "--dir", ALERTS_DIR, "--rate", "1000"],
+    { timeout: 30_000 },
+  );
   const expected = readdirSync(ALERTS_DIR).filter((f) => f.endsWith(".json")).length;
-  expect(records).toHaveLength(expected);
-  expect(records.every((r) => r.status === 201 && r.dedup === false)).toBe(true);
-  expect(new Set(records.map((r) => r.alertId)).size).toBe(records.length); // 每条各一个 id
+
+  const summary = stdout.match(/replay done: (\d+) pushed, (\d+) created, (\d+) dedup/);
+  expect(summary, "CLI 汇总行存在").toBeTruthy();
+  expect(Number(summary![1]), "推条数 = 目录 json 数").toBe(expected);
+  expect(Number(summary![2]), "全 201 新建（等价逐条 status==201 且 dedup==false）").toBe(expected);
+  expect(Number(summary![3]), "零去重命中").toBe(0);
+
+  const ids = [...stdout.matchAll(/alert_id=(\S+)/g)].map((m) => m[1]);
+  expect(ids, "每条各拿一个 alert_id").toHaveLength(expected);
+  expect(new Set(ids).size, "alert_id 互不重复").toBe(ids.length);
   await app.close();
 });

@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, test } from "vitest";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
 import { openDb, type DB } from "../../src/db.js";
 import { createRun } from "../../src/runs.js";
 import { executeRun } from "../../src/graph.js";
@@ -74,13 +73,21 @@ async function rig(over: { ti?: AnalyzerBackend; ticketTools?: string[] } = {}) 
   };
 
   /** eval 布景专用：往案件里种一条自定义 tlp/pap 的 observable（TLP:RED 情报从
-   *  合作方 feed 来；现行 m1 映射/REST 都只产 tlp=2，出入记票 15）。 */
-  const seedObservable = (caseId: string, o: { dataType: string; data: string; tlp: number; pap?: number }) => {
-    caseBackend.db
-      .prepare(
-        "INSERT INTO observables (id, case_id, data_type, data, tlp, pap, ioc, tags) VALUES (?, ?, ?, ?, ?, ?, 1, '[]')",
-      )
-      .run(randomUUID(), caseId, o.dataType, o.data, o.tlp, o.pap ?? 2);
+   *  合作方 feed 来；m1 映射产不出，才要布景种子）。票 28 起走 REST 正门——
+   *  POST /api/v1/cases/:id/observables 本就支持 tlp/pap/ioc 直传
+   *  （票 15 的直插库句柄形态随 E2 清偿退役）。 */
+  const seedObservable = async (
+    caseId: string,
+    o: { dataType: string; data: string; tlp: number; pap?: number },
+  ) => {
+    const { status, json } = await httpJson(caseBackend.url, "POST", `/api/v1/cases/${caseId}/observables`, {
+      dataType: o.dataType,
+      data: o.data,
+      tlp: o.tlp,
+      pap: o.pap ?? 2,
+      ioc: true,
+    });
+    if (status >= 300) throw new Error(`seedObservable failed: ${status} ${JSON.stringify(json)}`);
   };
 
   return {
@@ -154,7 +161,7 @@ describe("enrich/02_tlp_red_blocked：超限必拒 + DENIED 审计（验收 2/3�
   test("tlp=4 observable：TLP 闸门拒 → analyzer 一个字节都没收到（不外发）+ DENIED 审计", async () => {
     const r = await track(await rig());
     const { caseId } = await r.seedCaseFromFixture("vt-87105-malware.json");
-    r.seedObservable(caseId, { dataType: "ip", data: "203.0.113.66", tlp: 4 });
+    await r.seedObservable(caseId, { dataType: "ip", data: "203.0.113.66", tlp: 4 });
 
     const { done } = await r.runCase(caseId);
     expect(done.status).toBe("completed"); // 拒绝是工具级结果，不是 run 处决（fail-closed ≠ 摊牌）
@@ -186,7 +193,7 @@ describe("enrich/02_tlp_red_blocked：超限必拒 + DENIED 审计（验收 2/3�
   test("pap 超限同理：pap=3 observable → pap_exceeded 拒绝，且确定性（同入同出）", async () => {
     const r = await track(await rig());
     const { caseId } = await r.seedCaseFromFixture("vt-87105-malware.json");
-    r.seedObservable(caseId, { dataType: "ip", data: "203.0.113.77", tlp: 1, pap: 3 });
+    await r.seedObservable(caseId, { dataType: "ip", data: "203.0.113.77", tlp: 1, pap: 3 });
 
     const { done } = await r.runCase(caseId);
     expect(done.status).toBe("completed");
@@ -281,7 +288,7 @@ describe("analyzer 输出 = tool_output 通道（票 04 策略 flag）：投毒�
   test("fixtures/ti 里的投毒 IP：命中可疑指令模式 → guards flag + 审计，原文仍进报告待人复核", async () => {
     const r = await track(await rig());
     const { caseId } = await r.seedCaseFromFixture("vt-87105-malware.json");
-    r.seedObservable(caseId, { dataType: "ip", data: "198.51.100.23", tlp: 2 });
+    await r.seedObservable(caseId, { dataType: "ip", data: "198.51.100.23", tlp: 2 });
 
     const { done } = await r.runCase(caseId);
     expect(done.status).toBe("completed");

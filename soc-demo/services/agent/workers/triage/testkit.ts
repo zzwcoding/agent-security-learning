@@ -1,9 +1,15 @@
 // 票 13 测试工具箱：契约密钥/签票、确定性假 guards、真 case-backend 起停、
 // §5.1 告警种子映射。只被 *.test.ts 引用（文件名不含 .test，vitest 不会跑它）。
+// 票 28（E2 清偿）：起 case-backend 从「进程内 import buildApp/openDb」改为
+// 「子进程跑真服务入口 + HTTP 正门」——模块图上 agent 与 case-backend 断开，
+// 越界由 tools/check_boundary.py（边界规则 R1）机器把关。
+import { spawn } from "node:child_process";
 import { createHmac } from "node:crypto";
-import { readFileSync } from "node:fs";
-import { buildApp as buildCaseApp } from "../../../case-backend/src/app.js";
-import { openDb as openCaseDb, type DB as CaseDb } from "../../../case-backend/src/db.js";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { scanInjection, type ScanDecision } from "../../src/guards-client.js";
 
 /** fixtures/tickets/contract.json 的测试固定密钥（禁入真实环境）。 */
@@ -66,25 +72,69 @@ export const fakeScan = async (
 
 export interface CaseBackend {
   url: string;
-  /** 内存库句柄（票 15 起）：富化 eval 布景要种 tlp=4 的 observable——现行 REST/m1
-   *  映射都只产 tlp=2，布景直接种库（出入已记票 15）。 */
-  db: CaseDb;
   close(): Promise<void>;
 }
 
-/** 起真 case-backend（内存库 + 随机端口）：状态机/409/审计语义全在环内，
- *  HttpTriageM2（生产 adapter）直连它。 */
+const SOC_ROOT = fileURLToPath(new URL("../../../../", import.meta.url));
+const TSX = join(SOC_ROOT, "node_modules", ".bin", "tsx");
+const CASE_BACKEND_ENTRY = join(SOC_ROOT, "services", "case-backend", "src", "index.ts");
+
+/** 捞一个空闲 TCP 端口（listen(0) 让 OS 分配，让出后若被抢有重试兜底）。 */
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const srv = createServer();
+    srv.listen(0, "127.0.0.1", () => {
+      const port = (srv.address() as { port: number }).port;
+      srv.close(() => (port ? resolve(port) : reject(new Error("no free port"))));
+    });
+    srv.on("error", reject);
+  });
+}
+
+/** 轮询 /healthz 直到服务真起来（tsx 冷启动 ~1s，20s 封顶）。 */
+async function waitHealthy(url: string, deadlineMs: number): Promise<boolean> {
+  const deadline = Date.now() + deadlineMs;
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${url}/healthz`);
+      if (res.ok) return true;
+    } catch {
+      /* 还没起来，继续等 */
+    }
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return false;
+}
+
+/** 起真 case-backend（独立子进程 + 一次性 SQLite 文件库 + 随机端口）：
+ *  状态机/409/审计语义全在环内，agent 测试只经公开 REST 正门跟它说话
+ *  （票 28 E2：原进程内组装直引 case-backend 内部，越界，已清偿）。 */
 export async function startCaseBackend(): Promise<CaseBackend> {
-  const db = openCaseDb(":memory:");
-  const app = buildCaseApp({ db });
-  await app.listen({ port: 0, host: "127.0.0.1" });
-  const address = app.server.address();
-  const port = typeof address === "object" && address ? address.port : 0;
-  return {
-    url: `http://127.0.0.1:${port}`,
-    db,
-    close: () => new Promise((resolve) => app.close(() => resolve())),
-  };
+  const dir = mkdtempSync(join(tmpdir(), "soc-case-it-"));
+  // 端口竞态兜底：freePort 让出到子进程真监听之间可能被抢，EADDRINUSE 就换口重来
+  for (let attempt = 0; ; attempt++) {
+    const port = await freePort();
+    const child = spawn(TSX, [CASE_BACKEND_ENTRY], {
+      env: { ...process.env, PORT: String(port), CASE_DB_PATH: join(dir, "case.sqlite") },
+      stdio: "ignore",
+    });
+    const url = `http://127.0.0.1:${port}`;
+    if (await waitHealthy(url, 20000)) {
+      return {
+        url,
+        close: () =>
+          new Promise((resolve) => {
+            child.on("exit", () => {
+              rmSync(dir, { recursive: true, force: true });
+              resolve();
+            });
+            child.kill("SIGTERM");
+          }),
+      };
+    }
+    child.kill("SIGTERM");
+    if (attempt >= 4) throw new Error(`case-backend 子进程起不来（最后端口 ${port}）`);
+  }
 }
 
 export async function httpJson(
