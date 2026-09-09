@@ -134,7 +134,7 @@
 ### 备注
 
 - 资源兜底口径（PRD 决策记录 #4/#5/#12，2026-09-07 过 M3 节点用户复核确认）：LLM 超时统一 60s（留 per-node env 口子）、max_steps 20、token 50k/run——任一超限强杀 + 审计
-- 内部模块：`graph`（图定义）、`events`（SSE 总线 + offset 重放）、`envelope`（信封 hash）、`budget`（资源兜底计数）
+- 内部模块：`graph`（图定义）、`events`（SSE 总线 + offset 重放）、`envelope`（信封 hash）、`budget`（资源兜底计数）、`autorun`（票 40：M2 outbox 消费循环——alert.created/case.closed 事件自动拉起 run，EVENT_DRIVEN 开关）
 - 内部架构图见 `docs/architecture-m3-internal.html`
 
 ## m4

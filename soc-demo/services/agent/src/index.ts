@@ -6,6 +6,14 @@ import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
 import { openDb } from "./db.js";
 import { HttpUsedTokenReader } from "./token-ports.js";
+import {
+  dbCursorStore,
+  eventDrivenEnabled,
+  HttpOutboxReader,
+  makeHttpKbEntryCheck,
+  runsLookup,
+  startAutorun,
+} from "./autorun.js";
 import { APPROVAL_DEMO_FLOW } from "./graph.js";
 import { makeTriageFlow } from "../workers/triage/flow.js";
 import { makeCloseFlow } from "../workers/triage/close.js";
@@ -199,12 +207,44 @@ const makeNodes = nodes
 // 跨进程 ApprovalToken 重放第二次必 403 token_used（INV-2），不再只靠 executed_at +
 // 300s TTL 兜底；读口不可达 fail-closed 拒绝执行（INV-1）。写侧（用后焚毁登记）仍是
 // buildApp 缺省的 HttpTokenBurner（fire-and-forget POST 同一张 used_tokens 表）。
-buildApp({
-  db: openDb(dbPath),
+// 票 40：同一份 db 也给消费循环的游标/防重查（event_cursors + runs 表，autorun.ts）。
+const db = openDb(dbPath);
+const app = buildApp({
+  db,
   audit,
   nodes,
   makeNodes,
   usedReader: new HttpUsedTokenReader(),
-})
+});
+app
   .listen({ port: PORT, host: "0.0.0.0" })
-  .then(() => console.log(`agent listening on :${PORT}, db=${dbPath}`));
+  .then(() => {
+    console.log(`agent listening on :${PORT}, db=${dbPath}`);
+    // 票 40（G2-9 清偿）：事件驱动自动拉起——M2 outbox 的消费循环挂进常驻进程。
+    // alert.created → alert_flow（PRD 消息旅程 step4：supervisor 认领并拉起分诊）、
+    // case.closed → knowledge_flow（step11，票 17 线头收口）。拉起走 app.inject 打
+    // 自家 /internal/runs 正门——与手动触发同一条轨道（铸票→组图→执行→审计），不开旁路。
+    // EVENT_DRIVEN=off 可关（开关语义见 autorun.ts 文件头；evals/手动模式不受影响）。
+    if (!eventDrivenEnabled()) {
+      console.log("event-driven autorun: off (EVENT_DRIVEN=off)");
+      return;
+    }
+    const launch: Parameters<typeof startAutorun>[0]["launch"] = async (req) => {
+      const payload = req.kind === "alert_flow"
+        ? { kind: req.kind, alert_id: req.alertId }
+        : { kind: req.kind, case_id: req.caseId };
+      const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
+      if (res.statusCode >= 300) {
+        throw new Error(`internal/runs HTTP ${res.statusCode} ${res.body}`);
+      }
+    };
+    startAutorun({
+      events: new HttpOutboxReader(),
+      cursor: dbCursorStore(db),
+      launch,
+      hasActiveRun: runsLookup(db),
+      hasKbEntryForCase: makeHttpKbEntryCheck(),
+      log: (e) => console.log(JSON.stringify(e)),
+    });
+    console.log("event-driven autorun: on (M2 outbox → alert_flow/knowledge_flow)");
+  });

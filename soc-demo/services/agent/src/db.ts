@@ -84,6 +84,15 @@ CREATE TABLE IF NOT EXISTS approvals (
 );
 CREATE INDEX IF NOT EXISTS idx_approvals_run ON approvals(run_id, tool, params_hash);
 CREATE INDEX IF NOT EXISTS idx_approvals_status ON approvals(status, created_at);
+
+-- 票 40（G2-9 清偿）：M2 outbox 消费游标——event_cursors.name → 已消费到的
+-- outbox_events.id 水位（autorun.ts 的消费循环）。持久化在 agent 自己的库：重启不重放。
+-- 就算游标丢失（库被删）重放也安全——防重兜底（票 13 verdict 锁 + runs 表查 + M2 kb
+-- 账面查）保证「重复事件不重复拉起」（INV-6），这里只是少做无用功。
+CREATE TABLE IF NOT EXISTS event_cursors (
+  name TEXT PRIMARY KEY,
+  cursor INTEGER NOT NULL
+);
 `;
 
 // 票 17：runs 增 case_id（knowledge_flow 的目标案件）。老库靠查缺补列——

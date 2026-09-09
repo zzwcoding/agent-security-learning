@@ -61,6 +61,11 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
       LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
+      # 票 40（G2-9 清偿）：事件驱动自动拉起——agent 后台轮询 M2 outbox
+      # （GET /api/v1/events?after 游标），alert.created → alert_flow、
+      # case.closed → knowledge_flow（PRD 消息旅程 step4/step11 的自动化）。
+      # 缺省 on；EVENT_DRIVEN=off 可关（手动 POST /internal/runs 与 evals 不受影响）。
+      EVENT_DRIVEN: ${EVENT_DRIVEN:-on}
     volumes:
       - "./services/gateway/plugins:/fga:ro" # store/model id 与 contextforge 插件同源一份
       - "./services/gateway/fga:/fga-matrix:ro" # matrix.json = 可见工具清单的单一来源
