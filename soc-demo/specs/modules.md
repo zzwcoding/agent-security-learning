@@ -61,7 +61,7 @@
 ### 公开接口
 
 - `POST /api/v1/webhooks/alerts`（契约见 PRD §6-M1）
-- `POST /internal/replay {fixture_dir, rate}`（fixture 回放，演示布景）
+- 回放：`scripts/replay.ts` CLI（2026-09-04 定案，不设 HTTP 端点；2026-09-09 收官体检删幽灵行）
 
 ### 依赖
 
@@ -90,8 +90,12 @@
 
 ### 公开接口
 
-- PRD §6-M2 的 REST 面（alerts/cases/timeline/audit/active 查询）
-- 事件出口：`alert.created` 等写后事件（EventBus seam）
+- PRD §6-M2 的 REST 面（alerts/cases/timeline/audit/active 查询），另有实现长出的写面（2026-09-09 收官体检补卡）：
+  `POST /api/v1/alerts`（ingest 唯一写正门，201 新建/200 去重）、`PATCH /api/v1/alerts/:id`（verdict 生命周期，FR-M4.5）、
+  `POST /api/v1/alerts/:id/reopen`（FR-M2.1，保留待消费方）、`POST /api/v1/cases/:id/observables`（FR-M6.3 回写，去重合并）、
+  `POST /api/v1/cases/:id/tasks` + `POST /api/v1/tasks/:id/log`（m5 add_task_log 消费）
+- 事件出口：`GET /api/v1/events?after=`（outbox 游标；alert.created / case.closed；autorun 消费者，票 40）
+- 内部面：`POST /internal/audit`（FR-S5 两路汇入写口，票 35）、`POST /internal/used-tokens` + `GET /internal/used-tokens/:jti`（INV-2 焚毁写/读，验票闸生产依赖）
 
 ### 依赖
 
@@ -106,7 +110,7 @@
 
 ### 备注
 
-- 内部模块：`statemachine`（迁移函数集中定义，非法转移抛 InvalidTransition→409）、`audit-signal`（写操作拦截器自动落审计）——内部 seam，不进公开接口
+- 内部模块：`statemachine`（迁移函数集中定义，非法转移抛 InvalidTransition→409）、`audit-signal`（写操作拦截器自动落审计）、`autorun`（outbox 事件→自动拉起，EVENT_DRIVEN 开关，票 40）、`langfuse`（可选观测镜像旁路，票 37）——内部 seam，不进公开接口
 
 ## m3
 
@@ -117,7 +121,7 @@
 
 ### 公开接口
 
-- `POST /internal/runs {kind, alert_id}` → `202 {run_id}`
+- `POST /internal/runs` → `202 {run_id}`；kind ∈ {alert_flow, case_flow, knowledge_flow, chat_flow, close_flow}（注册表单一来源 src/run-kinds.ts），intake 按 kind 取 alert_id/case_id（chat 另带 message/role）；actor 经 `x-actor-type`/`x-actor-id` 头
 - `GET /api/v1/events/stream?run_id=`（SSE，事件自增 id 落盘，`Last-Event-ID` 补发——已定决策 9）
 
 ### 依赖
@@ -252,6 +256,7 @@
 
 ### 公开接口
 
+- `POST /api/v1/auth/login`（四预置身份会话签发，四预置身份 soc1/duty_lead/admin/redteam；2026-09-09 补卡钉路径）
 - `POST /api/v1/chat`（SSE，契约见 PRD §6-M8）；会话登录端点（4 预置身份）
 
 ### 依赖
@@ -280,7 +285,7 @@
 
 - `verifyTicket(toolCall, ctx) → allow|403+reason`（TS 中间件签名，PRD §6-M9-S2）
 - 审批卡 REST：`GET /api/v1/approvals?status=pending`、`POST .../approve|reject`（挂 agent 服务，铸票调 gateway）
-- gateway：`POST /internal/mint`（签任务票/ApprovalToken，py 侧，task_token.py 票型）
+- gateway：`POST /internal/mint`（签任务票/ApprovalToken，py 侧，手写 HMAC 三段式票型——ADR 0001 搬票型不搬代码，fixtures/tickets/ 契约）
 - gateway：`/proxy/llm/*`（凭证代理转发，proxy.py 参数化，LLM base_url 指这里）
 - guards：`POST /scan/injection`、`POST /pii/anonymize`
 
@@ -315,12 +320,12 @@
 ### 依赖
 
 - 模块: `m2`、`m3`、`m8`、`m9`
-- 外部: 数据源 adapter（真后端 / MSW 或 fixture 打桩供前端单测）
+- 外部: 数据源 adapter（真后端 / vi.stubGlobal fetch 打桩供前端单测，票 21/31 形态）
 
 ### Seam 与测试
 
-- Seam: 数据源（adapter：真后端 / MSW 或 fixture 打桩供前端单测）
-- Adapter: MSW 打桩
+- Seam: 数据源（adapter：真后端 / fetch stub 供前端单测）
+- Adapter: vi.stubGlobal fetch stub（2026-09-09 收官体检对齐实现）
 - 测试计划: 六幕剧本 Web 全通 + 每幕 curl 等价脚本；路由快照防范围蔓延
 
 ### 备注
@@ -390,10 +395,10 @@
 
 | 禁止 | 例外 | 理由 |
 |---|---|---|
-| `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；现存违例 testkit.ts 由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
-| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——**ADR 0003 允许清单扩展与本次例外列变更ADR 0003 追认（票 45，2026-09-09）**）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
+| `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；原违例已由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
+| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——ADR 0003 允许清单扩展已追认，票 45）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
 | `scripts/`、`tools/` 中立层 import services/evals/packages 内部 | （无） | 中立层保持可独立执行（票 09 replay 三铁律同源） |
-| services 测试反引仓库级 `scripts/`（replay 类走子进程） | （无；现存违例由票 28 清偿） | scripts 不在模块图内 |
+| services 测试反引仓库级 `scripts/`（replay 类走子进程） | （无；原违例已由票 28 清偿） | scripts 不在模块图内 |
 | `packages/mcp-audit` import 任何 workspace 包（独立 CLI） | （无） | m12 卡独立交付（ADR 0002 票 25 沿革） |
 | `services/web` import 任何他包源码（数据全走同源代理 REST/SSE） | （无） | m10 卡：web 是纯展示壳 |
 | `services/guards` 与 `services/gateway` 互不 import（py 侧经 REST） | （无） | C4/C5 分工（PRD §4.1） |

@@ -16,7 +16,7 @@
 
 **Belongs to spec:** specs/modules.md（边界规则）
 
-**Status:** ready-for-L0
+**Status:** done
 
 - [ ] ADR 0003 裁决 3 允许清单补七文件（L0 改 ADR，本票不改）
 - [ ] 边界规则表 R2 例外列变更追认（不追认则回滚：rig 文件并回 scenarios.ts 单文件）

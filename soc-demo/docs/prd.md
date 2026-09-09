@@ -482,7 +482,7 @@ POST /api/v1/cases/case_000012/close
 
 - 内部触发：M2 `alert.created` 事件 → `POST /internal/runs {kind:"alert_flow", alert_id}` → `202 {"run_id":"run_01J..."}`
 - 对话：`POST /api/v1/chat {case_id?, message, session_id}` → SSE 流（M8 详述）
-- SSE：`GET /api/v1/events/stream?run_id=...`，事件类型 `node_enter / node_exit / tool_call / tool_result / approval_required / approval_decided / audit / error`，示例：
+- SSE：`GET /api/v1/events/stream?run_id=...`，事件类型 `node_enter / node_exit / tool_call / tool_result / approval_required / approval_decided / audit / error / token / denied / done`（机器锁：fixtures/sse-events.json，票 31），示例：
 ```json
 {"type":"tool_call","run_id":"run_01J","node":"triage","tool":"search_cases_by_host","ticket_jti":"tk_01J","ts":1757000001}
 {"type":"approval_required","approval_id":"apr_01J","tool":"isolate_host","params":{"host":"centos7"},"reason":"调查报告建议遏制","ts":1757000002}
