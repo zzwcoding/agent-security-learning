@@ -7,7 +7,9 @@
 
 校验项：
 - docs/prd.md：状态取值合法；标记已定稿时全文不得残留 [待确认]（阶段 1 硬门禁的机器化）
-- specs/modules.md：依赖无环；依赖指向已声明模块；模块卡有 `目录:` 字段（目录不存在仅警告）
+- specs/modules.md：依赖无环；依赖指向已声明模块；模块卡有 `目录:` 字段（目录不存在仅警告）；
+  `## 边界规则` 节缺席 FAIL（边界禁令没有机器消费的规则段 = 阶段 2 未完成）；
+  节内表行"例外"有内容但"理由"为空 FAIL（无理由的例外不许存在）
 - specs/<功能>.md：状态取值合法；触及的模块 ⊆ 已声明模块；验收测试逐条绑定反引号测试标识；
   状态=已完成 时，测试标识必须能在源码中找到（状态流转表的机器守门）
 - .scratch/ 本地票：Touches modules 行中的模块 ⊆ 已声明模块；对账按「Belongs to spec / 所属 spec」
@@ -319,6 +321,24 @@ def check_open_tickets(tickets, spec_states):
                 warn(f"{name}: spec 已完成，但未完成票 touches `{mod}`：{rel}")
 
 
+def check_boundary_rules(root):
+    """modules.md「边界规则」节（阶段 6 边界闸的唯一事实来源）：
+    缺席 → FAIL；表行"例外"有内容但"理由"为空 → FAIL。空表/纯文字说明合法（无例外）。"""
+    path = root / "specs" / "modules.md"
+    if not path.exists():
+        return
+    text = path.read_text(encoding="utf-8")
+    if not re.search(r"^##\s*边界规则\s*$", text, re.M):
+        fail("modules.md: 缺 `## 边界规则` 节（边界禁令没有机器消费的规则段 = 阶段 2 未完成）")
+        return
+    rows = table_after(text.splitlines(), "## 边界规则")
+    for i, cells in enumerate(rows or [], 1):
+        exc = cells[1].strip() if len(cells) > 1 else ""
+        why = cells[2].strip() if len(cells) > 2 else ""
+        if exc and exc not in {"—", "-", "（无）", "无", "none", "n/a"} and (not why or why in {"—", "-", "无"}):
+            fail(f"modules.md: 边界规则第 {i} 行例外 `{exc}` 未附理由（无理由的例外不许存在）")
+
+
 def main():
     root = Path(sys.argv[1] if len(sys.argv) > 1 else ".").resolve()
     has_prd = (root / "docs" / "prd.md").exists()
@@ -337,6 +357,7 @@ def main():
             fail("存在功能 spec 但 specs/modules.md 缺失（回阶段 2）")
     else:
         check_graph(mods)
+        check_boundary_rules(root)
         for name, info in mods.items():
             if not info["dir"]:
                 warn(f"modules.md: 模块 `{name}` 缺 `目录:` 字段")

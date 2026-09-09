@@ -383,3 +383,19 @@
 
 - Redis/Kafka：不引入；EventBus seam 用 SQLite outbox adapter 首版（将来换实现不换接口）
 - M2 多租户/认证、M10 配置管理、M7 自动入库：照 PRD §11 边界声明
+
+## 边界规则
+
+> 2026-09-09 阶段 7 收官体检落卡（审计窗口 A 的 R1-R8 实盘为底稿）。CI 边界闸的唯一事实来源（票 28 建闸）。豁免复核归每轮体检第四条对账。
+
+| 禁止 | 例外 | 理由 |
+|---|---|---|
+| `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；现存违例 testkit.ts 由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
+| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts` 与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
+| `scripts/`、`tools/` 中立层 import services/evals/packages 内部 | （无） | 中立层保持可独立执行（票 09 replay 三铁律同源） |
+| services 测试反引仓库级 `scripts/`（replay 类走子进程） | （无；现存违例由票 28 清偿） | scripts 不在模块图内 |
+| `packages/mcp-audit` import 任何 workspace 包（独立 CLI） | （无） | m12 卡独立交付（ADR 0002 票 25 沿革） |
+| `services/web` import 任何他包源码（数据全走同源代理 REST/SSE） | （无） | m10 卡：web 是纯展示壳 |
+| `services/guards` 与 `services/gateway` 互不 import（py 侧经 REST） | （无） | C4/C5 分工（PRD §4.1） |
+| 依赖方向单向：fixtures→ingest→case-backend→agent→{guards,gateway,chroma,openfga}；反向/环状引用 | （无） | 依赖无环（check_specs 卡级锁的代码级延伸） |
+| 服务级 `/healthz` 等基础设施端点计入卡面公开接口对账 | 全体服务 `/healthz` | 体检对账三-12 统一豁免 |
