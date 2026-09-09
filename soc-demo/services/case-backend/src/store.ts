@@ -829,7 +829,9 @@ export function createTask(
     recordAudit(db, ctx, "create", id, "task", {
       created: { caseId, title: input.title, group: input.group ?? null, assignee: input.assignee ?? null },
     });
-    return mapTask(db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown>);
+    // 刚插的行同事务必在；mapTask 签名容 undefined 返 null，这里钉掉 null 分支
+    const row = db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown>;
+    return mapTask(row) as Record<string, unknown>;
   })();
 }
 

@@ -724,6 +724,7 @@ async function scenarioL2Privesc(c: EvalCase): Promise<ScenarioOutcome> {
       siem: new FixtureSiem(FIXTURES_ALERTS),
       kb: new MemoryKb(),
       llm,
+      scan: fakeScan, // 票 36 遗留补齐：InvestigationDeps 必填 seam，与兄弟场景同口径
       audit,
       spillDir,
     });

@@ -235,7 +235,8 @@ export function buildApp(opts: { db?: DB } = {}) {
     if (body.group !== undefined && !(TASK_GROUPS as readonly string[]).includes(body.group)) {
       return reply.status(400).send({ error: "invalid_task_group", details: [...TASK_GROUPS] });
     }
-    return reply.status(201).send(createTask(db, id, body, ctxOf(req.headers)));
+    // title 的必填窄化过不了整对象传参（TS 不沿控制流收窄属性到对象类型），显式钉回
+    return reply.status(201).send(createTask(db, id, { ...body, title: body.title }, ctxOf(req.headers)));
   });
 
   // 任务日志 kind 复用 PRD §5.5 TimelineEntry.kind 枚举（缺省 note）
