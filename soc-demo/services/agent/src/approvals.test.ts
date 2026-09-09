@@ -44,7 +44,9 @@ const CARD = {
 // ---------- 审批卡状态机（INV-10 同源仲裁：表之外的裁决一律 409） ----------
 
 describe("approval 状态机迁移表全组合（INV-10）", () => {
-  const LEGAL = new Set(["pending>approved", "pending>rejected"]);
+  // 票 47（ADR 0004-1）：pending→expired 是审批卡保质期的合法迁移（时间出的裁决，
+  // 分发循环的扫描器走它）；expired 是吸收态。
+  const LEGAL = new Set(["pending>approved", "pending>rejected", "pending>expired"]);
   for (const from of APPROVAL_STATES) {
     for (const to of APPROVAL_STATES) {
       if (from === to) continue;

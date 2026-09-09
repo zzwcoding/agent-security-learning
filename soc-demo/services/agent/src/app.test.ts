@@ -17,11 +17,12 @@ import {
 } from "./token-ports.js";
 import { MemoryBurnRegistry, paramsHash } from "./verify-ticket.js";
 import { httpJson, startCaseBackend } from "../workers/triage/testkit.js";
+import { waitForRunStatus, waitForRunTerminal } from "./testkit.js";
 
 function makeApp(over: { db?: DB; audit?: MemoryAuditSink } = {}) {
   const db = over.db ?? openDb(":memory:");
   const audit = over.audit ?? new MemoryAuditSink();
-  const app = buildApp({ db, audit });
+  const app = buildApp({ db, audit, dispatcher: { intervalMs: 5 } });
   return { db, audit, app };
 }
 
@@ -35,7 +36,7 @@ test("GET /healthz 返回 200 与服务名", async () => {
   await app.close();
 });
 
-test("POST /internal/runs {kind, alert_id} → 202 {run_id}，薄径 run 无人干预已跑完", async () => {
+test("POST /internal/runs {kind, alert_id} → 202 {run_id, status:queued}；等终态后薄径 run completed", async () => {
   const { db, app } = makeApp();
   const res = await app.inject({
     method: "POST",
@@ -44,11 +45,17 @@ test("POST /internal/runs {kind, alert_id} → 202 {run_id}，薄径 run 无人�
   });
   expect(res.statusCode).toBe(202);
   expect(res.json().run_id).toMatch(/^run_/);
+  // 票 47 时序契约：POST 落 queued 即秒回，不再同步跑完（执行移交后台分发循环）
+  expect(res.json().status).toBe("queued");
+  expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(res.json().run_id))
+    .toMatchObject({ status: "queued" });
 
-  // 薄径是同步直跑（无真 LLM）：请求回来时 run 已经 queued→running→completed
+  // 等终态：消费循环捡起后 queued→running→completed，无人干预跑完（薄径）
+  const done = await waitForRunTerminal(db, res.json().run_id as string);
   const row = db.prepare("SELECT status, kind, alert_id FROM runs WHERE id = ?").get(
     res.json().run_id,
   ) as { status: string; kind: string; alert_id: string };
+  expect(done.status).toBe("completed");
   expect(row).toEqual({ status: "completed", kind: "alert_flow", alert_id: "al-5712" });
   await app.close();
 });
@@ -207,8 +214,9 @@ function makeSequencedMint(over: { iatShift?: number } = {}) {
   return { client, calls };
 }
 
-// 拉起 L2 run（挂起在审批处）并取 pending 卡
-async function startSuspendedRun(app: ReturnType<typeof buildApp>): Promise<{ runId: string; cardId: string }> {
+// 拉起 L2 run（挂起在审批处）并取 pending 卡。票 47 时序：POST 秒回后由分发循环
+// 异步执行，挂起态要等（等不到 = 执行链路坏了，测试就该红）
+async function startSuspendedRun(app: ReturnType<typeof buildApp>, db: DB): Promise<{ runId: string; cardId: string }> {
   const res = await app.inject({
     method: "POST",
     url: "/internal/runs",
@@ -216,6 +224,7 @@ async function startSuspendedRun(app: ReturnType<typeof buildApp>): Promise<{ ru
   });
   expect(res.statusCode).toBe(202);
   const runId = res.json().run_id as string;
+  await waitForRunStatus(db, runId, "awaiting_approval");
   const card = (
     (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
       approvals: { id: string }[];
@@ -253,14 +262,16 @@ describe("焚毁表跨进程读口（票 34·INV-2）", () => {
         usedReader: reader,
         hmacKey: LIVE_KEY,
       });
-      const { cardId: cardA } = await startSuspendedRun(appA);
+      const { cardId: cardA } = await startSuspendedRun(appA, dbA);
       const apr = await appA.inject({
         method: "POST",
         url: `/api/v1/approvals/${cardA}/approve`,
         payload: { approver: "duty_lead" },
       });
       expect(apr.statusCode).toBe(200);
-      expect(apr.json().run_status).toBe("completed");
+      // 票 47 时序契约：批准秒回（resume 还在队列里），等终态后再取证
+      expect(apr.json().run_status).toBe("awaiting_approval");
+      await waitForRunTerminal(dbA, apr.json().run_id as string);
       const leaked = apr.json().approval_token as string; // ← 泄露面：审批响应里的票
       const jti = mintA.calls[0]!.jti;
       await waitForBurned(cb.url, jti); // jti 已进真 M2 used_tokens
@@ -279,7 +290,7 @@ describe("焚毁表跨进程读口（票 34·INV-2）", () => {
         usedReader: reader,
         hmacKey: LIVE_KEY,
       });
-      const { runId: runB, cardId: cardB } = await startSuspendedRun(appB);
+      const { runId: runB, cardId: cardB } = await startSuspendedRun(appB, dbB);
       // 泄露票进场：卡被塞进实例 A 铸的同一枚票（INV-9：闸只信票本身，闸无从知晓审批来源）
       decideApproval(dbB, cardB, {
         approve: true, approver: "attacker", token: leaked, tokenJti: jti,
@@ -323,14 +334,18 @@ describe("焚毁表跨进程读口（票 34·INV-2）", () => {
       usedReader: deadReader,
       hmacKey: LIVE_KEY,
     });
-    const { cardId } = await startSuspendedRun(app);
+    const { cardId } = await startSuspendedRun(app, db);
     const apr = await app.inject({
       method: "POST",
       url: `/api/v1/approvals/${cardId}/approve`,
       payload: { approver: "duty_lead" },
     });
     expect(apr.statusCode).toBe(200);
-    expect(apr.json().run_status).toBe("failed"); // 强杀不吞错
+    // 票 47 时序契约：批准秒回，等终态后强杀结果可查（强杀不吞错）
+    expect(apr.json().run_status).toBe("awaiting_approval");
+    await waitForRunTerminal(db, apr.json().run_id as string);
+    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(apr.json().run_id))
+      .toMatchObject({ status: "failed" });
     const deny = audit.entries.find((e) => e.result === "DENIED");
     expect(deny).toMatchObject({ action: "deny", objectType: "approval", details: { reason: "signature_invalid" } });
     expect(executions).toEqual([]);
@@ -352,14 +367,18 @@ describe("焚毁表跨进程读口（票 34·INV-2）", () => {
         usedReader: new HttpUsedTokenReader(cb.url),
         hmacKey: LIVE_KEY,
       });
-      const { cardId } = await startSuspendedRun(app);
+      const { cardId } = await startSuspendedRun(app, db);
       const apr = await app.inject({
         method: "POST",
         url: `/api/v1/approvals/${cardId}/approve`,
         payload: { approver: "duty_lead" },
       });
       expect(apr.statusCode).toBe(200);
-      expect(apr.json().run_status).toBe("completed"); // 未焚票一路绿灯
+      // 票 47 时序契约：批准秒回，等终态后取证（未焚票一路绿灯）
+      expect(apr.json().run_status).toBe("awaiting_approval");
+      await waitForRunTerminal(db, apr.json().run_id as string);
+      expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(apr.json().run_id))
+        .toMatchObject({ status: "completed" });
       expect(executions).toEqual([{ host: "centos7" }]);
       expect(audit.entries.some((e) => e.result === "DENIED")).toBe(false);
       await app.close();
@@ -388,13 +407,16 @@ describe("焚毁表跨进程读口（票 34·INV-2）", () => {
       usedReader: reader,
       hmacKey: LIVE_KEY,
     });
-    const { cardId } = await startSuspendedRun(app);
+    const { cardId } = await startSuspendedRun(app, db);
     const apr = await app.inject({
       method: "POST",
       url: `/api/v1/approvals/${cardId}/approve`,
       payload: { approver: "duty_lead" },
     });
-    expect(apr.json().run_status).toBe("failed");
+    // 票 47 时序契约：批准秒回，等终态后取证
+    await waitForRunTerminal(db, apr.json().run_id as string);
+    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(apr.json().run_id))
+      .toMatchObject({ status: "failed" });
     expect(audit.entries.find((e) => e.result === "DENIED"))
       .toMatchObject({ details: { reason: "token_used" } });
     expect(executions).toEqual([]);

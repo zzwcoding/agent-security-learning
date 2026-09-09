@@ -18,6 +18,7 @@ import { openDb, type DB } from "./db.js";
 import { createRun, transitionRun } from "./runs.js";
 import { MemoryAuditSink } from "./audit.js";
 import { buildApp } from "./app.js";
+import { waitForRunTerminal } from "./testkit.js";
 import { httpJson, seedAlert, startCaseBackend } from "../workers/triage/testkit.js";
 import { fileURLToPath } from "node:url";
 
@@ -328,8 +329,10 @@ describe("票 40 · 全链路集成（真 case-backend 子进程 + agent 正门�
   // 拉起 = app.inject 打自家 /internal/runs 正门；游标/防重 = agent sqlite 真表。
   // 唯一替身 = 不接 worker 图（薄径直跑终态）， mint 不进环（无 makeNodes 就不铸票）。
   function productionWiring(m2Url: string, adb: DB) {
-    const app = buildApp({ db: adb }); // 薄径：/internal/runs 拉起的 run 直达终态
+    // 票 47：薄径 run 不再同步跑完——POST 秒回后由 app 内建分发循环异步跑到终态（快节拍便于等待）
+    const app = buildApp({ db: adb, dispatcher: { intervalMs: 5 } });
     return {
+      app,
       events: new HttpOutboxReader(m2Url),
       cursor: dbCursorStore(adb),
       launch: async (req: LaunchReq) => {
@@ -346,32 +349,39 @@ describe("票 40 · 全链路集成（真 case-backend 子进程 + agent 正门�
 
   test("alert.created → 自动拉起 alert_flow（薄径 run completed）；游标丢失重放不重复拉起", async () => {
     const cb = await startCaseBackend();
+    let deps: ReturnType<typeof productionWiring> | null = null;
     try {
       const alertId = await seedAlert(
         cb.url,
         fileURLToPath(new URL("../../../fixtures/alerts/ssh-5712-real.json", import.meta.url)),
       );
       const adb = openDb(":memory:");
-      const deps = productionWiring(cb.url, adb);
+      deps = productionWiring(cb.url, adb);
       const res = await pollAutorunOnce(deps);
       expect(res.launched).toEqual([`alert_flow:${alertId}`]);
+      // 票 47 时序契约：拉起（POST /internal/runs）秒回，run 由分发循环异步跑到终态
+      const runId = (adb.prepare("SELECT id FROM runs").get() as { id: string }).id;
+      const done = await waitForRunTerminal(adb, runId);
       // run 真的在 agent 库里：kind/对象对、薄径已到终态
       const runs = adb.prepare("SELECT * FROM runs").all() as Record<string, unknown>[];
       expect(runs).toHaveLength(1);
       expect(runs[0].kind).toBe("alert_flow");
       expect(runs[0].alert_id).toBe(alertId);
-      expect(runs[0].status).toBe("completed");
+      expect(runs[0].status).toBe(done.status);
+      expect(done.status).toBe("completed");
       // 游标丢了（换一块新库存游标）：事件重放，但已有 run 挡住，不重复拉起（INV-6）
       const res2 = await pollAutorunOnce({ ...deps, cursor: memoryCursor(0) });
       expect(res2.launched).toEqual([]);
       expect(res2.skipped).toEqual([{ topic: "alert.created", refId: alertId, reason: "run_exists" }]);
     } finally {
+      await deps?.app.close();
       await cb.close();
     }
   }, 40000);
 
   test("case.closed → 自动拉起 knowledge_flow（真 M2 kb 账面查重：空 → 放行）", async () => {
     const cb = await startCaseBackend();
+    let deps: ReturnType<typeof productionWiring> | null = null;
     try {
       // 手工建案 + 置 InProgress + 带 verdict 关案（状态机 New→InProgress→Closed，
       // 全走公开 REST 正门，outbox 得到 case.closed）
@@ -384,13 +394,15 @@ describe("票 40 · 全链路集成（真 case-backend 子进程 + agent 正门�
       });
       expect(closed.status).toBeLessThan(300);
       const adb = openDb(":memory:");
-      const deps = productionWiring(cb.url, adb);
+      deps = productionWiring(cb.url, adb);
       const res = await pollAutorunOnce(deps);
       expect(res.launched).toEqual([`knowledge_flow:${caseId}`]);
       const runs = adb.prepare("SELECT * FROM runs").all() as Record<string, unknown>[];
       expect(runs[0].kind).toBe("knowledge_flow");
       expect(runs[0].case_id).toBe(caseId);
+      await waitForRunTerminal(adb, String(runs[0].id));
     } finally {
+      await deps?.app.close();
       await cb.close();
     }
   }, 40000);

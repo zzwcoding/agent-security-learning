@@ -8,6 +8,7 @@ import { openDb, type DB } from "../../src/db.js";
 import { createRun } from "../../src/runs.js";
 import { executeRun } from "../../src/graph.js";
 import { buildApp } from "../../src/app.js";
+import { waitForRunTerminal } from "../../src/testkit.js";
 import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { makeCloseFlow } from "./close.js";
@@ -240,6 +241,8 @@ describe("app 接线：POST /internal/runs {kind:close_flow}（m3 拉起面·最
       headers: { "x-actor-id": "soc1@soc.local" },
     });
     expect(res.statusCode).toBe(202);
+    // 票 47 时序契约：POST 秒回 queued，铸票/执行由分发循环异步做——等终态再取证
+    await waitForRunTerminal(db, res.json().run_id as string);
 
     // 最小票（INV-3：票面无任何 L2；工具面只有本动作用到的两件）
     expect(mintCalls).toHaveLength(1);

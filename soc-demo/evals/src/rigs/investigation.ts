@@ -8,6 +8,7 @@ import { openDb } from "../../../services/agent/src/db.js";
 import { createRun } from "../../../services/agent/src/runs.js";
 import { executeRun } from "../../../services/agent/src/graph.js";
 import { buildApp } from "../../../services/agent/src/app.js";
+import { waitForRunTerminal } from "../../../services/agent/src/testkit.js";
 import { MemoryAuditSink } from "../../../services/agent/src/audit.js";
 import { eventsAfter } from "../../../services/agent/src/events.js";
 import { verifyTicket } from "../../../services/agent/src/verify-ticket.js";
@@ -215,6 +216,8 @@ export async function scenarioInvestigationFull(c: EvalCase): Promise<ScenarioOu
     });
     if (res.statusCode !== 202) throw new Error(`case_flow 拉起失败: ${res.statusCode} ${res.body}`);
     const runId = res.json().run_id as string;
+    // 票 47 时序契约：拉起秒回 queued，等 agent 分发循环把 run 跑到终态再取证
+    await waitForRunTerminal(db, runId);
     const durationMs = Date.now() - t0;
     await app.close();
 

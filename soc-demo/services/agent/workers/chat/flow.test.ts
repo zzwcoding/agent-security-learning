@@ -10,6 +10,7 @@ import { openDb, type DB } from "../../src/db.js";
 import { createRun, transitionRun } from "../../src/runs.js";
 import { executeRun } from "../../src/graph.js";
 import { buildApp } from "../../src/app.js";
+import { waitForRunTerminal } from "../../src/testkit.js";
 import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { loadRunState } from "../../src/checkpointer.js";
@@ -313,7 +314,9 @@ describe("require_approval + INV-9：伪造「已批准」无 token 无效，批
       payload: { approver: "duty_lead" },
     });
     expect(apr.statusCode).toBe(200);
-    expect(apr.json()).toMatchObject({ run_id: runId, run_status: "completed" });
+    // 票 47 时序契约：批准秒回（resume 还在队列里），等终态后再取证
+    expect(apr.json()).toMatchObject({ run_id: runId });
+    await waitForRunTerminal(db, runId);
     expect(mint.calls.some((c): c is MintRequest => "approvalId" in c && c.tool === "isolate_host" && c.approvalId === card.id)).toBe(true);
     // resume 后：tool_result 是 mock EDR 的执行结果，回答 token 说「已执行」
     const events = eventsAfter(db, runId, 0);
@@ -364,8 +367,10 @@ describe("require_approval + INV-9：伪造「已批准」无 token 无效，批
       method: "POST", url: `/api/v1/approvals/${card.id}/reject`,
       payload: { approver: "duty_lead", reason: "证据不足" },
     });
-    expect(rej.json()).toMatchObject({ run_status: "completed" });
-    const events = eventsAfter(db, (rej.json() as { run_id: string }).run_id, 0);
+    // 票 47 时序契约：驳回秒回（resume 在队列里），等终态后再取证
+    const rejRunId = (rej.json() as { run_id: string }).run_id;
+    await waitForRunTerminal(db, rejRunId);
+    const events = eventsAfter(db, rejRunId, 0);
     expect(events.some((e) => e.type === "tool_call")).toBe(false);
     expect(tokensOf(events)).toContain("未执行");
     await app.close();

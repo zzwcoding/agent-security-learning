@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import type { DB } from "./db.js";
 import type { RunCtx } from "./runs.js";
-import { transitionRun } from "./runs.js";
+import { transitionRun, getRun } from "./runs.js";
 import { assertApprovalTransition, type ApprovalStatus } from "./statemachine.js";
 import { NotFoundError } from "./errors.js";
 import { emitEvent } from "./events.js";
@@ -210,6 +210,61 @@ export function markApprovalExecuted(db: DB, id: string, jti: string, ctx: RunCt
     result: "SUCCESS",
     createdAt: nowMs(),
   });
+}
+
+/** 审批卡保质期（票 47·ADR 0004-1）：超时 pending 卡由分发循环自动作废。
+ *  一个事务里做完四件事：卡 pending→expired（审批状态机仲裁，非 pending 抛 409 回滚）
+ *  → 审计 expire → 广播 approval_decided(decision=expired) → 对应 run 落
+ *  failed(reason=approval_expired)。「过期」是时间出的裁决，run 必须有个可观察的
+ *  终局，不能永远挂在 awaiting_approval 上。run 已在终态（陈旧卡）则只废卡不动 run。 */
+export function expireApprovalCard(db: DB, id: string, ctx: RunCtx, ttlSeconds: number): ApprovalRow {
+  return db.transaction(() => {
+    const card = requireApproval(db, id);
+    assertApprovalTransition(card.status, "expired"); // INV-10：只有 pending 能过期
+    const now = nowMs();
+    db.prepare("UPDATE approvals SET status = 'expired', decided_at = ? WHERE id = ?").run(now, id);
+    ctx.audit.record({
+      action: "expire",
+      actor: ctx.actor ?? { type: "system", id: "m3:dispatcher" },
+      objectId: id,
+      objectType: "approval",
+      details: {
+        status: { from: card.status, to: "expired" },
+        tool: card.tool,
+        params_hash: card.paramsHash,
+        run_id: card.runId,
+        ttl_seconds: ttlSeconds,
+      },
+      requestId: ctx.requestId,
+      result: "SUCCESS",
+      createdAt: now,
+    });
+    emitEvent(db, card.runId, "approval_decided", {
+      approval_id: id,
+      node: card.node,
+      tool: card.tool,
+      decision: "expired",
+      by: "system:approval_ttl",
+    });
+    // run 终局：awaiting_approval 不能直接 failed（状态机无此迁移）——照消费循环的
+    // 认领语义先转回 running 再强杀，两步都是合法迁移，审计各留一条（INV-8）。
+    const run = getRun(db, card.runId);
+    if (run && (run.status === "awaiting_approval" || run.status === "running")) {
+      if (run.status === "awaiting_approval") transitionRun(db, card.runId, "running", ctx);
+      transitionRun(db, card.runId, "failed", ctx, "approval_expired");
+    }
+    return getApproval(db, id) as ApprovalRow;
+  })();
+}
+
+/** 超时未决的 pending 卡（created_at 早于 TTL 之前）：保质期扫描器的候选集。 */
+export function listExpiredPendingApprovals(db: DB, ttlSeconds: number): ApprovalRow[] {
+  const cutoff = nowMs() - ttlSeconds * 1000;
+  return (
+    db
+      .prepare("SELECT * FROM approvals WHERE status = 'pending' AND created_at < ? ORDER BY created_at")
+      .all(cutoff) as Record<string, unknown>[]
+  ).map((r) => mapApproval(r) as ApprovalRow);
 }
 
 /** REST wire 形状（m9 卡公开接口）：snake_case，params 是原对象。 */

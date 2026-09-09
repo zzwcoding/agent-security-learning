@@ -4,6 +4,7 @@ import { openDb, type DB } from "../../src/db.js";
 import { createRun } from "../../src/runs.js";
 import { executeRun } from "../../src/graph.js";
 import { buildApp } from "../../src/app.js";
+import { waitForRunTerminal } from "../../src/testkit.js";
 import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { loadRunState } from "../../src/checkpointer.js";
@@ -121,6 +122,8 @@ describe("app 接线：POST /internal/runs 铸任务票并跑完分诊（FR-M3.4
     const res = await app.inject({ method: "POST", url: "/internal/runs", payload: { kind: "alert_flow", alert_id: alertId } });
     expect(res.statusCode).toBe(202);
     const runId = res.json().run_id;
+    // 票 47 时序契约：POST 秒回 queued，铸票/执行由分发循环异步做——等终态再取证
+    await waitForRunTerminal(db, runId);
 
     // 铸的票就是本 run 的任务票：sub/scope 对、allowed_tools=票 36 起的三族并集
     // （分诊六件套 + 链上调查/富化——拉起时 verdict 未可知，并集是当下能证明的最小
@@ -139,7 +142,7 @@ describe("app 接线：POST /internal/runs 铸任务票并跑完分诊（FR-M3.4
     await app.close();
   });
 
-  test("gateway 铸票失败 → 502 mint_failed，不留无票 run（fail-closed）", async () => {
+  test("gateway 铸票失败 → run failed(mint_failed)，无票绝不执行（fail-closed；票 47 起铸票在分发循环，502 面随之异步化）", async () => {
     const db = openDb(":memory:");
     const app = buildApp({
       db,
@@ -155,10 +158,14 @@ describe("app 接线：POST /internal/runs 铸任务票并跑完分诊（FR-M3.4
       makeNodes: () => [],
     });
     const res = await app.inject({ method: "POST", url: "/internal/runs", payload: { kind: "alert_flow", alert_id: "al-1" } });
-    expect(res.statusCode).toBe(502);
-    expect(res.json().error).toBe("mint_failed");
-    const runs = db.prepare("SELECT status FROM runs").all() as { status: string }[];
-    expect(runs).toEqual([{ status: "queued" }]); // 无票不放行执行：run 留在 queued，绝不裸跑
+    expect(res.statusCode).toBe(202);
+    const runId = res.json().run_id as string;
+    // 票 47 时序契约：拉起秒回 queued；铸票失败在消费循环里暴露——run 强杀成
+    // failed(mint_failed)（镜像 runFlow 的强杀口径），无票依然绝不执行
+    expect(res.json().status).toBe("queued");
+    await waitForRunTerminal(db, runId);
+    const runs = db.prepare("SELECT status, fail_reason FROM runs").all() as { status: string; fail_reason: string }[];
+    expect(runs).toEqual([{ status: "failed", fail_reason: "mint_failed" }]);
     await app.close();
   });
 });

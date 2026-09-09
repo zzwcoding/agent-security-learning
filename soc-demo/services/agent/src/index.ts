@@ -14,6 +14,10 @@ import {
   runsLookup,
   startAutorun,
 } from "./autorun.js";
+import {
+  approvalTtlSecondsFromEnv,
+  runDispatchConcurrency,
+} from "./run-dispatcher.js";
 import { APPROVAL_DEMO_FLOW } from "./graph.js";
 import {
   requireRunKind,
@@ -126,6 +130,12 @@ app
   .listen({ port: PORT, host: "0.0.0.0" })
   .then(() => {
     console.log(`agent listening on :${PORT}, db=${dbPath}`);
+    // 票 47（ADR 0004-1）：run 分发循环（buildApp 内建装配）——POST /internal/runs 落
+    // queued 秒回，start/resume 队列由消费循环在本进程内消化；审批卡保质期扫描同循环。
+    // env：RUN_DISPATCH 并发上限（默认 1）、APPROVAL_TTL_SECONDS 审批保质期（默认 86400）。
+    console.log(
+      `run dispatcher: on (concurrency=${runDispatchConcurrency()}, approval_ttl=${approvalTtlSecondsFromEnv()}s)`,
+    );
     // 票 40（G2-9 清偿）：事件驱动自动拉起——M2 outbox 的消费循环挂进常驻进程。
     // alert.created → alert_flow（PRD 消息旅程 step4：supervisor 认领并拉起分诊）、
     // case.closed → knowledge_flow（step11，票 17 线头收口）。拉起走 app.inject 打

@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { openDb, type DB } from "../../src/db.js";
 import { buildApp } from "../../src/app.js";
+import { waitForRunStatus } from "../../src/testkit.js";
 import { MemoryAuditSink, type AuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { LlmUpstreamError, type LlmChatResult } from "../../src/llm-client.js";
@@ -101,11 +102,14 @@ async function rig(): Promise<Rig> {
     approve: async () => {
       const card = await pending();
       const res = await app.inject({ method: "POST", url: `/api/v1/approvals/${card?.id}/approve`, payload: { approver: "duty_lead" } });
+      // 票 47 时序契约：批准秒回，resume 由分发循环异步跑——等终态再返回，调用方取证才稳定
+      if (card?.run_id) await waitForRunStatus(db, String(card.run_id), ["completed", "failed"]);
       return { status: res.statusCode, json: res.json() as Record<string, unknown> };
     },
     reject: async () => {
       const card = await pending();
       const res = await app.inject({ method: "POST", url: `/api/v1/approvals/${card?.id}/reject`, payload: { approver: "duty_lead", reason: "卡上草稿含指令性内容" } });
+      if (card?.run_id) await waitForRunStatus(db, String(card.run_id), ["completed", "failed"]);
       return { status: res.statusCode, json: res.json() as Record<string, unknown> };
     },
     // kb/proposals 面在 case-backend（m7 卡决策：REST 挂 M2）——helper 打对服务
@@ -138,8 +142,9 @@ async function runKnowledge(r: Rig, caseId: string): Promise<{ runId: string; st
   const res = await r.app.inject({ method: "POST", url: "/internal/runs", payload: { kind: "knowledge_flow", case_id: caseId } });
   expect(res.statusCode).toBe(202);
   const runId = res.json().run_id as string;
-  const status = (await r.app.inject({ method: "GET", url: "/healthz" }), (r.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId) as { status: string }).status);
-  return { runId, status };
+  // 票 47 时序契约：POST 秒回 queued，等消费循环跑到「挂起或终态」再返回（原 healthz 让步赌时序，换显式等待）
+  const row = await waitForRunStatus(r.db, runId, ["awaiting_approval", "completed", "failed"]);
+  return { runId, status: row.status };
 }
 
 const toolCalls = (r: Rig, runId: string): RunEvent[] =>
@@ -290,6 +295,7 @@ describe("replay 对（FR-M7.4）：结论与人审沉淀知识一致 + 探索�
     const res1 = await r.app.inject({ method: "POST", url: "/internal/runs", payload: { kind: "alert_flow", alert_id: alert1 } });
     expect(res1.statusCode).toBe(202);
     const run1 = (res1.json() as { run_id: string }).run_id;
+    await waitForRunStatus(r.db, run1, ["awaiting_approval", "completed", "failed"]); // 票 47：异步执行等到位
     expect(toolCalls(r, run1)).toHaveLength(4); // get_alert/kb_lookup/search_cases/create_case
     const alert1Row = await httpJson(r.cb.url, "GET", `/api/v1/alerts/${alert1}`);
     expect((alert1Row.json as Record<string, unknown>).verdict).toBe("true_positive");
@@ -317,6 +323,7 @@ describe("replay 对（FR-M7.4）：结论与人审沉淀知识一致 + 探索�
     const alert2 = String((seed2.json as { alert: { id: string } }).alert.id);
     const res2 = await r.app.inject({ method: "POST", url: "/internal/runs", payload: { kind: "alert_flow", alert_id: alert2 } });
     const run2 = (res2.json() as { run_id: string }).run_id;
+    await waitForRunStatus(r.db, run2, ["awaiting_approval", "completed", "failed"]); // 票 47：异步执行等到位
 
     // 工具调用数下降：4 → 3（不再 create_case）
     expect(toolCalls(r, run2)).toHaveLength(3);

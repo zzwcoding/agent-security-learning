@@ -39,6 +39,8 @@ export function statusTag(status: ApprovalCard["status"]): { color: string; text
       return { color: "green", text: "已批准" };
     case "rejected":
       return { color: "red", text: "已驳回" };
+    case "expired": // 票 47：审批卡保质期到点，未被裁决即作废（对应 run 已 failed）
+      return { color: "default", text: "已过期" };
     default:
       return { color: "default", text: status };
   }

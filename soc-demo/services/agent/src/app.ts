@@ -1,9 +1,9 @@
 import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
 import { openDb, type DB } from "./db.js";
-import { createRun, getRun, requireRun, type RunCtx } from "./runs.js";
+import { createRun, getRun, requireRun, transitionRun, type RunCtx } from "./runs.js";
 import { executeRun, resumeRun, type ExecuteOpts, type FlowNode } from "./graph.js";
-import { eventsAfter, formatSse } from "./events.js";
+import { emitEvent, eventsAfter, formatSse } from "./events.js";
 import {
   APPROVAL_STATES,
   InvalidApprovalTransitionError,
@@ -22,6 +22,12 @@ import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "..
 import { visibleTools } from "../workers/chat/visible-tools.js";
 import type { RunRow } from "./runs.js";
 import { requireRunKind, runKindOf, type RunGraphFactory } from "./run-kinds.js";
+import {
+  enqueueRunJob,
+  runDispatchConcurrency,
+  approvalTtlSecondsFromEnv,
+  startRunDispatcher,
+} from "./run-dispatcher.js";
 
 // run kind 的放行/拉起实体/票面规格全部在 src/run-kinds.ts 注册表（票 44：一处注册
 // 处处消费；原 RUN_KINDS/CASE_KINDS/TICKET_SPECS 三张平行表由此删除）。本文件只保留
@@ -35,6 +41,11 @@ import { requireRunKind, runKindOf, type RunGraphFactory } from "./run-kinds.js"
 export const CHAT_WIRE_TYPES = new Set([
   "token", "tool_call", "tool_result", "approval_required", "approval_decided", "denied", "done",
 ]);
+
+// 票 47：分发循环与 SSE 实时推送的节拍。两者都是本地 SQLite 的便宜轮询（有索引），
+// 100ms 量级在演示里就是「实时」；不进 env（真要调走 opts，测试已经在用）。
+const DISPATCH_INTERVAL_MS = 100;
+const SSE_PUSH_INTERVAL_MS = 100;
 
 // 每-kind 的任务票规格移入注册表（run-kinds.ts 的 ticket 格，票 44）。
 
@@ -63,6 +74,10 @@ export function buildApp(opts: {
   usedReader?: UsedTokenReader;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY）。 */
   hmacKey?: string;
+  /** 票 47（ADR 0004-1）：run 分发循环。缺省开（POST /internal/runs 落 queued 秒回，
+   *  执行走后台消费循环）；false 关掉（测试要看「队列里等着」的确定性时刻）。
+   *  intervalMs/concurrency/approvalTtlSeconds 缺省读 env（RUN_DISPATCH/APPROVAL_TTL_SECONDS）。 */
+  dispatcher?: false | { intervalMs?: number; concurrency?: number; approvalTtlSeconds?: number };
 } = {}) {
   const db = opts.db ?? openDb(":memory:");
   const audit = opts.audit ?? new MemoryAuditSink();
@@ -255,7 +270,6 @@ export function buildApp(opts: {
       }
     }
     const chatMessage = typeof body.message === "string" ? body.message.trim() : "";
-    const spec = desc.ticket;
     const requestId = (req.headers["x-request-id"] as string) ?? randomUUID();
     const actorId = (req.headers["x-actor-id"] as string) ?? "internal";
     // 票 39：actor 类型诚实派生（照 M2 ctxOf 的内网信任口径——不猜，缺头按 internal
@@ -281,35 +295,23 @@ export function buildApp(opts: {
       // 角色缺省 = 空串 → 意图闸按未知角色 fail-closed deny（INV-1），不猜身份
       const launched = await launchChatRun(run, chatMessage, typeof body.role === "string" ? body.role : "", req.headers as Record<string, unknown>);
       if (!launched.ok) return reply.status(launched.status).send({ error: launched.error });
-      return reply.status(202).send({ run_id: run.id });
+      // chat 记票口径（票 47）：保持同步不走队列——POST /api/v1/chat 的 SSE 应答流
+      // 本身就是产品（m8 卡「流式回答」），对话体验不能改成「先 202 再另开流听」；
+      // 且 message/role 交接态不在 run 行里，入队就要扩 schema。编排面这条同路支线
+      // 原样同步跑完（下面的非 chat kind 才落 queued 秒回）。
+      return reply.status(202).send({ run_id: run.id, status: run.status });
     }
-    let nodes = opts.nodes;
-    if (opts.makeNodes) {
-      try {
-        const minted = await mint.mintTaskTicket({
-          jti: `tk_${randomUUID()}`,
-          sub: spec.sub,
-          // 分诊时还没有 case（闸侧跳过绑定校验）；其余 kind 绑定案件（FR-S2.2）——
-          // 票 36 起 case_flow 同 knowledge_flow 口径：case_id 随拉起即在
-          caseId: body.kind === "alert_flow" ? null : (body.case_id ?? null),
-          runId: run.id,
-          scope: [...spec.scope],
-          allowedTools: [...spec.allowedTools],
-        });
-        nodes = await opts.makeNodes(run, minted.token, { actor });
-      } catch {
-        return reply.status(502).send({ error: "mint_failed" });
-      }
-    }
-    // 同步直跑到终态再 202（节点可异步：guards/LLM/M2 出站都 await）；
-    // executeRun 自带失败兜底，壳不用改。真异步调度（先 202 后台跑）等后续票。
-    await executeRun(db, run.id, { ...runOpts(req.headers as Record<string, unknown>), nodes });
-    return reply.status(202).send({ run_id: run.id });
+    // 票 47（ADR 0004-1）：非 chat kind 落 queued 即秒回——执行移交后台分发循环
+    // （run-dispatcher）。铸票/组图/执行全跟着任务走进循环（铸票失败的 502 面随之
+    // 变成 run failed(reason=mint_failed)，失败可观察且「不留无票 run」口径不变）。
+    // actor 随任务落盘：异步后请求头早没了，close_flow 的确认审计还得记到人头上（票 39）。
+    enqueueRunJob(db, run.id, "start", { actor });
+    return reply.status(202).send({ run_id: run.id, status: run.status });
   });
 
-  // m9 卡公开接口：审批卡 REST（FR-S2.4）。批准 → 铸 ApprovalToken → resume；
-  // 驳回 → 不铸票不执行，resume 让 run 走完（动作跳过）。两路都先裁决后由
-  // resumeRun 推进 run；并发后到者在审批状态机处 409（approvals.ts 仲裁）。
+  // m9 卡公开接口：审批卡 REST（FR-S2.4）。批准 → 铸 ApprovalToken → 决定落卡 →
+  // resume 入队秒回（票 47：续跑由分发循环异步接手）；驳回 → 不铸票不执行，
+  // 决定落卡 → resume 入队（动作跳过）。并发后到者在审批状态机处 409（approvals.ts 仲裁）。
   app.get("/api/v1/approvals", (req, reply) => {
     const q = req.query as { status?: string };
     let status: ApprovalStatus | undefined;
@@ -325,7 +327,8 @@ export function buildApp(opts: {
   /** 票 17：makeNodes 图的 resume 组图。拉起时 worker 图是按 run 组的（票 13 工厂），
    *  resume 若不带它，runOpts 的静态 nodes 会把图换成薄径——LangGraph 找不到挂起的
    *  worker 节点直接跑完，L2 动作静默丢失。故 resume 前按原 run.kind 重新铸任务票
-   *  （票面规格不变，INV-3 依旧无 L2）并重组 worker 图；静态 nodes（薄径/演示图）不受影响。 */
+   *  （票面规格不变，INV-3 依旧无 L2）并重组 worker 图；静态 nodes（薄径/演示图）不受影响。
+   *  票 47 起由分发循环的执行步调用（决定已落卡后异步重组），不再在审批端点里同步做。 */
   async function rebuildResumeNodes(runId: string): Promise<FlowNode[] | undefined> {
     if (opts.nodes || !opts.makeNodes) return opts.nodes;
     const run = requireRun(db, runId);
@@ -341,6 +344,82 @@ export function buildApp(opts: {
     return opts.makeNodes(run, minted.token);
   }
 
+  // ---- 票 47：分发循环的两个执行件（队列任务的落地面）。与同步时代同一套代码
+  //（铸票 → 组图 → executeRun/resumeRun），只是调用时机从 HTTP 请求内挪到了循环里；
+  // requestId 用 dispatch_ 前缀自造——审计仍五要素齐全（INV-8），请求关联靠 run_id。 ----
+
+  /** 分发循环专用的执行参数（无 HTTP 头可借：审计 requestId 自造）。 */
+  function dispatcherRunOpts(): ExecuteOpts {
+    return {
+      nodes: opts.nodes,
+      audit,
+      requestId: `dispatch_${randomUUID()}`,
+      burn,
+      used: opts.used,
+      usedReader: opts.usedReader,
+      hmacKey: opts.hmacKey,
+    };
+  }
+
+  /** start 任务：铸任务票 → 组图 → 从 queued 开跑。铸票失败 = 不留无票 run：
+   *  镜像 runFlow 的强杀口径把 run 推到 failed(reason=mint_failed)（queued→running→
+   *  failed 两步合法迁移）+ 审计 FAILURE + error 事件（原 502 面的异步等价物）。 */
+  async function executeStartJob(runId: string, actor?: { type: string; id: string }): Promise<void> {
+    const run = requireRun(db, runId);
+    let nodes = opts.nodes;
+    if (opts.makeNodes) {
+      try {
+        const spec = requireRunKind(run.kind).ticket;
+        const minted = await mint.mintTaskTicket({
+          jti: `tk_${randomUUID()}`,
+          sub: spec.sub,
+          // 分诊时还没有 case（闸侧跳过绑定校验）；其余 kind 绑定案件（FR-S2.2）——
+          // 票 36 起 case_flow 同 knowledge_flow 口径：case_id 随拉起即在
+          caseId: run.kind === "alert_flow" ? null : run.caseId,
+          runId: run.id,
+          scope: [...spec.scope],
+          allowedTools: [...spec.allowedTools],
+        });
+        nodes = await opts.makeNodes(run, minted.token, { actor });
+      } catch (err) {
+        const ctx: RunCtx = {
+          audit,
+          requestId: `dispatch_${randomUUID()}`,
+          actor: { type: "system", id: "m3:dispatcher" },
+        };
+        transitionRun(db, runId, "running", ctx);
+        transitionRun(db, runId, "failed", ctx, "mint_failed");
+        ctx.audit.record({
+          action: "kill",
+          actor: ctx.actor as { type: string; id: string },
+          objectId: runId,
+          objectType: "run",
+          details: { code: "mint_failed", message: String(err), status: { from: "queued", to: "failed" } },
+          requestId: ctx.requestId,
+          result: "FAILURE",
+          createdAt: Date.now(),
+        });
+        emitEvent(db, runId, "error", { code: "mint_failed", message: String(err) });
+        return;
+      }
+    }
+    await executeRun(db, runId, { ...dispatcherRunOpts(), nodes });
+  }
+
+  /** resume 任务：从审批挂起处续跑（按 kind 重组 worker 图）。决定已落在卡上，这里
+   *  只负责把图接回去；run 已不在 awaiting_approval（陈旧诉求，如决定落到已终局 run）
+   *  就安静跳过——状态机会 409 的路不硬走。任务票铸失败：异常抛给循环记失败日志，
+   *  run 仍挂起可观察（决定在卡上，不丢）。 */
+  async function executeResumeJob(runId: string): Promise<void> {
+    const run = getRun(db, runId);
+    if (!run || run.status !== "awaiting_approval") return;
+    let resumeNodes: FlowNode[] | undefined = opts.nodes;
+    if (!opts.nodes && opts.makeNodes) {
+      resumeNodes = await rebuildResumeNodes(runId);
+    }
+    await resumeRun(db, runId, { ...dispatcherRunOpts(), nodes: resumeNodes });
+  }
+
   app.post("/api/v1/approvals/:id/approve", async (req, reply) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { approver?: string };
@@ -353,8 +432,9 @@ export function buildApp(opts: {
     }
     // 先铸票后裁决：铸票失败 → 卡仍 pending 可重试，不留「已批准无票」的悬置态。
     // 并发双批会各铸一枚，但裁决事务只放行先到者，后到的票随 409 一起作废（300s 自焚）。
+    // resume 的任务票重组（票 17）挪进了分发循环的执行步——决定已落卡，图必须能被
+    // 异步重组（任务票铸失败在循环里审计 FAILURE，run 仍挂起可观察）。
     let minted: Awaited<ReturnType<MintClient["mintApprovalToken"]>>;
-    let resumeNodes: FlowNode[] | undefined;
     try {
       minted = await mint.mintApprovalToken({
         jti: `ap_${randomUUID()}`,
@@ -364,15 +444,16 @@ export function buildApp(opts: {
         params: card.params,
         caseId: card.caseId,
       });
-      resumeNodes = await rebuildResumeNodes(card.runId);
     } catch {
       return reply.status(502).send({ error: "mint_failed" });
     }
-    await decideAndResume(id, { approve: true, approver: body.approver, token: minted.token, tokenJti: String(minted.payload.jti ?? "") }, req.headers, resumeNodes);
+    await decideAndResume(id, { approve: true, approver: body.approver, token: minted.token, tokenJti: String(minted.payload.jti ?? "") }, req.headers);
     return {
       approval_id: id,
       approval_token: minted.token,
       run_id: card.runId,
+      // 票 47 时序契约：批准秒回时续跑还在队里，run 仍 awaiting_approval——
+      // 终态由 SSE（/events/stream 实时推送）或轮询获知，不再同步等执行完
       run_status: getRun(db, card.runId)?.status ?? null,
     };
   });
@@ -382,37 +463,32 @@ export function buildApp(opts: {
     const body = (req.body ?? {}) as { approver?: string; reason?: string };
     if (!body.approver) return reply.status(400).send({ error: "approver_required" });
     const card = requireApproval(db, id); // 404
-    let resumeNodes: FlowNode[] | undefined;
-    try {
-      resumeNodes = await rebuildResumeNodes(card.runId);
-    } catch {
-      return reply.status(502).send({ error: "mint_failed" });
-    }
-    await decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers, resumeNodes);
+    await decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers);
     return {
       approval_id: id,
       decision: "rejected",
       run_id: card.runId,
-      run_status: getRun(db, card.runId)?.status ?? null,
+      run_status: getRun(db, card.runId)?.status ?? null, // 同批准：秒回时续跑在队里
     };
   });
 
-  // 裁决（409 仲裁在审批状态机）→ resume 推进 run：批准路径执行 L2 动作，
-  // 驳回路径节点拿到 rejected 决定跳过执行；两条路 run 都由信封链末态续跑。
+  // 裁决（409 仲裁在审批状态机）→ resume 入队：批准路径执行 L2 动作，驳回路径节点
+  // 拿到 rejected 决定跳过执行；两条路都由分发循环从信封链末态异步续跑（票 47）。
   async function decideAndResume(
     id: string,
     decision: DecideInput,
     headers: Record<string, unknown>,
-    resumeNodes?: FlowNode[],
   ): Promise<void> {
     const card = requireApproval(db, id);
     decideApproval(db, id, decision, httpCtx(headers));
-    await resumeRun(db, card.runId, { ...runOpts(headers), nodes: resumeNodes });
+    enqueueRunJob(db, card.runId, "resume");
   }
 
   // m3 卡公开接口：GET /api/v1/events/stream?run_id=（SSE，INV-7）
   // 断线重连带 Last-Event-ID 头（EventSource 自动带）→ 按 id>cursor 补发，不丢不重。
   // ?after= 是同一游标的显式写法（与 M2 outbox 的 ?after= 同名，curl 调试方便）。
+  // 票 47：run 异步化后订阅时事件多半还没发生——补发之后进入实时推送（轮询落盘总线
+  // 追加增量，同一张表同一段补发代码，INV-7 语义不变），run 到终态、写完最后一批才收流。
   app.get("/api/v1/events/stream", (req, reply) => {
     const q = req.query as { run_id?: string; after?: string };
     if (!q.run_id) return reply.status(400).send({ error: "run_id_required" });
@@ -422,18 +498,58 @@ export function buildApp(opts: {
     const h = req.headers["last-event-id"];
     const raw = (Array.isArray(h) ? h[0] : h) ?? q.after ?? "0";
     const last = Number(raw);
-    const events = eventsAfter(db, run.id, Number.isFinite(last) ? last : 0);
+    let cursor = Number.isFinite(last) ? last : 0;
 
     reply.hijack();
     reply.raw.writeHead(200, {
       "content-type": "text/event-stream; charset=utf-8",
       "cache-control": "no-cache",
     });
-    reply.raw.write(formatSse(events));
-    // run 进行中保持连接（实时推送等 run 异步化后接）；终态写完补发即收流，
-    // EventSource 收到关闭，Web 端据此知道这条 run 播完了
-    if (isTerminalRun(run.status)) reply.raw.end();
+    const cleanup = (): void => {
+      if (timer) clearInterval(timer);
+    };
+    const push = (): void => {
+      const events = eventsAfter(db, run.id, cursor);
+      if (events.length > 0) {
+        cursor = events[events.length - 1]!.id;
+        reply.raw.write(formatSse(events));
+      }
+      // 终态（或 run 被删）写完最后一批即收流，EventSource 收到关闭，
+      // Web 端据此知道这条 run 播完了
+      const cur = getRun(db, run.id);
+      if (!cur || isTerminalRun(cur.status)) {
+        cleanup();
+        reply.raw.end();
+      }
+    };
+    let timer: ReturnType<typeof setInterval> | null = null;
+    timer = setInterval(push, SSE_PUSH_INTERVAL_MS);
+    reply.raw.on("close", cleanup); // 客户端断开：别留空转的定时器
+    push(); // 先补发（订阅前已发生的事件；run 已终态则写完即收流）
     return reply;
+  });
+
+  // 票 47（ADR 0004-1）：run 分发循环——start/resume 队列的唯一消费者。执行件在
+  // 本文件（铸票/组图/续跑与同步时代同一套代码，只是换了调用时机）；队列与并发/
+  // 恢复/保质期扫描都在 run-dispatcher.ts。dispatcher:false 可关（测试的确定性时刻）。
+  const dispatcherCtl = opts.dispatcher === false
+    ? null
+    : startRunDispatcher(
+        {
+          db,
+          audit,
+          execute: async (job) => {
+            if (job.action === "resume") return executeResumeJob(job.runId);
+            const actor = job.payload?.actor as { type: string; id: string } | undefined;
+            return executeStartJob(job.runId, actor);
+          },
+          concurrency: opts.dispatcher?.concurrency ?? runDispatchConcurrency(),
+          approvalTtlSeconds: opts.dispatcher?.approvalTtlSeconds ?? approvalTtlSecondsFromEnv(),
+        },
+        { intervalMs: opts.dispatcher?.intervalMs ?? DISPATCH_INTERVAL_MS },
+      );
+  app.addHook("onClose", async () => {
+    await dispatcherCtl?.stop(); // 优雅停机：在跑任务落定才放进程走
   });
 
   return app;

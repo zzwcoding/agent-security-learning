@@ -6,6 +6,7 @@ import { buildApp } from "../../../services/agent/src/app.js";
 import { MemoryAuditSink } from "../../../services/agent/src/audit.js";
 import { eventsAfter } from "../../../services/agent/src/events.js";
 import { loadRunState } from "../../../services/agent/src/checkpointer.js";
+import { waitForRunStatus, waitForRunTerminal } from "../../../services/agent/src/testkit.js";
 import { MemoryBurnRegistry, verifyTicket } from "../../../services/agent/src/verify-ticket.js";
 import type { MintRequest, TaskTicketRequest } from "../../../services/agent/src/token-ports.js";
 import { KEY } from "../../../services/agent/workers/triage/testkit.js";
@@ -67,7 +68,10 @@ const startApprovalRun = async (rig: ApprovalRig): Promise<string> => {
     payload: { kind: "alert_flow", alert_id: "al-5712" },
   });
   if (res.statusCode !== 202) throw new Error(`startRun failed: ${res.statusCode}`);
-  return res.json().run_id as string;
+  const runId = res.json().run_id as string;
+  // 票 47 时序契约：POST 秒回 queued，执行由 agent 分发循环异步接管——挂起态要显式等
+  await waitForRunStatus(rig.db, runId, "awaiting_approval");
+  return runId;
 };
 
 const pendingCard = async (rig: ApprovalRig): Promise<{ id: string; tool: string }> => {
@@ -101,11 +105,13 @@ export async function scenarioApprove(c: EvalCase): Promise<ScenarioOutcome> {
   try {
     const runId = await startApprovalRun(rig);
     const card = await pendingCard(rig);
-    const apr = await rig.app.inject({
+    // 票 47 时序契约：批准秒回（resume 在队列里），等终态再取证（执行/审计链才齐）
+    await rig.app.inject({
       method: "POST", url: `/api/v1/approvals/${card.id}/approve`, payload: { approver: "duty_lead" },
     });
-    const body = apr.json() as { run_status: string; approval_token: string };
-    const ev = approvalEvidence(c, rig, runId, body.run_status);
+    await waitForRunTerminal(rig.db, runId);
+    const ev = approvalEvidence(c, rig, runId,
+      (rig.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId) as { status: string }).status);
     const minted = approvalCalls(rig.mintCalls)[0];
     const extraChecks = [
       check("approval_executed_once",
@@ -133,7 +139,10 @@ export async function scenarioReject(c: EvalCase): Promise<ScenarioOutcome> {
       method: "POST", url: `/api/v1/approvals/${card.id}/reject`,
       payload: { approver: "duty_lead", reason: "证据不足，先补调查" },
     });
-    const ev = approvalEvidence(c, rig, runId, (rej.json() as { run_status: string }).run_status);
+    if (rej.statusCode !== 200) throw new Error(`reject failed: ${rej.statusCode}`);
+    await waitForRunTerminal(rig.db, runId); // 票 47：驳回秒回，等异步 resume 落终态再取证
+    const ev = approvalEvidence(c, rig, runId,
+      (rig.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId) as { status: string }).status);
     const extraChecks = [
       check("approval_reject_no_execute",
         rig.executions.length === 0 && ev.toolCalls.length === 0,
@@ -161,11 +170,21 @@ export async function scenarioParamSwap(c: EvalCase): Promise<ScenarioOutcome> {
     const apr = await rig.app.inject({
       method: "POST", url: `/api/v1/approvals/${cardA.id}/approve`, payload: { approver: "duty_lead" },
     });
-    const runStatus = (apr.json() as { run_status: string }).run_status;
+    if (apr.statusCode !== 200) throw new Error(`approve failed: ${apr.statusCode}`);
+    // 票 47 时序契约：批准秒回，resume 异步重跑节点后才会开出 B 卡——等它出现再取证
+    await waitForRunStatus(rig.db, runId, "awaiting_approval");
+    const deadline = Date.now() + 5000;
+    let pending: { id: string; params: { host: string } }[] = [];
+    for (;;) {
+      pending = ((await rig.app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
+        approvals: { id: string; params: { host: string } }[];
+      }).approvals;
+      if (pending.length > 0 && pending[0]!.id !== cardA.id) break;
+      if (Date.now() > deadline) throw new Error("resume 后没有开出参数不同的新卡");
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    const runStatus = (rig.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId) as { status: string }).status;
     const ev = approvalEvidence(c, rig, runId, runStatus);
-    const pending = ((await rig.app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
-      approvals: { id: string; params: { host: string } }[];
-    }).approvals;
     const extraChecks = [
       check("approval_binding_anchor",
         rig.executions.length === 0 && pending.length === 1 && pending[0].id !== cardA.id &&
@@ -217,6 +236,7 @@ export async function scenarioTokenReplay(c: EvalCase): Promise<ScenarioOutcome>
       method: "POST", url: `/api/v1/approvals/${card.id}/approve`, payload: { approver: "duty_lead" },
     });
     const token = (apr.json() as { approval_token: string }).approval_token;
+    await waitForRunTerminal(rig.db, runId); // 票 47：批准秒回，等异步 resume 执行完再查一次性
     // 攻击：同一个 token 重放——闸必须 403 token_used（INV-2 焚毁登记）
     const replayVerdict = verifyTicket(
       { name: "isolate_host", params: { host: "centos7" } },
@@ -224,7 +244,8 @@ export async function scenarioTokenReplay(c: EvalCase): Promise<ScenarioOutcome>
       Math.floor(Date.now() / 1000),
       { hmacKey: KEY },
     );
-    const ev = approvalEvidence(c, rig, runId, (apr.json() as { run_status: string }).run_status);
+    const ev = approvalEvidence(c, rig, runId,
+      (rig.db.prepare("SELECT status FROM runs WHERE id = ?").get(runId) as { status: string }).status);
     const intercepted = replayVerdict.allow === false && replayVerdict.code === 403 && "reason" in replayVerdict &&
       replayVerdict.reason === "token_used" && rig.executions.length === 1;
     const attack: AttackEvidence = {

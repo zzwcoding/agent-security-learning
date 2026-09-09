@@ -59,9 +59,10 @@ describe("decideErrorText", () => {
 });
 
 describe("statusTag", () => {
-  it("pending/approved/rejected 三态都有颜色文案", () => {
+  it("pending/approved/rejected/expired 四态都有颜色文案（票 47：审批卡保质期）", () => {
     expect(statusTag("pending")).toMatchObject({ text: "待审批" });
     expect(statusTag("approved")!.text).toBe("已批准");
     expect(statusTag("rejected")!.text).toBe("已驳回");
+    expect(statusTag("expired")!.text).toBe("已过期");
   });
 });

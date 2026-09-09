@@ -120,7 +120,9 @@ export function replayAlert(payload: unknown): Promise<ReplayResult> {
 // ---- m9 审批卡 REST（services/agent，票 11/18；FR-M10.3 的数据面）----
 // wire 形状 = agent approvals.ts toWire()（snake_case），这里收拢成前端命名。
 
-export type ApprovalStatusWire = "pending" | "approved" | "rejected";
+// 票 47（ADR 0004-1）：审批卡有保质期——超时未决的 pending 卡被 agent 分发循环
+// 自动作废成 expired（时间出的裁决），web 端如实渲染。
+export type ApprovalStatusWire = "pending" | "approved" | "rejected" | "expired";
 
 export interface ApprovalCard {
   id: string;

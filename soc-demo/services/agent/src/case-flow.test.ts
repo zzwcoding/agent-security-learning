@@ -28,6 +28,7 @@ import { HttpEnrichmentM2 } from "../workers/enrichment/m2.js";
 import { FixtureAnalyzerTable } from "../workers/enrichment/analyzers.js";
 import { ENRICHMENT_TOOLS } from "../workers/enrichment/tools.js";
 import { INVESTIGATION_TOOLS } from "../workers/investigation/prompt.js";
+import { waitForRunTerminal } from "./testkit.js";
 
 // 票 36 验收主战场（B4 清偿）：investigation/enrichment 子图（票 14/15）此前只有
 // evals 直构一个入口，PRD §4.2 消息旅程步骤 7-8 在生产上不可达。本票两路接线：
@@ -187,6 +188,8 @@ describe("case_flow 直拉（RUN_KINDS 放行，验收 1 的入口半边）", ()
     });
     expect(res.statusCode).toBe(202);
     const runId = res.json().run_id as string;
+    // 票 47 时序契约：POST 秒回 queued，等消费循环跑到终态再取证
+    await waitForRunTerminal(r.db, runId);
     // alert_id 列 NOT NULL（runs.ts 票 17 注）：无告警上下文的 run 存空串——与
     // knowledge_flow/chat_flow 同一惯例，case_flow 不另造第三种口径
     expect(runRow(r.db, runId)).toEqual({ status: "completed", kind: "case_flow", alert_id: "", case_id: caseId });
@@ -228,8 +231,10 @@ describe("alert_flow TP 建案后同 run 链上调查+富化（验收 1，B4/遗
     });
     expect(res.statusCode).toBe(202);
     const runId = res.json().run_id as string;
+    // 票 47 时序契约：POST 秒回 queued，等消费循环跑到终态再取证
+    await waitForRunTerminal(r.db, runId);
 
-    // run 本尊仍是 alert_flow（同 run 链上，不是新 run——票 40 的事件驱动拉起另算）
+    // run 本尊仍是 alert_flow（同 run 链上，不是新 run——票 40 事件驱动拉起另算）
     expect(runRow(r.db, runId)).toMatchObject({ status: "completed", kind: "alert_flow", alert_id: alertId });
 
     // TP → 建案（FakeTriageLlm R2 判 tp，无活跃同主机案 → create_case）
@@ -276,6 +281,8 @@ describe("alert_flow TP 建案后同 run 链上调查+富化（验收 1，B4/遗
     });
     expect(res.statusCode).toBe(202);
     const runId = res.json().run_id as string;
+    // 票 47 时序契约：POST 秒回 queued，等消费循环跑到终态再取证
+    await waitForRunTerminal(r.db, runId);
     expect(runRow(r.db, runId)).toMatchObject({ status: "completed", kind: "alert_flow" });
 
     expect(await caseList(r.cb)).toHaveLength(0);

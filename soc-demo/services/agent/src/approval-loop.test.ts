@@ -17,6 +17,7 @@ import { createRun } from "./runs.js";
 import { InvalidRunTransitionError } from "./statemachine.js";
 import { resumeRun, type FlowNode } from "./graph.js";
 import type { MintClient, MintRequest } from "./token-ports.js";
+import { waitForRunStatus, waitForRunTerminal } from "./testkit.js";
 
 const CONTRACT = JSON.parse(
   readFileSync(new URL("../../../fixtures/tickets/contract.json", import.meta.url), "utf8"),
@@ -105,18 +106,23 @@ function makeApp(over: { paramsRef?: { current: unknown } } = {}) {
     burn: used,
     used,
     hmacKey: KEY,
+    dispatcher: { intervalMs: 5 }, // 票 47：消费循环快节拍（测试等终态用）
   });
   return { db, audit, used, mint, executions, app };
 }
 
-async function startRun(app: ReturnType<typeof buildApp>): Promise<string> {
+// 票 47 时序契约：POST 秒回 queued，执行由分发循环异步接管——挂起态要显式等
+//（审批五验收的其余语义零改动，等的只是时序）。
+async function startRun(app: ReturnType<typeof buildApp>, db: ReturnType<typeof openDb>): Promise<string> {
   const res = await app.inject({
     method: "POST",
     url: "/internal/runs",
     payload: { kind: "alert_flow", alert_id: "al-5712" },
   });
   expect(res.statusCode).toBe(202);
-  return res.json().run_id as string;
+  const runId = res.json().run_id as string;
+  await waitForRunStatus(db, runId, "awaiting_approval");
+  return runId;
 }
 
 // ---------- 验收 1：L2 动作 interrupt 挂起 → Web 审批 → resume，决定绑定 (run, tool_call) ----------
@@ -124,7 +130,7 @@ async function startRun(app: ReturnType<typeof buildApp>): Promise<string> {
 describe("审批回路：批准路径（FR-M3.5·FR-S2.4）", () => {
   test("L2 处挂起 awaiting_approval → 批准铸 ApprovalToken → resume 执行原 tool_call → run completed", async () => {
     const { db, audit, used, mint, executions, app } = makeApp();
-    const runId = await startRun(app);
+    const runId = await startRun(app, db);
 
     // interrupt 挂起：run 停在 awaiting_approval（不吞错也不误杀）
     expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(runId)).toMatchObject({
@@ -158,7 +164,10 @@ describe("审批回路：批准路径（FR-M3.5·FR-S2.4）", () => {
     const body = apr.json() as { approval_token: string; run_id: string; run_status: string };
     expect(body.approval_token).toMatch(/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[a-f0-9]{64}$/);
     expect(body.run_id).toBe(runId);
-    expect(body.run_status).toBe("completed");
+    // 票 47 时序契约：批准秒回（resume 还在队列里），终态等到了再断言
+    expect(body.run_status).toBe("awaiting_approval");
+    await waitForRunTerminal(db, runId);
+    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(runId)).toMatchObject({ status: "completed" });
 
     // 决定绑定原 (run, tool_call)：铸票请求带着原卡 id / 工具 / 参数
     expect(mint.calls[0]).toMatchObject({
@@ -203,12 +212,12 @@ describe("审批回路：批准路径（FR-M3.5·FR-S2.4）", () => {
   test("换参数的 tool_call 不吃原决定：批准只绑定原参数，新参数要重新开卡（绑定锚）", async () => {
     const paramsRef = { current: { host: "centos7" } };
     const { db, executions, app } = makeApp({ paramsRef });
-    const runId = await startRun(app);
+    const runId = await startRun(app, db);
 
     const list = await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" });
     const cardA = list.json().approvals[0];
 
-    // 捣乱者中途换参数：批准 A 之后 resume，节点提请的却是 B
+    // 捣乱者中途换参数：批准 A 之后 resume（异步），节点提请的却是 B
     paramsRef.current = { host: "web-99" };
     const apr = await app.inject({
       method: "POST",
@@ -216,21 +225,33 @@ describe("审批回路：批准路径（FR-M3.5·FR-S2.4）", () => {
       payload: { approver: "duty_lead" },
     });
     expect(apr.statusCode).toBe(200);
-    expect(apr.json().run_status).toBe("awaiting_approval"); // B 没有决定 → 再挂起
+    // 票 47 时序契约：批准秒回；等 resume 真跑过（B 卡开出）再断言再挂起
+    const deadline = Date.now() + 5000;
+    let pendingAfter: { id: string; params: { host: string } }[] = [];
+    for (;;) {
+      pendingAfter = (
+        (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
+          approvals: { id: string; params: { host: string } }[];
+        }
+      ).approvals;
+      if (pendingAfter.length > 0 && pendingAfter[0]!.id !== cardA.id) break;
+      if (Date.now() > deadline) throw new Error("resume 后没有开出 B 卡");
+      await new Promise((r) => setTimeout(r, 20));
+    }
 
     // A 的决定没有授权 B：没执行，只多了一张等审批的新卡
     expect(executions).toEqual([]);
+    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(runId)).toMatchObject({
+      status: "awaiting_approval",
+    });
     const pending = (
       (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string; params: { host: string } }[];
       }
     ).approvals;
     expect(pending).toHaveLength(1);
-    expect(pending[0].id).not.toBe(cardA.id);
-    expect(pending[0].params).toEqual({ host: "web-99" });
-    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(runId)).toMatchObject({
-      status: "awaiting_approval",
-    });
+    expect(pending[0]!.id).not.toBe(cardA.id);
+    expect(pending[0]!.params).toEqual({ host: "web-99" });
     await app.close();
   });
 });
@@ -240,7 +261,7 @@ describe("审批回路：批准路径（FR-M3.5·FR-S2.4）", () => {
 describe("审批回路：驳回路径（FR-S2.4）", () => {
   test("驳回 → 不铸票不执行，run completed（动作跳过），审计 reject 留痕", async () => {
     const { db, audit, mint, executions, app } = makeApp();
-    const runId = await startRun(app);
+    const runId = await startRun(app, db);
     const card = (
       (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string }[];
@@ -253,7 +274,10 @@ describe("审批回路：驳回路径（FR-S2.4）", () => {
       payload: { approver: "duty_lead", reason: "证据不足，先补调查" },
     });
     expect(rej.statusCode).toBe(200);
-    expect(rej.json()).toMatchObject({ approval_id: card.id, run_id: runId, run_status: "completed" });
+    // 票 47 时序契约：驳回秒回（resume 在队列里），等终态后断言跳过执行
+    expect(rej.json()).toMatchObject({ approval_id: card.id, run_id: runId });
+    await waitForRunTerminal(db, runId);
+    expect(db.prepare("SELECT status FROM runs WHERE id = ?").get(runId)).toMatchObject({ status: "completed" });
 
     // 不执行：mock 动作没跑，run 终态里留下「被驳回」的可观察残留
     expect(executions).toEqual([]);
@@ -282,16 +306,18 @@ describe("中断-恢复：杀进程重启（m3 卡测试计划·Tracecat 持久�
 
     // —— 进程 1：跑到审批 interrupt 处「被杀」——
     const mint1 = makeFakeMint();
+    const db1 = openDb(dbPath);
     const app1 = buildApp({
-      db: openDb(dbPath),
+      db: db1,
       audit: new MemoryAuditSink(),
       nodes: l2Flow({ executions }),
       mint: mint1.client,
       burn: new MemoryBurnRegistry(),
       used: new MemoryBurnRegistry(),
       hmacKey: KEY,
+      dispatcher: { intervalMs: 5 },
     });
-    const runId = await startRun(app1);
+    const runId = await startRun(app1, db1);
     const card = (
       (await app1.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string }[];
@@ -303,28 +329,31 @@ describe("中断-恢复：杀进程重启（m3 卡测试计划·Tracecat 持久�
     const mint2 = makeFakeMint();
     const used2 = new MemoryBurnRegistry();
     const audit2 = new MemoryAuditSink();
+    const db2 = openDb(dbPath);
     const app2 = buildApp({
-      db: openDb(dbPath),
+      db: db2,
       audit: audit2,
       nodes: l2Flow({ executions }),
       mint: mint2.client,
       burn: used2,
       used: used2,
       hmacKey: KEY,
+      dispatcher: { intervalMs: 5 },
     });
 
     // pending 卡从盘上恢复：同一张卡，绑定同一个 run
     const list = await app2.inject({ method: "GET", url: "/api/v1/approvals?status=pending" });
     expect(list.json().approvals.map((c: { id: string }) => c.id)).toEqual([card.id]);
 
-    // 重启后批准：决定落在原 (run, tool_call) 上
+    // 重启后批准：决定落在原 (run, tool_call) 上；resume 由本进程分发循环异步执行
     const apr = await app2.inject({
       method: "POST",
       url: `/api/v1/approvals/${card.id}/approve`,
       payload: { approver: "duty_lead" },
     });
     expect(apr.statusCode).toBe(200);
-    expect(apr.json()).toMatchObject({ run_id: runId, run_status: "completed" });
+    expect(apr.json()).toMatchObject({ run_id: runId });
+    await waitForRunTerminal(db2, runId);
 
     // 铸票与执行都指向中断前的那次 tool_call
     expect(mint2.calls[0]).toMatchObject({ approvalId: card.id, tool: "isolate_host" });
@@ -338,8 +367,8 @@ describe("中断-恢复：杀进程重启（m3 卡测试计划·Tracecat 持久�
 
 describe("并发审批仲裁（PRD M10·INV-10 同源仲裁）", () => {
   test("approve 后再 approve/reject → 409 InvalidTransition；未知卡 404；缺 approver 400", async () => {
-    const { app } = makeApp();
-    const runId = await startRun(app);
+    const { db, app } = makeApp();
+    const runId = await startRun(app, db);
     const card = (
       (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string }[];
@@ -416,7 +445,7 @@ describe("fail-closed 边界", () => {
       used,
       hmacKey: KEY,
     });
-    const runId = await startRun(app);
+    const runId = await startRun(app, db);
     const card = (
       (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string }[];
@@ -456,7 +485,7 @@ describe("fail-closed 边界", () => {
       used,
       hmacKey: KEY,
     });
-    const runId = await startRun(app);
+    const runId = await startRun(app, db);
     const card = (
       (await app.inject({ method: "GET", url: "/api/v1/approvals?status=pending" })).json() as {
         approvals: { id: string }[];
@@ -469,7 +498,8 @@ describe("fail-closed 边界", () => {
       payload: { approver: "duty_lead" },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json().run_status).toBe("failed"); // 闸拒了，强杀不吞错
+    // 票 47 时序契约：批准秒回，等终态后闸拒结果可查（强杀不吞错）
+    await waitForRunTerminal(db, runId);
 
     expect(db.prepare("SELECT status, fail_reason FROM runs WHERE id = ?").get(runId))
       .toMatchObject({ status: "failed", fail_reason: "node_error:execute_action" });

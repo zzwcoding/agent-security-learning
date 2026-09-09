@@ -47,14 +47,17 @@ export function isTerminalRun(status: string): boolean {
 // 审批卡状态机（票 11）：pending 是唯一可裁决态。裁决（approve/reject）是终局——
 // 「审批卡是单决媒体」，并发审批后到者 409 就从这里来（PRD M10 异常与边界；
 // 与 run 状态机同源仲裁：INV-10 表之外的变更一律抛错→409，不静默改写）。
-export const APPROVAL_STATES = ["pending", "approved", "rejected"] as const;
+// 票 47（ADR 0004-1）：审批卡有保质期——超时 pending 由分发循环自动作废成
+// expired（不是任何人的裁决，是时间出的裁决）；过期卡上再批准/驳回一律 409。
+export const APPROVAL_STATES = ["pending", "approved", "rejected", "expired"] as const;
 
 export type ApprovalStatus = (typeof APPROVAL_STATES)[number];
 
 export const APPROVAL_TRANSITIONS: Record<ApprovalStatus, ApprovalStatus[]> = {
-  pending: ["approved", "rejected"],
+  pending: ["approved", "rejected", "expired"],
   approved: [],
   rejected: [],
+  expired: [],
 };
 
 export class InvalidApprovalTransitionError extends Error {

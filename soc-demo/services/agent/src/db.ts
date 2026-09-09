@@ -93,6 +93,22 @@ CREATE TABLE IF NOT EXISTS event_cursors (
   name TEXT PRIMARY KEY,
   cursor INTEGER NOT NULL
 );
+
+-- 票 47（ADR 0004-1）：run 分发队列。runs.status='queued' 是 run 自己的生命周期态
+-- （CONTEXT.md 状态机，一字不动）；这里这张表是「待办清单」——resume 的诉求没法用
+-- run 状态表达（awaiting_approval→queued 不是合法迁移），start/resume 统一落表，
+-- 消费循环（run-dispatcher.ts）领了跑。重启后 pending/claimed 都在盘上：queued 不丢。
+-- state ∈ pending → claimed → done（done 保留行：重启恢复要靠它区分「领过没跑完」）。
+CREATE TABLE IF NOT EXISTS run_jobs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  run_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  payload TEXT,
+  state TEXT NOT NULL DEFAULT 'pending',
+  created_at INTEGER NOT NULL,
+  claimed_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_run_jobs_state ON run_jobs(state, id);
 `;
 
 // 票 17：runs 增 case_id（knowledge_flow 的目标案件）。老库靠查缺补列——
