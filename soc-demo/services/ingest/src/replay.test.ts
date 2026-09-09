@@ -34,17 +34,18 @@ test("铁律①：replay 绝不直塞数据库——源码不 import 任何库�
 // severity 期望值按 PRD §5.1 映射表人工算死（level 5/6/7→2，10→3，12→3），
 // 不现场调映射函数——避免「用被测代码算期望值」的循环论证。
 
+// 票 30：映射补了 agent.name→hostname observable（首位），obs 数组按新映射表更新。
 const NAMED: Record<
   string,
   { level: number; severity: number; source: string; sourceRef: string; obs: string[] }
 > = {
-  "ssh-5710-bad-user.json": { level: 5, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682430062.2210", obs: ["ip", "other"] },
-  "ssh-5712-real.json": { level: 10, severity: 3, source: "wazuh:centos7", sourceRef: "1682430696.3725", obs: ["ip", "other"] },
-  "fim-554-file-added.json": { level: 7, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431351.7771", obs: ["filename", "hash", "hash", "hash"] },
-  "fim-510-rootcheck.json": { level: 7, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431409.4109", obs: [] },
-  "vt-87105-malware.json": { level: 12, severity: 3, source: "wazuh:wazuh-manager", sourceRef: "1682431744.9001", obs: ["filename", "hash"] },
-  "web-31101-sqli-400.json": { level: 5, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682432012.3101", obs: ["ip", "url"] },
-  "web-31103-cgi-500.json": { level: 6, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431400.3105", obs: ["ip", "url"] },
+  "ssh-5710-bad-user.json": { level: 5, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682430062.2210", obs: ["hostname", "ip", "other"] },
+  "ssh-5712-real.json": { level: 10, severity: 3, source: "wazuh:centos7", sourceRef: "1682430696.3725", obs: ["hostname", "ip", "other"] },
+  "fim-554-file-added.json": { level: 7, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431351.7771", obs: ["hostname", "filename", "hash", "hash", "hash"] },
+  "fim-510-rootcheck.json": { level: 7, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431409.4109", obs: ["hostname"] },
+  "vt-87105-malware.json": { level: 12, severity: 3, source: "wazuh:wazuh-manager", sourceRef: "1682431744.9001", obs: ["hostname", "filename", "hash"] },
+  "web-31101-sqli-400.json": { level: 5, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682432012.3101", obs: ["hostname", "ip", "url"] },
+  "web-31103-cgi-500.json": { level: 6, severity: 2, source: "wazuh:wazuh-manager", sourceRef: "1682431400.3105", obs: ["hostname", "ip", "url"] },
 };
 
 test("7 类具名 fixture 全部映射成功，severity 与映射表一致", async () => {
@@ -110,7 +111,7 @@ test("注入变体：载荷在 srcuser/full_log/url/UA 四个位置，入库即�
 
 // ---------- 端到端回放：子进程跑 replay.ts，对活着的 ingest 按速率推完整个目录 ----------
 
-test("replay 按速率推 fixtures/alerts 全目录：7 具名 + 4 注入变体全 201、无重复", async () => {
+test("replay 按速率推 fixtures/alerts 全目录：具名 fixture 全 201、无重复", async () => {
   const m2 = new MemoryM2Client();
   const app = buildApp({ m2 });
   await app.listen({ port: 0, host: "127.0.0.1" });

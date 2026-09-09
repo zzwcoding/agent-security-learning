@@ -151,12 +151,41 @@ export async function httpJson(
   return { status: res.status, json: (await res.json().catch(() => ({}))) as Record<string, unknown> };
 }
 
+const INGEST_ENTRY = join(SOC_ROOT, "services", "ingest", "src", "index.ts");
+
+/** 起真 ingest（独立子进程 + 随机端口 + 指向 case-backend 的 CASE_BACKEND_URL）：
+ *  票 30 全链 wire 契约测试用——fixture 从 webhook 正门进真 mapWazuhAlert，
+ *  出站写库走真 HttpM2Client → case-backend REST。与 startCaseBackend 同款
+ *  「子进程 + 公开 REST 面」纪律（边界规则 R1：跨服务不 import 源码）。 */
+export async function startIngest(caseBackendUrl: string): Promise<CaseBackend> {
+  for (let attempt = 0; ; attempt++) {
+    const port = await freePort();
+    const child = spawn(TSX, [INGEST_ENTRY], {
+      env: { ...process.env, PORT: String(port), CASE_BACKEND_URL: caseBackendUrl },
+      stdio: "ignore",
+    });
+    const url = `http://127.0.0.1:${port}`;
+    if (await waitHealthy(url, 20000)) {
+      return {
+        url,
+        close: () =>
+          new Promise((resolve) => {
+            child.on("exit", () => resolve());
+            child.kill("SIGTERM");
+          }),
+      };
+    }
+    child.kill("SIGTERM");
+    if (attempt >= 4) throw new Error(`ingest 子进程起不来（最后端口 ${port}）`);
+  }
+}
+
 type Obj = Record<string, unknown>;
 
 /** 告警种子映射（测试布景版）：照 ingest wazuh.ts 的 §5.1 映射表 + 不可信标记约定，
- *  另加 hostname observable（来自 agent.name）。注意：m1 现行映射没有抽 hostname
- *  ——FR-M2.4 按 hostname observable 归并对回放流水线永远空转，出入已记进票 13
- *  （本 stub 按 PRD §5.1「等结构化字段」把主机进 observable，归并链路才能真跑）。 */
+ *  另加 hostname observable（来自 agent.name）。hostname 映射在票 30 已补进真 m1
+ *  （wazuh.ts extractObservables）——本 stub 是纯测试布景副本，不随真映射自动同步；
+ *  两边的形状由 triage/wire-contract.test.ts（走真 ingest webhook）对活锁住。 */
 export function alertInputFromWazuh(w: Obj): Obj {
   const rule = (w.rule as Obj) ?? {};
   const agent = (w.agent as Obj) ?? {};

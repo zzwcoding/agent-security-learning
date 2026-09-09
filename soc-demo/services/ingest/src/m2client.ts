@@ -7,6 +7,8 @@ export interface ObservableInput {
   dataType: string;
   data: string;
   message?: string;
+  tlp?: number; // 票 30：observables 继承告警级 tlp（M6 富化闸门的输入随管道走）
+  pap?: number;
   tags?: string[];
 }
 

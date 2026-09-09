@@ -3,6 +3,7 @@ import {
   extractObservables,
   mapWazuhAlert,
   severityFromLevel,
+  tlpFromAlert,
   untrustedSection,
   validateWazuhAlert,
 } from "./wazuh.js";
@@ -102,6 +103,99 @@ describe("不可信标记（CONTEXT.md 术语 untrusted；FR-M1.4 入库即标�
     const byType = Object.fromEntries(obs.map((o) => [o.dataType, o]));
     expect(byType.ip?.tags).toContain("untrusted");
     expect(byType.filename?.tags ?? []).not.toContain("untrusted");
+  });
+});
+
+// ---------- m1 映射补齐（票 30）：hostname observable + TLP 溯源 ----------
+
+describe("hostname observable（票 30 验收 1：agent.name → hostname，FR-M2.4 归并的锚）", () => {
+  test("agent.name 抽成 hostname observable（基础设施字段，不带 untrusted）", () => {
+    const input = mapWazuhAlert(wazuh5712);
+    const host = input.observables?.find((o) => o.dataType === "hostname");
+    expect(host).toMatchObject({ data: "centos7", message: "from agent.name" });
+    expect(host?.tags ?? []).not.toContain("untrusted");
+  });
+
+  test("缺 agent 字段不炸、不抽 hostname", () => {
+    const noAgent: Record<string, unknown> = { ...wazuh5712 };
+    delete noAgent.agent;
+    const obs = mapWazuhAlert(noAgent).observables ?? [];
+    expect(obs.find((o) => o.dataType === "hostname")).toBeUndefined();
+    expect(obs.length).toBeGreaterThan(0); // 其余 observable 照抽
+  });
+
+  test("observables 继承告警级 TLP（M6 富化闸门的输入随管道走，票 15 缺口的收口）", () => {
+    const red = mapWazuhAlert({
+      ...wazuh5712,
+      rule: { ...wazuh5712.rule, groups: [...wazuh5712.rule.groups, "tlp:red"] },
+    });
+    expect(red.tlp).toBe(4);
+    expect(red.observables?.map((o) => o.tlp)).toEqual([4, 4, 4]); // hostname/ip/other 全继承
+    const base = mapWazuhAlert(wazuh5712);
+    expect(base.observables?.map((o) => o.tlp)).toEqual([2, 2, 2]); // 默认 2 不变
+  });
+});
+
+describe("TLP 溯源规则（票 30 记票口径：显式字段 > tlp: 关键字取最严 > 默认 2）", () => {
+  test("无任何标记 → 默认 2（PRD §5.1「默认 2/2」；既有 5712 样例语义保持）", () => {
+    expect(tlpFromAlert(wazuh5712)).toBe(2);
+  });
+
+  test("rule.groups 里的 tlp:<色> 关键字 → 对应级别（TheHive 5.2 后口径 0-4）", () => {
+    const withGroups = (groups: string[]) =>
+      tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, groups } });
+    expect(withGroups(["tlp:white"])).toBe(0);
+    expect(withGroups(["tlp:clear"])).toBe(0);
+    expect(withGroups(["tlp:green"])).toBe(1);
+    expect(withGroups(["tlp:amber"])).toBe(2);
+    expect(withGroups(["tlp:amber+strict"])).toBe(3);
+    expect(withGroups(["tlp:red"])).toBe(4);
+  });
+
+  test("rule.description 里的标记也认，大小写不敏感（集成常把 TLP 盖章进描述）", () => {
+    expect(
+      tlpFromAlert({
+        ...wazuh5712,
+        rule: { ...wazuh5712.rule, description: "VirusTotal: malicious file detected. (TLP:RED)" },
+      }),
+    ).toBe(4);
+    expect(
+      tlpFromAlert({
+        ...wazuh5712,
+        rule: { ...wazuh5712.rule, description: "ops noise, share freely [tlp:green]" },
+      }),
+    ).toBe(1);
+  });
+
+  test("数字形式 tlp:0..4 同样认", () => {
+    expect(
+      tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, groups: ["tlp:0"] } }),
+    ).toBe(0);
+    expect(
+      tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, groups: ["tlp:4"] } }),
+    ).toBe(4);
+  });
+
+  test("多个命中取最严（fail-closed 口径：宁可高保不高外流）", () => {
+    expect(
+      tlpFromAlert({
+        ...wazuh5712,
+        rule: { ...wazuh5712.rule, groups: ["tlp:green", "tlp:red"] },
+      }),
+    ).toBe(4);
+  });
+
+  test("显式 rule.tlp 字段优先（0-4 界内整数才认）", () => {
+    expect(
+      tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, tlp: 1, groups: ["tlp:red"] } }),
+    ).toBe(1);
+  });
+
+  test("界外/畸形标记忽略走默认：tlp:9、tlp:redis 都不是有效标记", () => {
+    expect(tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, tlp: 9 } })).toBe(2);
+    expect(
+      tlpFromAlert({ ...wazuh5712, rule: { ...wazuh5712.rule, groups: ["tlp:redis"] } }),
+    ).toBe(2);
   });
 });
 
