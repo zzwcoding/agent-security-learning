@@ -235,3 +235,38 @@ services:
       interval: 5s
       timeout: 3s
       retries: 12
+
+  # ── 票 38（PRD FR-M1.6 / 决策 #4）：Wazuh 真实模式 profile ─────────────────
+  # 默认一键启动不含它（九服务拓扑不变），`docker compose --profile real-wazuh up -d
+  # wazuh-manager` 才起（点名服务，不碰默认栈）。只要 manager 单容器当「真规则引擎」
+  # backdrop（logtest 喂数用），不要 indexer/dashboard 全家桶——PRD 只要 logtest，
+  # 水位线纪律同票 37（compose-topology.test.ts 有机器断言）。
+  wazuh-manager:
+    # 官方单容器镜像按 index digest 钉（票 37 口径：Docker Hub index digest 本机 daemon
+    # 实证可 pull，CI amd64 同用一枚）= wazuh/wazuh-manager 4.14.7（2026-09-01 发布，
+    # 多 arch；2026-09-09 arm64 本地实测）。喂数脚本 scripts/wazuh-logtest-feed.ts。
+    image: wazuh/wazuh-manager@sha256:80cada6a192fcb8caa8b415a5b64e2155138dd8df1da3a7b227d7e5e4e7460c0
+    profiles: ["real-wazuh"]
+    # 只露 API 口：宿主侧 15500（55000 落在 macOS/Linux 临时端口段 49152+/32768+ 里，
+    # 偶发被随机连接占用，同 langfuse 13000 口径）；容器内仍是 55000。API 是 https +
+    # 自签证书（PRD FR-M1.6 的 PUT /logtest 在这口）。agent 接入口 1514/1515/514 不开——
+    # 本地不收 agent，只要 logtest。
+    ports: ["15500:55000"]
+    environment:
+      # 官方镜像的 API 账号注入口（Docker Hub 文档口径，默认即这两串）。教学假值当
+      # 金丝雀（contextforge JWT_SECRET_KEY 同口径）：wazuh-logtest-feed.ts 的默认值
+      # 与这里同串；真部署由部署环境注入，绝不放真密钥进仓库。
+      API_USERNAME: wazuh-wui
+      API_PASSWORD: "MyS3cr37P450r.*-"
+    # 官方 compose 同款文件句柄上限（manager 内部 ossec-analysisd 打开规则/解码器文件多）
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
+    # 定制 ossec.conf（deploy/wazuh-manager/，源=官方镜像原版仅关两段）：漏洞检测
+    # enabled=no（否则每次启动自动下全量 CVE 库 5-8GB，曾撑爆容器层+宿主磁盘）；
+    # indexer 连接器 enabled=no。实测（4.14.7）：VD 彻底不下载；连接器受 s6 已知
+    # 行为影响仍会起（wazuh/wazuh#35264），但有界：LMDB 约 110MB 见顶不再涨。
+    # 只读挂载到官方路径；无状态口径不变——不挂任何数据卷，重跑 up 幂等
+    volumes:
+      - "./deploy/wazuh-manager/ossec.conf:/var/ossec/etc/ossec.conf:ro"

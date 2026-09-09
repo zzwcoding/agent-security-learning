@@ -31,6 +31,19 @@ docker compose up -d agent && pnpm replay
 run trace 时间线；每个 run 一条 trace，SSE 事件与审计五要素镜像为观察条目。
 真容器冒烟：`bash scripts/langfuse-smoke-37.sh`。
 
+### 可选：Wazuh 真实规则引擎 profile（票 38，PRD FR-M1.6；默认链路零改动）
+
+```bash
+docker compose --profile real-wazuh up -d wazuh-manager   # 官方 4.14.7 镜像 digest 钉，宿主 15500
+pnpm wazuh:feed                                           # fixture 灌真引擎 PUT /logtest，真回包回推 webhook 正门
+docker compose --profile real-wazuh stop wazuh-manager    # 用完即停（logtest 无状态，重跑幂等）
+```
+
+`pnpm replay` 推的是手造 fixture；`pnpm wazuh:feed` 把同一批 fixture 的 full_log 喂进
+真 Wazuh 规则引擎，由引擎重新判（如 ssh fixture 实测回 rule 5710 / level 5 /
+MITRE T1110.001），判定为真告警的回包原样走 ingest webhook 正门——默认九服务
+一个不碰，不 OPEN profile 时引擎与脚本都不存在。
+
 ## 文档地图
 
 - PRD v1.1（冻结+变更记录）：`../deliverables/route5/product-handbook.md`
