@@ -10,17 +10,19 @@ import { filterByTags, listCases, selectedTags, FIXTURES_EVAL_DIR } from "./load
 // 票 22 扩维：分诊之外的 attack/approval/replay/chat 五个目录进場；行为流用例可用
 // input.scenario 指名布景（§5.11 的第三种 input——eval 格式归 m11 管，扩展记本票）。
 
-describe("真实 fixture 目录：五维用例清单（m11 卡测试计划的分维下限）", () => {
+describe("真实 fixture 目录：六维用例清单（m11 卡测试计划的分维下限 + 票 42 investigation）", () => {
   const cases = listCases();
   const byDomain = (d: string): number => cases.filter((c) => c.domain === d).length;
 
-  test("总量 ≥30：分诊 ≥10 / 攻击 ≥10 / 审批 ≥3 / replay ≥2 / 对话 ≥3", () => {
+  test("总量 ≥30：分诊 ≥10 / 攻击 ≥10 / 审批 ≥3 / replay ≥2 / 对话 ≥3 / 调查 ≥1", () => {
     expect(cases.length).toBeGreaterThanOrEqual(30);
     expect(byDomain("triage")).toBeGreaterThanOrEqual(10);
     expect(byDomain("attack")).toBeGreaterThanOrEqual(10);
     expect(byDomain("approval")).toBeGreaterThanOrEqual(3);
     expect(byDomain("replay")).toBeGreaterThanOrEqual(2);
     expect(byDomain("chat")).toBeGreaterThanOrEqual(3);
+    // 票 42（G2-8 清偿）：调查维具名用例入 evals——票 14 遗留标记 14-1 的收口
+    expect(byDomain("investigation")).toBeGreaterThanOrEqual(1);
   });
 
   test("攻击维四面齐全：告警注入(A1)/RAG(A2)/提权(A3)/沙箱(第四面)各至少一条", () => {

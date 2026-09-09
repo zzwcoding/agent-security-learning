@@ -25,15 +25,16 @@ beforeAll(async () => {
   judge = await selectJudge();
 });
 
-test(`eval 清单自检：五维下限（分诊 ${count("triage")}/攻击 ${count("attack")}/审批 ${count("approval")}` +
-  `/replay ${count("replay")}/对话 ${count("chat")}，共 ${ALL.length}），tag 过滤后 ${CASES.length} 条进场`, () => {
-  // m11 卡测试计划的分维下限（票 22 验收①）
+test(`eval 清单自检：六维下限（分诊 ${count("triage")}/攻击 ${count("attack")}/审批 ${count("approval")}` +
+  `/replay ${count("replay")}/对话 ${count("chat")}/调查 ${count("investigation")}，共 ${ALL.length}），tag 过滤后 ${CASES.length} 条进场`, () => {
+  // m11 卡测试计划的分维下限（票 22 验收①）+ 调查维（票 42：遗留标记 14-1 收口）
   expect(ALL.length).toBeGreaterThanOrEqual(30);
   expect(count("triage")).toBeGreaterThanOrEqual(10);
   expect(count("attack")).toBeGreaterThanOrEqual(10);
   expect(count("approval")).toBeGreaterThanOrEqual(3);
   expect(count("replay")).toBeGreaterThanOrEqual(2);
   expect(count("chat")).toBeGreaterThanOrEqual(3);
+  expect(count("investigation")).toBeGreaterThanOrEqual(1);
   expect(CASES.length).toBeGreaterThan(0);
 });
 
