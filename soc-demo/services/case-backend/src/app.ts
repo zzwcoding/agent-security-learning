@@ -6,14 +6,18 @@ import {
   JtiExistsError,
   MergeTargetClosedError,
   NotFoundError,
-  VerdictLockedError,
+  TaskCaseMismatchError,
   VerdictRequiredError,
+  VerdictLockedError,
+  TASK_GROUPS,
   addCaseObservable,
+  addTaskLog,
   addTimelineEntry,
   closeAlert,
   closeCase,
   createCaseFromAlert,
   createCaseManual,
+  createTask,
   findActiveCases,
   getAlert,
   getCaseDetail,
@@ -70,6 +74,7 @@ export function buildApp(opts: { db?: DB } = {}) {
       err instanceof VerdictLockedError ||
       err instanceof MergeTargetClosedError ||
       err instanceof JtiExistsError ||
+      err instanceof TaskCaseMismatchError ||
       err instanceof KbInvalidError ||
       err instanceof NotFoundError
     ) {
@@ -214,6 +219,40 @@ export function buildApp(opts: { db?: DB } = {}) {
           body: body.body ?? "",
           structured: body.structured,
         },
+        ctxOf(req.headers),
+      ),
+    );
+  });
+
+  // ---- tasks（票 36·G2-5 收口：FR-M2.5 Task log 写口）----
+  // m2 卡六实体的 Task 补上写半边：建任务 + 任务日志。日志 = 挂 task_id 的时间线条目
+  // （PRD §5.4 Task.logs: TimelineEntry[]），调查工具面 add_task_log 落这里。
+  // 与 /internal/audit 同款薄口纪律：只拦字段必填/枚举，业务裁决在 store。
+  app.post("/api/v1/cases/:id/tasks", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { title?: string; group?: string; assignee?: string };
+    if (!body.title) return reply.status(400).send({ error: "title_required" });
+    if (body.group !== undefined && !(TASK_GROUPS as readonly string[]).includes(body.group)) {
+      return reply.status(400).send({ error: "invalid_task_group", details: [...TASK_GROUPS] });
+    }
+    return reply.status(201).send(createTask(db, id, body, ctxOf(req.headers)));
+  });
+
+  // 任务日志 kind 复用 PRD §5.5 TimelineEntry.kind 枚举（缺省 note）
+  const TASK_LOG_KINDS = new Set(["note", "investigation_report", "enrichment_report", "approval", "execution", "system"]);
+  app.post("/api/v1/tasks/:id/log", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { case_id?: string; author?: string; body?: string; kind?: string };
+    if (!body.case_id) return reply.status(400).send({ error: "case_id_required" });
+    if (!body.author) return reply.status(400).send({ error: "author_required" });
+    if (!body.body) return reply.status(400).send({ error: "body_required" });
+    if (body.kind !== undefined && !TASK_LOG_KINDS.has(body.kind)) {
+      return reply.status(400).send({ error: "invalid_kind" });
+    }
+    return reply.status(201).send(
+      addTaskLog(
+        db, id,
+        { caseId: body.case_id, author: body.author, body: body.body, kind: body.kind },
         ctxOf(req.headers),
       ),
     );

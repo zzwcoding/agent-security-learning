@@ -19,6 +19,8 @@ import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner, typ
 import type { BurnRegistry } from "./verify-ticket.js";
 import { TRIAGE_TOOLS } from "../workers/triage/prompt.js";
 import { KNOWLEDGE_TOOLS } from "../workers/knowledge/prompt.js";
+import { INVESTIGATION_TOOLS } from "../workers/investigation/prompt.js";
+import { ENRICHMENT_TOOLS } from "../workers/enrichment/tools.js";
 import { CHAT_READONLY_TOOLS, THIN_CHAT_FLOW } from "../workers/chat/flow.js";
 import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "../workers/chat/session.js";
 import { visibleTools } from "../workers/chat/visible-tools.js";
@@ -27,10 +29,11 @@ import type { RunRow } from "./runs.js";
 // 本票放行的 run kind。chat_flow（票 18）到票再放——fail-closed：不认识的 kind 直接
 // 400，不给「什么都接」留口子。knowledge_flow = 票 17 沉淀子图（案件关闭 → 提炼 →
 // kb_write 人审闸）；chat_flow = 票 18 对话 Copilot（用户触发，公开面走 POST /api/v1/chat，
-// 这里放行是为编排侧调试/测试同路进柴）。
-const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow"]);
+// 这里放行是为编排侧调试/测试同路进柴）；case_flow = 票 36 调查+富化链（TP 建案后的
+// 下半场，PRD §4.2 步骤 7-8——直拉入口，alert_flow 链上见 index.ts 的 makeNodes）。
+const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow", "case_flow"]);
 // 吃 case_id（无 alert）的 kind：alert_flow 之外的两种
-const CASE_KINDS = new Set(["knowledge_flow", "chat_flow"]);
+const CASE_KINDS = new Set(["knowledge_flow", "chat_flow", "case_flow"]);
 
 // chat 流的 SSE wire 只出对话语义帧（PRD §6-M8 的 data.type 枚举 + 审批过程可见）；
 // node_enter/node_exit/audit 是流水线视图的帧（/events/stream 原样给全量），对话流里
@@ -43,11 +46,27 @@ export const CHAT_WIRE_TYPES = new Set([
 // 每-kind 的任务票规格（FR-M3.4 worker 拉起即申领最小 scope 票；INV-3：票面永不含 L2
 // ——kb_write 不在 knowledge 的 allowed_tools 里，L2 走审批卡铸 ApprovalToken）。
 const TICKET_SPECS: Record<string, { sub: string; scope: string[]; allowedTools: string[] }> = {
-  alert_flow: { sub: "agent:triage", scope: ["alert:update", "case:write"], allowedTools: [...TRIAGE_TOOLS] },
+  // 票 36（B4 清偿）：alert_flow 的 TP 建案分支后【同一 run 内】链上调查+富化，而任务票
+  // 在拉起时铸、verdict 要跑到中途才知道——allowed_tools 取分诊∪调查∪富化三个 L1 工具族
+  // 的并集（拉起时刻能证明需要的最小超集）。FP/merge 分支用不到链上工具：票里没执行的
+  // 授权不等于执行（闸仍 fail-closed，且并集不含任何 L2——INV-3 依旧）。两票方案（链段
+  // 单独铸票）要动 makeNodes 票务 seam，留待真需要时再说。
+  alert_flow: {
+    sub: "agent:triage",
+    scope: ["alert:update", "case:write"],
+    allowedTools: [...new Set([...TRIAGE_TOOLS, ...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
+  },
   knowledge_flow: { sub: "agent:knowledge", scope: ["case:read", "kb:propose"], allowedTools: [...KNOWLEDGE_TOOLS] },
   // chat 票面 = 只读四件（FR-M8.4 allow 态的全部执行面）；动作意图的执行票是审批铸的
   // ApprovalToken，不经这张任务票（INV-3：对话 worker 同样物理无 L2 任务票）。
   chat_flow: { sub: "agent:chat", scope: ["case:read"], allowedTools: [...CHAT_READONLY_TOOLS] },
+  // 票 36：case_flow 的链上两 worker（调查 m5 + 富化 m6）同 run 共票——allowed_tools =
+  // 两个 L1 工具族的并集（INV-3 依旧：并集里没有任何 L2），scope 只含案件读写。
+  case_flow: {
+    sub: "agent:case_flow",
+    scope: ["case:read", "case:write"],
+    allowedTools: [...new Set([...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
+  },
 };
 
 // buildApp 纯工厂（全仓 seam 约定）：测试注入 :memory: db + MemoryAuditSink + 假铸票，
@@ -243,7 +262,8 @@ export function buildApp(opts: {
   //   triage worker：先铸任务票（gateway /internal/mint，票面 scope=分诊六件套，
   //   无任何 L2——INV-3），再组图直跑到终态；铸票失败 502，不留无票 run。
   //   票 18 起 chat_flow 同路进柴：吃 case_id + message + role（交接态随请求注入），
-  //   经 launchChatRun 铸只读票组 chat 子图——公开面 POST /api/v1/chat 是它的正门。）
+  //   经 launchChatRun 铸只读票组 chat 子图——公开面 POST /api/v1/chat 是它的正门。
+  //   票 36 起 case_flow 同路进柴：吃 case_id 直拉调查+富化链（index.ts 组链）。）
   app.post("/internal/runs", async (req, reply) => {
     const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; message?: string; role?: string };
     if (!body.kind) return reply.status(400).send({ error: "kind_required" });
@@ -289,8 +309,9 @@ export function buildApp(opts: {
         const minted = await mint.mintTaskTicket({
           jti: `tk_${randomUUID()}`,
           sub: spec.sub,
-          // 分诊时还没有 case（闸侧跳过绑定校验）；沉淀子图绑定案件（FR-S2.2）
-          caseId: body.kind === "knowledge_flow" ? (body.case_id ?? null) : null,
+          // 分诊时还没有 case（闸侧跳过绑定校验）；其余 kind 绑定案件（FR-S2.2）——
+          // 票 36 起 case_flow 同 knowledge_flow 口径：case_id 随拉起即在
+          caseId: body.kind === "alert_flow" ? null : (body.case_id ?? null),
           runId: run.id,
           scope: [...spec.scope],
           allowedTools: [...spec.allowedTools],

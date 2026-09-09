@@ -19,6 +19,8 @@
 // 安全语义（照票 13 的结构，不靠 prompt 品格）：
 //   - 每个工具调用先过 validateToolCall（签名契约）再过 verifyTicket（gated 唯一
 //     入口，票面 scope 无 L2，INV-1/INV-3）；闸拒 = 审计 DENIED + 抛错强杀。
+//   - 工具输出进上下文前过 guards tool_output 通道（票 36 接通 G2-6；票 04 策略 =
+//     flag 打标不拦），打标进观察元数据 + 审计。
 //   - worker 没有 awaitApproval/executeApproved——调查报告的 recommended_actions
 //     只是建议，「只提建议不动手」落在结构上：isolate_host 永远到不了执行层。
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -26,6 +28,7 @@ import { dirname, join } from "node:path";
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
 import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
 import type { AuditSink } from "../../src/audit.js";
+import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
 import { buildDecidePrompt, buildPlanPrompt, buildReportPrompt, validateToolCall, type CaseView, type ObsEntry, type PlanCall, type ReportCall, type SummarizeCall } from "./prompt.js";
 import { parseReport, renderReportMarkdown } from "./schema.js";
 import type { InvestigationLlm } from "./llm.js";
@@ -63,6 +66,9 @@ export interface InvestigationDeps {
   /** m7 检索面（kb_lookup 共用件，票 13 的 MemoryKb / 票 17 chroma）。 */
   kb: TriageKb;
   llm: InvestigationLlm;
+  /** guards 扫描口（票 36·G2-6：工具输出的 tool_output 通道扫描；票 04 策略 = flag
+   *  打标不拦。生产 = scanInjection，测试 = fakeScan——enrichment 同款必填 seam）。 */
+  scan: (text: string, channel: ScanChannel) => Promise<ScanDecision>;
   audit: AuditSink;
   /** spill 落盘根目录（默认 workspace/spill，PRD §6-M5；测试注入 tmpdir）。 */
   spillDir?: string;
@@ -191,9 +197,12 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
           structured: params.structured,
         });
       case "add_task_log":
-        // A.1 声明面内的工具，但 M2 尚无 tasks 写 API——执行期报错走「工具报错 →
-        // 证据缺口并继续」路径（PRD 异常与边界），不假装修成了。
-        throw new Error("add_task_log_not_available:m2_tasks_api");
+        // 票 36 收口（G2-5）：M2 tasks 写口就绪（FR-M2.5 Task log 写口）——声明面与
+        // 执行面一致。任务不存在/挂错案按工具报错走「证据缺口并继续」路径。
+        return deps.m2.addTaskLog(String(params.case_id), String(params.task_id), {
+          author: ACTOR.id,
+          body: String(params.body),
+        });
       default:
         throw new Error(`unreachable_tool:${tool}`);
     }
@@ -214,11 +223,33 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
     return undefined;
   };
 
-  async function observe(ctx: NodeCtx, tool: string, payload: unknown): Promise<unknown> {
+  async function observe(
+    ctx: NodeCtx,
+    tool: string,
+    payload: unknown,
+  ): Promise<{ payload: unknown; flagged: boolean }> {
     const text = JSON.stringify(payload) ?? "";
     const spillThreshold = deps.spillThresholdChars ?? numEnv(process.env.SPILL_THRESHOLD_CHARS) ?? DEFAULT_SPILL_THRESHOLD;
     const summarizeThreshold =
       deps.summarizeThresholdChars ?? numEnv(process.env.LLM_SUMMARIZE_THRESHOLD_CHARS) ?? DEFAULT_SUMMARIZE_THRESHOLD;
+
+    // guards 扫描（票 36·G2-6）：工具输出属 tool_output 通道（票 04 策略 = flag）。
+    // SIEM/KB/关联告警都是可被污染的数据源——命中注入特征的输出照常进上下文（证据
+    // 一个字节不丢），但打标 + 审计留痕待人复核。不拦 ≠ 没看见：flag 在观察元数据和
+    // 审计两处同时可查。位置在治理阈值之前——超大/摘要路径的输出同样要被打标。
+    let flagged = false;
+    const decision = await deps.scan(text, "tool_output");
+    if (decision.action === "flag") {
+      flagged = true;
+      record({
+        action: "tool_output_flagged",
+        objectId: deps.runId,
+        objectType: "tool_output",
+        details: { tool, channel: "tool_output", score: decision.score },
+        result: "SUCCESS",
+      });
+      ctx.emit("audit", { action: "tool_output_flagged", tool, channel: "tool_output", score: decision.score });
+    }
 
     if (text.length > spillThreshold) {
       // 超大结果落盘，上下文只留引用（PRD §6-M5 返回形状：{total, truncated, hits_ref}）
@@ -235,7 +266,7 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
         result: "SUCCESS",
       });
       ctx.emit("audit", { action: "context_spill", tool, mode: "spill", chars: text.length, hits_ref: relRef });
-      return { total: totalOf(payload), truncated: true, hits_ref: relRef };
+      return { payload: { total: totalOf(payload), truncated: true, hits_ref: relRef }, flagged };
     }
     if (text.length > summarizeThreshold) {
       // 超阈值 → llm_summarize 小模型摘要（只压上下文，不做决策）
@@ -252,9 +283,9 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
         result: "SUCCESS",
       });
       ctx.emit("audit", { action: "context_summarize", tool, mode: "summarize", chars: text.length });
-      return { total: totalOf(payload), truncated: false, summary: s.summary };
+      return { payload: { total: totalOf(payload), truncated: false, summary: s.summary }, flagged };
     }
-    return payload;
+    return { payload, flagged };
   }
 
   // ---- 子图节点（PRD §6-M5）----
@@ -350,8 +381,15 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
           try {
             const payload = await gated(ctx, d.tool, d.params, () => execTool(d.tool, d.params));
             executed.add(d.tool);
-            const governed = await observe(ctx, d.tool, payload);
-            observations.push({ step: stepsUsed, tool: d.tool, params: d.params, ok: true, payload: governed });
+            const govn = await observe(ctx, d.tool, payload);
+            observations.push({
+              step: stepsUsed,
+              tool: d.tool,
+              params: d.params,
+              ok: true,
+              payload: govn.payload,
+              ...(govn.flagged ? { flagged: true } : {}),
+            });
           } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
             if (msg.includes("_gate_denied:")) throw e; // INV-1：闸拒不吞，fail-closed 上抛

@@ -6,7 +6,7 @@ import { executeRun } from "../../src/graph.js";
 import { MemoryAuditSink } from "../../src/audit.js";
 import { GatewayLlmClient, LlmUpstreamError, type LlmChatResult } from "../../src/llm-client.js";
 import { MemoryKb } from "../triage/kb.js";
-import { httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, type CaseBackend } from "../triage/testkit.js";
+import { fakeScan, httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, type CaseBackend } from "../triage/testkit.js";
 import { makeInvestigationFlow } from "./flow.js";
 import { RealInvestigationLlm } from "./llm-real.js";
 import { HttpInvestigationM2 } from "./m2.js";
@@ -221,6 +221,7 @@ describe("全链路（验收③④）：RealInvestigationLlm 驱动 plan → too
       siem: new FixtureSiem(FIXTURES) as SiemBackend,
       kb: new MemoryKb(),
       llm,
+      scan: fakeScan, // 票 36：guards tool_output 扫描口必填（生产 = scanInjection）
       audit,
       spillDir: "/tmp/invest-27-spill",
     });

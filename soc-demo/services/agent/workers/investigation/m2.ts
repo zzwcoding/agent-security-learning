@@ -44,6 +44,9 @@ export interface InvestigationM2 {
   getAlert(alertId: string): Promise<AlertDto | null>;
   listAlerts(): Promise<AlertDto[]>;
   addTimelineEntry(caseId: string, entry: TimelineEntryInput): Promise<{ id: string }>;
+  /** 任务日志（票 36·G2-5 收口：FR-M2.5 Task log 写口）。M2 按 (task 归属, case_id)
+   *  一致性把关：任务不存在 404、case 与任务归属不符 400——都按工具报错走证据缺口。 */
+  addTaskLog(caseId: string, taskId: string, entry: { author: string; body: string }): Promise<{ id: string }>;
 }
 
 export class HttpInvestigationM2 implements InvestigationM2 {
@@ -81,6 +84,15 @@ export class HttpInvestigationM2 implements InvestigationM2 {
   async addTimelineEntry(caseId: string, entry: TimelineEntryInput): Promise<{ id: string }> {
     const { status, json } = await this.call("POST", `/api/v1/cases/${caseId}/timeline`, entry);
     if (status >= 300) throw new Error(`m2 add_timeline_entry failed: HTTP ${status} ${JSON.stringify(json)}`);
+    return { id: String(json.id ?? "") };
+  }
+
+  async addTaskLog(caseId: string, taskId: string, entry: { author: string; body: string }): Promise<{ id: string }> {
+    const { status, json } = await this.call("POST", `/api/v1/tasks/${taskId}/log`, {
+      case_id: caseId,
+      ...entry,
+    });
+    if (status >= 300) throw new Error(`m2 add_task_log failed: HTTP ${status} ${JSON.stringify(json)}`);
     return { id: String(json.id ?? "") };
   }
 }

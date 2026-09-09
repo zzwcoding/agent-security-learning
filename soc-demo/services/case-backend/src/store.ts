@@ -52,6 +52,14 @@ export class JtiExistsError extends Error {
     this.name = "jti_exists";
   }
 }
+export class TaskCaseMismatchError extends Error {
+  readonly code = "case_task_mismatch";
+  readonly httpStatus = 400;
+  constructor(taskId: string) {
+    super(`case_task_mismatch: ${taskId}`);
+    this.name = "case_task_mismatch";
+  }
+}
 
 export interface Actor {
   type: string;
@@ -370,7 +378,11 @@ export function getCaseDetail(db: DB, id: string): Record<string, unknown> | nul
     db.prepare("SELECT * FROM observables WHERE case_id = ? ORDER BY rowid").all(id) as
       Record<string, unknown>[]
   ).map(mapObservable);
-  c.tasks = db.prepare("SELECT * FROM tasks WHERE case_id = ? ORDER BY rowid").all(id);
+  // 票 36：tasks 走 mapTask 出 camelCase wire 形（与 observables 同口径；此前无消费者）
+  c.tasks = (
+    db.prepare("SELECT * FROM tasks WHERE case_id = ? ORDER BY rowid").all(id) as
+      Record<string, unknown>[]
+  ).map((r) => mapTask(r));
   c.timeline = listTimeline(db, id);
   return c;
 }
@@ -772,6 +784,84 @@ export function listTimeline(db: DB, caseId: string): unknown[] {
       const row = r as Record<string, unknown>;
       return { ...row, structured: pj(row.structured as string, null) };
     });
+}
+
+// ---------- tasks（票 36·FR-M2.5 Task log 写口的 store 半边）----------
+//
+// m2 卡六实体里的 Task 一直只有读半边（getCaseDetail 附带 tasks），调查工具面声明的
+// add_task_log 执行期只能报错（G2-5）。本票补写半边：createTask 建任务 + addTaskLog
+// 写任务日志。任务日志 = 挂 task_id 的时间线条目（PRD §5.4 Task.logs: TimelineEntry[]，
+// TheHive task log 语义）——同一张 timeline_entries 表，案件时间线查询面原样可见。
+
+/** PRD §5.4 group 枚举（TheHive NIST 式分组裁到 5 组）。 */
+export const TASK_GROUPS = [
+  "Identification",
+  "Containment",
+  "Eradication",
+  "Recovery",
+  "LessonsLearned",
+] as const;
+
+function mapTask(row: Record<string, unknown> | undefined): Record<string, unknown> | null {
+  if (!row) return null;
+  return {
+    id: row.id,
+    caseId: row.case_id,
+    title: row.title,
+    group: row.task_group,
+    status: row.status,
+    assignee: row.assignee,
+  };
+}
+
+export function createTask(
+  db: DB,
+  caseId: string,
+  input: { title: string; group?: string; assignee?: string },
+  ctx: Ctx,
+): Record<string, unknown> {
+  return db.transaction(() => {
+    requireCase(db, caseId);
+    const id = randomUUID();
+    db.prepare(
+      "INSERT INTO tasks (id, case_id, title, task_group, status, assignee) VALUES (?, ?, ?, ?, 'Todo', ?)",
+    ).run(id, caseId, input.title, input.group ?? null, input.assignee ?? null);
+    recordAudit(db, ctx, "create", id, "task", {
+      created: { caseId, title: input.title, group: input.group ?? null, assignee: input.assignee ?? null },
+    });
+    return mapTask(db.prepare("SELECT * FROM tasks WHERE id = ?").get(id) as Record<string, unknown>);
+  })();
+}
+
+export interface TaskLogInput {
+  /** 调查工具面 add_task_log 传 (case_id, task_id) 双 id——这里做归属一致性把关。 */
+  caseId: string;
+  author: string;
+  body: string;
+  /** timeline kind（缺省 note）；枚举把关在 app 薄口。 */
+  kind?: string;
+}
+
+export function addTaskLog(db: DB, taskId: string, input: TaskLogInput, ctx: Ctx): Record<string, unknown> {
+  return db.transaction(() => {
+    const task = db.prepare("SELECT * FROM tasks WHERE id = ?").get(taskId) as
+      | Record<string, unknown>
+      | undefined;
+    if (!task) throw new NotFoundError(`task ${taskId}`);
+    if (task.case_id !== input.caseId) throw new TaskCaseMismatchError(taskId);
+    const id = randomUUID();
+    const kind = input.kind ?? "note";
+    db.prepare(
+      `INSERT INTO timeline_entries (id, case_id, task_id, kind, author, body, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, task.case_id as string, taskId, kind, input.author, input.body, nowMs());
+    recordAudit(db, ctx, "create", id, "task_log", {
+      created: { caseId: task.case_id, taskId, kind, author: input.author },
+    });
+    return db
+      .prepare("SELECT * FROM timeline_entries WHERE id = ?")
+      .get(id) as Record<string, unknown>;
+  })();
 }
 
 export function queryAudit(

@@ -24,5 +24,20 @@
     "denied",
     "done"
   ],
-  "chat_wire_types_note": "POST /api/v1/chat 的 SSE 只出对话语义帧（services/agent/src/app.ts CHAT_WIRE_TYPES 过滤子集，⊆ event_types）；node_enter/node_exit/audit 是流水线视图帧，对话流里是噪声。"
+  "chat_wire_types_note": "POST /api/v1/chat 的 SSE 只出对话语义帧（services/agent/src/app.ts CHAT_WIRE_TYPES 过滤子集，⊆ event_types）；node_enter/node_exit/audit 是流水线视图帧，对话流里是噪声。",
+  "flow_nodes": {
+    "alert_flow": [
+      "load_alert",
+      "kb_check",
+      "merge_check",
+      "self_audit_checkpoint",
+      "verdict_llm",
+      "outcome"
+    ],
+    "case_flow": [
+      "investigate_case",
+      "enrich_case"
+    ]
+  },
+  "flow_nodes_note": "流水线视图预置骨架（FR-M10.2，票 36 起两端契约锁）：web pipeline.ts FLOW_NODES 与 agent 侧节点名单共读本表。alert_flow = 分诊六节点骨架（镜像 workers/triage/flow.ts）；case_flow = 调查+富化链的两个交接节点（workers/case-flow.ts CASE_FLOW_NODES；m5/m6 子图的内部节点经 tool_call/audit 帧可见，不进预置骨架）。"
 }

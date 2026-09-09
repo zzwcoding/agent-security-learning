@@ -1,8 +1,11 @@
 // 流水线视图的状态归约（纯函数层，React 之外可单测）：SSE 事件流 →
 // 「节点图高亮 + 每 worker 在干嘛一屏看全」（FR-M10.2）。
 // 设计取向：Web 是薄客户端，节点图结构只有一个来源是可信的——SSE 事件流本身。
-// alert_flow 的 triage 六节点作为预置骨架（镜像 services/agent/workers/triage/flow.ts
-// 的子图声明，纯展示用），其余 kind 的节点从 node_enter 动态追加，不超前猜图。
+// 预置骨架只做纯展示的节点名单（镜像 agent 侧子图声明）：alert_flow = 分诊六节点、
+// case_flow = 调查+富化链两交接节点（票 36）。名单与 fixtures/sse-events.json
+// flow_nodes 共读同源（票 31 先例：两端测试各自咬住对端，agent 产出侧闸在
+// services/agent/src/case-flow.test.ts）。其余 kind 的节点从 node_enter 动态追加，
+// 不超前猜图。
 import type { SseEvent } from "./sse";
 
 export type { SseEvent };
@@ -32,10 +35,12 @@ export interface PipelineState {
 
 const LOG_CAP = 200;
 
-/** 预置节点骨架：alert_flow = triage 六节点（worker 子图声明顺序）。
+/** 预置节点骨架：alert_flow = triage 六节点；case_flow = 调查+富化链（票 36，
+ *  FR-M10.2）。名单与 fixtures/sse-events.json flow_nodes 两端契约锁。
  *  其余 kind（chat/knowledge）节点未知 → 空骨架动态发现（不超前猜图）。 */
 export const FLOW_NODES: Record<string, string[]> = {
   alert_flow: ["load_alert", "kb_check", "merge_check", "self_audit_checkpoint", "verdict_llm", "outcome"],
+  case_flow: ["investigate_case", "enrich_case"],
 };
 
 export function initPipeline(kind: string | null): PipelineState {

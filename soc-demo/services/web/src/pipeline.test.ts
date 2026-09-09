@@ -1,8 +1,13 @@
 // 流水线视图的状态归约测试：SSE 事件流（纯数据）→ 节点高亮状态 + 事件日志。
 // 纯函数层单测，不碰 React——这是流水线视图唯一值得测的逻辑。
 import { describe, expect, it } from "vitest";
+import fixtureSse from "../../../fixtures/sse-events.json?raw";
 import { FLOW_NODES, applyEvent, initPipeline, type SseEvent } from "./pipeline";
 import type { SseEventType } from "./sse";
+
+const SSE_FIXTURE = JSON.parse(fixtureSse) as {
+  flow_nodes: Record<string, string[]>;
+};
 
 function ev(id: number, type: SseEventType, payload: Record<string, unknown> = {}): SseEvent {
   return { id, type, payload, ts: 1700000000000 + id };
@@ -22,10 +27,20 @@ describe("initPipeline", () => {
     expect(st.nodes.every((n) => n.status === "pending")).toBe(true);
   });
 
-  it("FLOW_NODES 只收编 alert_flow（其余 kind 动态发现，不超前猜图）", () => {
-    expect(Object.keys(FLOW_NODES)).toEqual(["alert_flow"]);
+  it("case_flow 预置调查+富化链两节点（票 36，FR-M10.2：case_flow 节点在流水线视图可见）", () => {
+    const st = initPipeline("case_flow");
+    expect(st.nodes.map((n) => n.name)).toEqual(["investigate_case", "enrich_case"]);
+  });
+
+  it("FLOW_NODES 收编 alert_flow 与 case_flow（其余 kind 动态发现，不超前猜图）", () => {
+    expect(Object.keys(FLOW_NODES)).toEqual(["alert_flow", "case_flow"]);
     expect(initPipeline("chat_flow").nodes).toEqual([]);
     expect(initPipeline(null).nodes).toEqual([]);
+  });
+
+  it("case_flow 节点名单与 fixtures/sse-events.json 共读同源（票 31 先例；agent 产出侧闸在 services/agent/src/case-flow.test.ts）", () => {
+    expect(FLOW_NODES.case_flow).toEqual(SSE_FIXTURE.flow_nodes.case_flow);
+    expect(FLOW_NODES.alert_flow).toEqual(SSE_FIXTURE.flow_nodes.alert_flow);
   });
 });
 

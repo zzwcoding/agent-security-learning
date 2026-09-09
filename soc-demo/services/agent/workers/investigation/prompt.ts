@@ -54,7 +54,7 @@ export const TOOL_SCHEMAS: Record<string, { description: string; required: strin
     optional: ["structured"],
   },
   add_task_log: {
-    description: "写任务日志（L1 写；A.1 声明面，M2 tasks API 就绪前执行期报错）",
+    description: "写任务日志（L1 写；M2 tasks API：任务须已存在——POST /api/v1/cases/:id/tasks 建任务，日志落案件时间线挂 task_id）",
     required: ["case_id", "task_id", "body"],
     optional: [],
   },
@@ -149,7 +149,8 @@ export interface CaseView {
 }
 
 /** 循环里的一条观察：工具输出经上下文治理后的形态（payload 可能是原始结果、
- *  llm_summarize 摘要或 spill 引用——见 flow.observe）。 */
+ *  llm_summarize 摘要或 spill 引用——见 flow.observe）。flagged = guards 对该工具
+ *  输出的 tool_output 通道扫描命中注入特征（票 04 策略 = flag 打标不拦，票 36）。 */
 export interface ObsEntry {
   step: number;
   tool: string;
@@ -157,6 +158,7 @@ export interface ObsEntry {
   ok: boolean;
   payload?: unknown;
   error?: string;
+  flagged?: boolean;
 }
 
 export interface PlanCall {

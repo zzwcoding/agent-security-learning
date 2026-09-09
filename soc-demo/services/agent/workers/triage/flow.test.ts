@@ -13,6 +13,9 @@ import { MemoryKb } from "./kb.js";
 import { FakeTriageLlm, type TriageLlm } from "./llm.js";
 import { HttpTriageM2 } from "./m2.js";
 import { TRIAGE_TOOLS, type LlmCall } from "./prompt.js";
+// 票 36：alert_flow 链上调查+富化后，铸票面 = 三工具族并集（断言见下方 makeNodes 路径测试）
+import { INVESTIGATION_TOOLS } from "../investigation/prompt.js";
+import { ENRICHMENT_TOOLS } from "../enrichment/tools.js";
 import {
   fakeScan,
   httpJson,
@@ -119,9 +122,15 @@ describe("app 接线：POST /internal/runs 铸任务票并跑完分诊（FR-M3.4
     expect(res.statusCode).toBe(202);
     const runId = res.json().run_id;
 
-    // 铸的票就是分诊票：sub/scope 对、allowed_tools=六件套、run_id 绑定本 run
+    // 铸的票就是本 run 的任务票：sub/scope 对、allowed_tools=票 36 起的三族并集
+    // （分诊六件套 + 链上调查/富化——拉起时 verdict 未可知，并集是当下能证明的最小
+    // 超集；仍无任何 L2，INV-3）、run_id 绑定本 run
     expect(mintCalls).toHaveLength(1);
-    expect(mintCalls[0]).toMatchObject({ sub: "agent:triage", runId, allowedTools: [...TRIAGE_TOOLS] });
+    expect(mintCalls[0]).toMatchObject({
+      sub: "agent:triage",
+      runId,
+      allowedTools: [...new Set([...TRIAGE_TOOLS, ...INVESTIGATION_TOOLS, ...ENRICHMENT_TOOLS])],
+    });
 
     // run 到终态且分诊结果写回 M2
     const alert = await httpJson(cb.url, "GET", `/api/v1/alerts/${alertId}`);

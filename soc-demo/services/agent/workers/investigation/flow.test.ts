@@ -10,8 +10,9 @@ import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { loadRunState } from "../../src/checkpointer.js";
 import { verifyTicket } from "../../src/verify-ticket.js";
+import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
 import { MemoryKb } from "../triage/kb.js";
-import { httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, type CaseBackend } from "../triage/testkit.js";
+import { fakeScan, httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, type CaseBackend } from "../triage/testkit.js";
 import { makeInvestigationFlow, LOOP_MAX_STEPS } from "./flow.js";
 import { INVESTIGATION_TOOLS, type DecideCall, type ReportCall } from "./prompt.js";
 import { parseReport } from "./schema.js";
@@ -54,7 +55,12 @@ function probeLlm(base: InvestigationLlm, probe: Probe, over: Partial<Investigat
   };
 }
 
-async function rig(over: { llm?: Partial<InvestigationLlm>; siem?: SiemBackend; ticketTools?: string[] } = {}) {
+async function rig(over: {
+  llm?: Partial<InvestigationLlm>;
+  siem?: SiemBackend;
+  ticketTools?: string[];
+  scan?: (text: string, channel: ScanChannel) => Promise<ScanDecision>;
+} = {}) {
   const caseBackend: CaseBackend = await startCaseBackend();
   const db: DB = openDb(":memory:");
   const audit = new MemoryAuditSink();
@@ -88,6 +94,7 @@ async function rig(over: { llm?: Partial<InvestigationLlm>; siem?: SiemBackend; 
       siem: countedSiem,
       kb,
       llm,
+      scan: over.scan ?? fakeScan, // 票 36：guards tool_output 扫描口（生产 = scanInjection，测试 = 假件）
       audit,
       spillDir,
     });
@@ -137,7 +144,7 @@ const loopState = (db: DB, runId: string) => {
     finished: boolean;
     incomplete: boolean;
     executed: string[];
-    observations: { step: number; tool: string; ok: boolean; payload?: unknown; error?: string }[];
+    observations: { step: number; tool: string; ok: boolean; payload?: unknown; error?: string; flagged?: boolean }[];
   };
 };
 
@@ -464,5 +471,116 @@ describe("INV-3：调查 worker 物理无 L2 票（m9-S2）", () => {
     // 建案的系统条目在，但调查报告一条都没写进去（fail-closed）
     const tl = await r.timeline(caseId);
     expect(tl.filter((e) => e.kind === "investigation_report")).toHaveLength(0);
+  });
+});
+
+describe("guards tool_output 通道：调查循环的观察面（票 36·G2-6·D1 防线）", () => {
+  // 票 04 通道策略表：tool_output = flag（打标不拦）。analyzer/SIEM 是可被污染的第三方
+  // 件——命中注入特征的输出放行进上下文，但必须打标 + 审计留痕待人复核。
+  const flagToolOutput = async (_text: string, channel: ScanChannel): Promise<ScanDecision> =>
+    channel === "tool_output"
+      ? { blocked: false, action: "flag", score: 0.87 }
+      : { blocked: false, action: "allow", score: 0 };
+
+  test("SIEM 输出命中 → flag 打标不拦：观察带 flagged 元数据、审计留痕、原文保留、报告照常出", async () => {
+    const r = await track(await rig({ scan: flagToolOutput }));
+    const { caseId } = await r.seedCaseFromFixture("ssh-5712-real.json");
+
+    const { done, runId } = await r.runCase(caseId);
+    expect(done.status).toBe("completed"); // 打标 ≠ 拦截：调查照常跑完
+
+    const loop = loopState(r.db, runId);
+    const siemObs = loop.observations.filter((o) => o.tool === "siem_query" && o.ok);
+    expect(siemObs.length).toBeGreaterThanOrEqual(1);
+    for (const o of siemObs) expect(o.flagged).toBe(true);
+    // 未打标的观察（get_alert 之类同样过扫但 action=allow）不带 flagged 键
+    const alertObs = loop.observations.find((o) => o.tool === "get_alert");
+    expect(alertObs?.flagged).toBeUndefined();
+
+    // 审计留痕（工具 + 通道 + score，供人工复核定位）
+    const flagged = r.audit.entries.filter((e) => e.action === "tool_output_flagged");
+    expect(flagged.length).toBeGreaterThanOrEqual(1);
+    expect(flagged[0]).toMatchObject({ result: "SUCCESS", objectType: "tool_output" });
+    expect(flagged[0].details).toMatchObject({ tool: "siem_query", channel: "tool_output", score: 0.87 });
+
+    // 原文一个字节没丢（证据面）：5712 的爆破日志还在观察与报告里
+    const transcript = JSON.stringify(loop.observations);
+    expect(transcript).toContain("Invalid user blimey");
+    const tl = await r.timeline(caseId);
+    expect(tl.find((e) => e.kind === "investigation_report")).toBeDefined();
+  });
+
+  test("未命中 → 不打标不审计（flagged 键不出现，行为与票 14 基线一致）", async () => {
+    const r = await track(await rig()); // 默认 fakeScan：无注入特征 → allow
+    const { caseId } = await r.seedCaseFromFixture("ssh-5712-real.json");
+
+    const { done, runId } = await r.runCase(caseId);
+    expect(done.status).toBe("completed");
+    const loop = loopState(r.db, runId);
+    expect(loop.observations.some((o) => o.flagged)).toBe(false);
+    expect(r.audit.entries.some((e) => e.action === "tool_output_flagged")).toBe(false);
+  });
+});
+
+describe("add_task_log 两头一致（票 36·G2-5 收口）：M2 tasks 写口在环", () => {
+  test("建任务 → 循环 add_task_log → 日志以 task_id 落案件时间线（FR-M2.5）", async () => {
+    const ref = { caseId: "", taskId: "" };
+    const r = await track(await rig({
+      llm: {
+        decide: async (call) =>
+          call.input.observations.length === 0
+            ? {
+                kind: "tool",
+                tool: "add_task_log",
+                params: { case_id: ref.caseId, task_id: ref.taskId, body: "已核对 18.18.18.18 的爆破记录" },
+                tokens: 8,
+              }
+            : { kind: "finish", tokens: 4 },
+      },
+    }));
+    const { caseId } = await r.seedCaseFromFixture("ssh-5712-real.json");
+    ref.caseId = caseId;
+    const created = await httpJson(r.caseBackend.url, "POST", `/api/v1/cases/${caseId}/tasks`, {
+      title: "核对爆破来源",
+      group: "Identification",
+    });
+    ref.taskId = String((created.json as { id: string }).id);
+
+    const { done, runId } = await r.runCase(caseId);
+    expect(done.status).toBe("completed");
+
+    // 声明面（INVESTIGATION_TOOLS）与执行面一致：真写进去了，不再执行期报错
+    const loop = loopState(r.db, runId);
+    expect(loop.executed).toContain("add_task_log");
+    expect(loop.observations.some((o) => o.tool === "add_task_log" && o.ok)).toBe(true);
+    const tl = await r.timeline(caseId) as unknown as { task_id?: string; kind: string; author: string; body: string }[];
+    const log = tl.find((e) => e.task_id === ref.taskId);
+    expect(log).toBeDefined();
+    expect(log?.kind).toBe("note");
+    expect(log?.author).toBe("agent:investigation");
+    expect(log?.body).toContain("已核对 18.18.18.18 的爆破记录");
+  });
+
+  test("任务不存在 → 工具报错计证据缺口并继续（不假装修成，PRD 异常与边界）", async () => {
+    const r = await track(await rig({
+      llm: {
+        decide: async (call) =>
+          call.input.observations.length === 0
+            ? { kind: "tool", tool: "add_task_log", params: { case_id: "case_x", task_id: "task_nope", body: "x" }, tokens: 8 }
+            : { kind: "finish", tokens: 4 },
+      },
+    }));
+    const { caseId } = await r.seedCaseFromFixture("ssh-5712-real.json");
+
+    const { done, runId } = await r.runCase(caseId);
+    expect(done.status).toBe("completed");
+    const loop = loopState(r.db, runId);
+    const obs = loop.observations.find((o) => o.tool === "add_task_log");
+    expect(obs).toMatchObject({ ok: false });
+    expect(String(obs?.error)).toContain("404");
+    expect(r.audit.entries.some((e) => e.action === "tool_error" && String(e.details.tool) === "add_task_log")).toBe(true);
+    // 循环没被打断：报告照常产出
+    const tl = await r.timeline(caseId);
+    expect(tl.find((e) => e.kind === "investigation_report")).toBeDefined();
   });
 });

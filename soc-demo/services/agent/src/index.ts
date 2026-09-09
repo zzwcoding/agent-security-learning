@@ -13,6 +13,12 @@ import { RealTriageLlm } from "../workers/triage/llm-real.js";
 import { GatewayLlmClient } from "./llm-client.js";
 import { HttpInvestigationM2 } from "../workers/investigation/m2.js";
 import { FixtureSiem } from "../workers/investigation/siem.js";
+import { FakeInvestigationLlm } from "../workers/investigation/llm.js";
+import { RealInvestigationLlm } from "../workers/investigation/llm-real.js";
+import { HttpEnrichmentM2 } from "../workers/enrichment/m2.js";
+import { FixtureAnalyzerTable } from "../workers/enrichment/analyzers.js";
+import { makeCaseFlow } from "../workers/case-flow.js";
+import { scanInjection } from "./guards-client.js";
 import { makeChatFlow } from "../workers/chat/flow.js";
 import { FakeChatLlm } from "../workers/chat/llm.js";
 import { RealChatLlm } from "../workers/chat/llm-real.js";
@@ -34,9 +40,11 @@ mkdirSync(dataDir, { recursive: true });
 const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite", dataDir));
 
 // 图选择（票 13 起 alert_flow 接 m4 分诊子图；票 17 起 knowledge_flow 接 m7 沉淀子图；
-// 票 18 起 chat_flow 接 m8 对话 Copilot）：
+// 票 18 起 chat_flow 接 m8 对话 Copilot；票 36 起 case_flow 接 m5+m6 调查富化链，
+// alert_flow 的 TP 建案分支后同一 run 内链上同一条链——B4 清偿，PRD §4.2 步骤 7-8）：
 //   AGENT_FLOW=approval_demo → 带 L2 动作的演示图（curl 走通审批回路，票 11）
-//   其余按 run.kind 组图：alert_flow=triage / knowledge_flow=knowledge / chat_flow=chat。
+//   其余按 run.kind 组图：alert_flow=triage+case 链 / knowledge_flow=knowledge /
+//   chat_flow=chat / case_flow=investigate→enrich。
 //   makeNodes 在每个 run 拉起时被调：app.ts 先按 kind 向 gateway 铸任务票（INV-3：
 //   票面无 L2），票交进来组图。
 //
@@ -49,8 +57,13 @@ const kbStore: VectorStore = KB_CHROMA_URL
   ? new RealChromaClient({ baseUrl: KB_CHROMA_URL })
   : new MemoryVectorStore();
 const kbForTriage = KB_CHROMA_URL ? new ChromaKb(kbStore) : new MemoryKb();
-// chat 的只读面（票 18）：M2 REST + fixture SIEM 语料（m5 worker 同款 adapter 直用）
-const siemForChat = new FixtureSiem(fileURLToPath(new URL("../../../fixtures/alerts/", import.meta.url)));
+// chat 的只读面（票 18）：M2 REST + fixture SIEM 语料（m5 worker 同款 adapter 直用）。
+// 票 36 起 case_flow 的调查子图共用同一语料与 M2 adapter（fixture 表当 mock SIEM）。
+const fixtureSiem = new FixtureSiem(fileURLToPath(new URL("../../../fixtures/alerts/", import.meta.url)));
+const siemForChat = fixtureSiem;
+// case_flow 富化面的 analyzer backend（票 15：fixtures/ti 情报表 mock；microsandbox
+// 真跑切换见 workers/enrichment/sandbox.ts——compose 攻击演示切真跑，不在本票范围）
+const analyzers = new FixtureAnalyzerTable(fileURLToPath(new URL("../../../fixtures/ti/", import.meta.url)));
 // chat 的 FGA 裁决面（票 12 真 openfga 容器；FGA_API_URL/FGA_IDS_FILE env 见 compose）
 const fgaForChat = makeFgaChecker();
 //
@@ -73,6 +86,37 @@ const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : 
 const makeNodes = nodes
   ? undefined
   : (run: { id: string; kind: string; caseId: string | null }, ticket: string) => {
+    // 票 36 调查+富化链的装配（B4 清偿）：真件 = M2 REST + fixture SIEM 语料 + fixture
+    // TI 情报表 + guards scanInjection（GUARDS_URL，compose 服务名可达）；调查 LLM 照
+    // AGENT_LLM 切 fake/real。case_id 不在组图时给定——直拉来自 run 行（executeRun
+    // 拼进交接态），alert_flow 链上来自 outcome 的 create_case 运行态写入。
+    const caseChain = (runId: string) => {
+      const requestId = `launch_${runId}`;
+      return makeCaseFlow({
+        invest: {
+          runId,
+          requestId,
+          ticket,
+          m2: new HttpInvestigationM2(),
+          siem: fixtureSiem,
+          kb: kbForTriage,
+          llm: LLM_MODE === "fake"
+            ? new FakeInvestigationLlm()
+            : new RealInvestigationLlm(new GatewayLlmClient({ requestId, actor: "agent:investigation" })),
+          scan: scanInjection,
+          audit,
+        },
+        enrich: {
+          runId,
+          requestId,
+          ticket,
+          m2: new HttpEnrichmentM2(),
+          analyzers,
+          scan: scanInjection,
+          audit,
+        },
+      });
+    };
     if (run.kind === "knowledge_flow") {
       return makeKnowledgeFlow({
         runId: run.id,
@@ -107,17 +151,26 @@ const makeNodes = nodes
         audit,
       });
     }
-    return makeTriageFlow({
-      runId: run.id,
-      requestId: `launch_${run.id}`,
-      ticket,
-      m2: new HttpTriageM2(),
-      kb: kbForTriage,
-      llm: LLM_MODE === "fake"
-        ? new FakeTriageLlm()
-        : new RealTriageLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:triage" })),
-      audit,
-    });
+    if (run.kind === "case_flow") {
+      // 直拉入口（票 36）：POST /internal/runs {kind:"case_flow", case_id} → 链两交接节点
+      return caseChain(run.id);
+    }
+    // alert_flow：分诊六节点 + 链上调查+富化（票 36·B4 清偿，PRD §4.2 步骤 7-8）。
+    // 只有 TP 的 create_case 分支会把 case_id 写进交接态——FP/merge 等分支链空转跳过。
+    return [
+      ...makeTriageFlow({
+        runId: run.id,
+        requestId: `launch_${run.id}`,
+        ticket,
+        m2: new HttpTriageM2(),
+        kb: kbForTriage,
+        llm: LLM_MODE === "fake"
+          ? new FakeTriageLlm()
+          : new RealTriageLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:triage" })),
+        audit,
+      }),
+      ...caseChain(run.id),
+    ];
   };
 
 // 跨进程焚毁读口（票 34·G2-1 清偿）：生产装配把 M2 used_tokens 读口接进验票闸——

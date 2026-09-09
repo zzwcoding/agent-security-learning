@@ -58,9 +58,11 @@ test.each([
   // 错误码随之拆细——缺 kind 与缺入口参数分开报。
   // 票 18：chat_flow 已进白名单（吃 case_id+message，另有 message_required 校验），
   // 「未知 kind」样例换成永不入册的名字。
+  // 票 36：case_flow 进白名单（吃 case_id，与 knowledge_flow 同口径）。
   ["缺 kind", { alert_id: "al-1" }, "kind_required"],
   ["缺 alert_id", { kind: "alert_flow" }, "kind_and_alert_id_required"],
   ["未知 kind", { kind: "nope_flow", alert_id: "al-1" }, "unknown_kind"],
+  ["case_flow 缺 case_id", { kind: "case_flow" }, "case_id_required"],
 ])("%s → 400", async (_label, payload, error) => {
   const { app } = makeApp();
   const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
