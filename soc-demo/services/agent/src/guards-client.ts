@@ -80,3 +80,50 @@ function unreachable(failMode: "block" | "flag", reason: string): ScanDecision {
   }
   return { blocked: true, action: "fail_closed", reason };
 }
+
+// ---- 票 49（ADR 0004-3）：PII 受控反查的 guards 出站（/pii/reveal 转发半边）----
+// 与 scanInjection 同一套出站纪律（超时/错误分类收 outbound.ts，INV-1 fail-closed）：
+// 任何失败都收口成 {ok:false, reason}，绝不抛异常炸端点，也绝不编造原文。
+
+export type PiiRevealOutcome =
+  | { ok: true; placeholder: string; originals: string[] }
+  | { ok: false; reason: string };
+
+export interface PiiRevealOptions {
+  baseUrl?: string;
+  timeoutMs?: number;
+}
+
+/** 按占位符向 guards 反查原文。上游语义：404 = 映射表查无此人（unknown），
+ *  其它非 200 = guards 病了；响应形状不对也按病了算（guards_bad_shape）。 */
+export async function revealPii(
+  placeholder: string,
+  opts: PiiRevealOptions = {},
+): Promise<PiiRevealOutcome> {
+  const baseUrl = opts.baseUrl ?? process.env.GUARDS_URL ?? "http://guards:8001";
+  const timeoutMs = opts.timeoutMs ?? Number(process.env.GUARDS_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${baseUrl}/pii/reveal`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ placeholder }),
+      signal: timeoutSignal(timeoutMs),
+    });
+    if (res.status === 404) return { ok: false, reason: "placeholder_unknown" };
+    if (!res.ok) return { ok: false, reason: `guards_http_${res.status}` };
+    const data = (await res.json()) as { placeholder?: unknown; originals?: unknown };
+    if (
+      !Array.isArray(data.originals) ||
+      !data.originals.every((x) => typeof x === "string")
+    ) {
+      return { ok: false, reason: "guards_bad_shape" };
+    }
+    return {
+      ok: true,
+      placeholder: typeof data.placeholder === "string" ? data.placeholder : placeholder,
+      originals: data.originals,
+    };
+  } catch (e) {
+    return { ok: false, reason: outboundTimeoutReason("guards", isOutboundTimeout(e)) };
+  }
+}

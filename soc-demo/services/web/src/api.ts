@@ -247,6 +247,26 @@ export function findCaseIdByAlert(cases: CaseRow[], alertId: string): string | n
   return (cases.find((c) => c.linkedAlerts.includes(alertId)) ?? null)?.id ?? null;
 }
 
+// ---- m9 PII 受控反查（services/agent POST /api/v1/pii/reveal，票 49·ADR 0004-3）----
+// 链路：本页按钮（duty_lead/admin 可见）→ agent 端点（会话 + 角色白名单 + INV-8
+// 审计，details 只记命中条数不记原文）→ guards /pii/reveal（mapstore 反查）。
+
+export interface PiiReveal {
+  placeholder: string;
+  originals: string[];
+}
+
+export function revealPii(placeholder: string, token: string): Promise<PiiReveal> {
+  return request<Record<string, unknown>>("/api/v1/pii/reveal", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ placeholder }),
+  }).then((r) => ({
+    placeholder: typeof r.placeholder === "string" ? r.placeholder : placeholder,
+    originals: Array.isArray(r.originals) ? r.originals.map(String) : [],
+  }));
+}
+
 // ---- m11 Eval 产物（eval-results/latest.json；FR-M10.6 数据源）----
 // 拿法（记票口径）：vite 静态服务 eval-results 目录（vite.config.ts 插件），URL 与磁盘
 // 路径一致——m11 卡公开接口就是「产出 eval-results/latest.json」，Web 只读产物不加端点。

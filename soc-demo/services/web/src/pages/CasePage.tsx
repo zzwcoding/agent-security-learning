@@ -7,9 +7,10 @@
 // 动作意图会在对话里转审批卡，回流到本页时间线。
 import { Button, Drawer, Empty, Input, List, Select, Space, Spin, Tag, Timeline, Typography, message } from "antd";
 import { useCallback, useEffect, useState } from "react";
-import { findCaseIdByAlert, getCaseDetail, listApprovals, listCases, type CaseDetail, type CaseRow } from "../api";
+import { findCaseIdByAlert, getCaseDetail, listApprovals, listCases, revealPii, type CaseDetail, type CaseRow } from "../api";
 import { useAuth } from "../auth";
 import { applyChatFrame, EMPTY_TURN, streamChat, type ChatTurn } from "../chat";
+import { canRevealPii, findPlaceholders, revealErrorText } from "../reveal";
 import { assembleTimeline } from "../timeline";
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -38,6 +39,28 @@ export default function CasePage({ caseId, alertId }: { caseId?: string; alertId
   const [exchanges, setExchanges] = useState<ChatExchange[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+
+  // 票 49：反查结果按时间线条目就地展示（key → 人话行）。
+  const [reveals, setReveals] = useState<Record<string, string>>({});
+
+  // 票 49（ADR 0004-3）：脱敏占位符反查——把这条时间线里的每个 <TYPE> 占位符
+  // 经 agent 受控端点（会话 + 角色白名单 + INV-8 审计）反查回原文，就地展示。
+  // 服务端是权威闸，这里按钮可见性只是第一道收窄；结果只渲染给发起人自己。
+  const revealRow = async (key: string, body: string): Promise<void> => {
+    const placeholders = findPlaceholders(body);
+    if (!session || placeholders.length === 0) return;
+    try {
+      const results = await Promise.all(placeholders.map((p) => revealPii(p, session.token)));
+      setReveals((prev) => ({
+        ...prev,
+        [key]: results.map((r) => `${r.placeholder} → ${r.originals.join("、") || "（查无记录）"}`).join("；"),
+      }));
+    } catch (e) {
+      const text = revealErrorText(e);
+      setReveals((prev) => ({ ...prev, [key]: text }));
+      message.error(text);
+    }
+  };
 
   // 深链没带 case_id 时（#/cases 直接进 / 告警页 alert_id 反查）：拉案件列表兜底
   useEffect(() => {
@@ -162,6 +185,27 @@ export default function CasePage({ caseId, alertId }: { caseId?: string; alertId
                 {r.body && (
                   <pre style={{ margin: "4px 0 0", fontSize: 12, whiteSpace: "pre-wrap", maxWidth: 860 }}>
                     {r.body}
+                  </pre>
+                )}
+                {/* 票 49：文本里有占位符 + duty_lead/admin 登录才出反查入口（检测驱动，不猜） */}
+                {canRevealPii(session?.role) && findPlaceholders(r.body).length > 0 && (
+                  <Space size={6} style={{ marginTop: 4 }} wrap>
+                    <Button size="small" type="link" onClick={() => void revealRow(r.key, r.body)}>
+                      反查 PII
+                    </Button>
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      脱敏占位符反查（值班长/管理员，每次查询留审计）
+                    </Typography.Text>
+                  </Space>
+                )}
+                {reveals[r.key] && (
+                  <pre
+                    style={{
+                      margin: "4px 0 0", fontSize: 12, whiteSpace: "pre-wrap", maxWidth: 860,
+                      color: reveals[r.key].startsWith("反查失败") || reveals[r.key].includes("不可达") ? "#cf1322" : undefined,
+                    }}
+                  >
+                    {reveals[r.key]}
                   </pre>
                 )}
               </div>

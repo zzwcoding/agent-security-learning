@@ -85,6 +85,10 @@ services:
   guards:
     build: ./services/guards
     ports: ["8001:8001"]
+    # 票 49（ADR 0004-3）：PII mapstore（占位符→原文）落宿主盘——脱敏映射重启不丢，
+    # /pii/reveal 反查口才有粮。库文件缺省 data/pii-mapstore.sqlite（CWD=/app），
+    # 挂 ./data/guards:/app/data 同 case-backend/agent 卷口径（挂别处=重建丢映射）。
+    volumes: ["./data/guards:/app/data"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
       interval: 5s

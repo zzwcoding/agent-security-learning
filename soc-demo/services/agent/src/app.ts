@@ -16,6 +16,7 @@ import { TamperedCheckpointError } from "./envelope.js";
 import { NotFoundError, UnauthorizedError } from "./errors.js";
 import { MemoryAuditSink, type AuditSink } from "./audit.js";
 import { HttpMintClient, HttpTokenBurner, type MintClient, type TokenBurner, type UsedTokenReader } from "./token-ports.js";
+import { revealPii as httpRevealPii, type PiiRevealOutcome } from "./guards-client.js";
 import type { BurnRegistry } from "./verify-ticket.js";
 import { THIN_CHAT_FLOW } from "../workers/chat/flow.js";
 import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "../workers/chat/session.js";
@@ -78,6 +79,11 @@ export function buildApp(opts: {
    *  执行走后台消费循环）；false 关掉（测试要看「队列里等着」的确定性时刻）。
    *  intervalMs/concurrency/approvalTtlSeconds 缺省读 env（RUN_DISPATCH/APPROVAL_TTL_SECONDS）。 */
   dispatcher?: false | { intervalMs?: number; concurrency?: number; approvalTtlSeconds?: number };
+  /** 票 49（ADR 0004-3）：PII 反查的 guards 出站 seam（缺省 HTTP revealPii，
+   *  GUARDS_URL env；测试注入假件）。反查是人的动作不是工具调用——不走 FGA
+   *  工具闸（A.2 四族装不下「PII 反查」，票面记票交 L0 追认），走下面的端点级
+   *  角色白名单。 */
+  revealPii?: (placeholder: string) => Promise<PiiRevealOutcome>;
 } = {}) {
   const db = opts.db ?? openDb(":memory:");
   const audit = opts.audit ?? new MemoryAuditSink();
@@ -483,6 +489,58 @@ export function buildApp(opts: {
     decideApproval(db, id, decision, httpCtx(headers));
     enqueueRunJob(db, card.runId, "resume");
   }
+
+  // ---- 票 49（ADR 0004-3）：PII 受控反查口。全链：web（duty_lead/admin）→
+  // 本端点（会话验签 + 角色白名单 + INV-8 审计）→ guards /pii/reveal（mapstore）。
+  // 反查是人的动作不是工具调用：不走 FGA 工具闸（A.2 四族装不下「PII 反查」，
+  // 端点级白名单是裁决落法，票面记票交 L0 追认）——可见性即第一收窄（FR-M8.2
+  // 同款口径），web 只给这两个角色出按钮，这里的闸兜底。每查必审计（含被拒的查），
+  // 审计 details 只记命中条数、绝不记原文（敏感面金丝雀，INV-4 类推口径）。
+  const PII_REVEAL_ROLES: ReadonlySet<string> = new Set(["duty_lead", "admin"]);
+  app.post("/api/v1/pii/reveal", async (req, reply) => {
+    const key = sessionKey();
+    if (!key) return reply.status(503).send({ error: "hmac_key_missing" });
+    const h = req.headers.authorization;
+    const token = typeof h === "string" && h.startsWith("Bearer ") ? h.slice(7) : null;
+    const claims = token ? verifySession(token, key, Math.floor(Date.now() / 1000)) : null;
+    if (!claims) throw new UnauthorizedError();
+    const body = (req.body ?? {}) as { placeholder?: unknown };
+    const placeholder = typeof body.placeholder === "string" ? body.placeholder.trim() : "";
+    if (!placeholder) return reply.status(400).send({ error: "placeholder_required" });
+
+    const ctx = httpCtx(req.headers as Record<string, unknown>);
+    const auditReveal = (
+      result: "SUCCESS" | "FAILURE" | "DENIED",
+      details: Record<string, unknown>,
+    ): void => {
+      audit.record({
+        action: "pii_reveal",
+        actor: { type: "user", id: claims.sub },
+        objectId: placeholder,
+        objectType: "pii_placeholder",
+        details,
+        requestId: ctx.requestId,
+        result,
+        createdAt: Date.now(),
+      });
+    };
+
+    if (!PII_REVEAL_ROLES.has(claims.role)) {
+      auditReveal("DENIED", { reason: "role_forbidden", role: claims.role });
+      return reply.status(403).send({ error: "pii_reveal_forbidden" });
+    }
+    const outcome = await (opts.revealPii ?? httpRevealPii)(placeholder);
+    if (!outcome.ok) {
+      auditReveal("FAILURE", { reason: outcome.reason });
+      if (outcome.reason === "placeholder_unknown") {
+        return reply.status(404).send({ error: "placeholder_unknown" });
+      }
+      return reply.status(502).send({ error: "guards_unavailable" });
+    }
+    // 成功审计只记「谁查了占位符 X、命中几条」——查回的原文一个字节不进 details
+    auditReveal("SUCCESS", { match_count: outcome.originals.length });
+    return { placeholder, originals: outcome.originals };
+  });
 
   // m3 卡公开接口：GET /api/v1/events/stream?run_id=（SSE，INV-7）
   // 断线重连带 Last-Event-ID 头（EventSource 自动带）→ 按 id>cursor 补发，不丢不重。

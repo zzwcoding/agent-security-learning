@@ -61,7 +61,7 @@
    "id": "api",
    "type": "backend",
    "label": "FastAPI 入口",
-   "sublabel": ":8001 · /scan/injection + /pii/anonymize",
+   "sublabel": ":8001 · /scan/injection + /pii/anonymize + /pii/reveal",
    "pos": [
     390,
     271
@@ -136,7 +136,7 @@
    "id": "mapstore",
    "type": "database",
    "label": "脱敏映射表",
-   "sublabel": "服务端内存 · run 结束即弃",
+   "sublabel": "自持 sqlite · data/pii-mapstore.sqlite · 重启不丢",
    "pos": [
     660,
     480
@@ -145,7 +145,7 @@
     200,
     60
    ],
-   "tag": "不进审计"
+   "tag": "敏感面 · 不进日志/审计"
   }
  ],
  "boundaries": [
@@ -276,7 +276,7 @@
    "id": "presidio-to-mapstore",
    "from": "presidio",
    "to": "mapstore",
-   "label": "写映射（仅内存）",
+   "label": "写映射（落盘）",
    "fromSide": "bottom",
    "toSide": "right",
    "via": [
@@ -307,6 +307,24 @@
    "labelAt": [
     560,
     96
+   ]
+  },
+  {
+   "id": "api-to-mapstore-reveal",
+   "from": "api",
+   "to": "mapstore",
+   "label": "受控反查 /pii/reveal",
+   "fromSide": "bottom",
+   "toSide": "left",
+   "via": [
+    [
+     560,
+     510
+    ]
+   ],
+   "labelAt": [
+    610,
+    502
    ]
   }
  ],

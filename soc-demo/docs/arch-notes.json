@@ -292,8 +292,8 @@
     "body": "<p><b>干什么：</b>自定义识别器 Rfc1918ExemptIpRecognizer 挂载到 Presidio 注册表，替换内建 IpRecognizer：RFC1918 内网网段（10/172.16/192.168）白名单豁免——命中即从结果里滤掉。</p><ul><li><b>为什么（决策 #8）：</b>安全工具的世界里内网 IP 是分析线索不是隐私——脱了就没法干活</li><li><b>公网 IP 照脱：</b>外联 C2 检测要的正是外网地址本身</li></ul>"
   },
   "mapstore": {
-    "title": "脱敏映射表 —— 会话级内存",
-    "body": "<p><b>干什么：</b>占位符 ↔ 原文的映射，仅服务端内存保留，run 结束即弃。</p><ul><li><b>不进审计</b>：映射若落盘/进审计，脱敏就白做了（审计记参数 hash 不记原文）</li><li>演示可展示脱敏前后对照；误脱敏影响调查 → 接受（合规优先）</li></ul>"
+    "title": "脱敏映射表 —— 自持 sqlite 落盘（票 49）",
+    "body": "<p><b>干什么：</b>占位符 ↔ 原文的映射，guards 自持 SQLite（data/pii-mapstore.sqlite，compose 挂 data/ 卷）落盘保存，重启不丢。</p><ul><li><b>谁写</b>：/pii/anonymize 脱敏替换前，按实体 span 切原文，把 &lt;占位符, 原文&gt; 对旁路记进库（PRIMARY KEY 去重，同占位符多原文全收）</li><li><b>谁读</b>：/pii/reveal 受控反查口（票 49·ADR 0004-3）——反查是人的动作不是工具调用，角色闸在 agent 侧（duty_lead/admin 白名单 + INV-8 审计），guards 只管存与查</li><li><b>敏感面口径</b>（INV-4 类推）：原文只活在库里和授权反查的响应体，绝不进日志/审计 details/错误消息——审计只记「谁查了占位符 X、命中几条」，不记查回了什么</li></ul>"
   },
   "m12": {
     "title": "M12 MCP 体检 CLI —— 亮点清单小件",

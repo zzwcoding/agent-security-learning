@@ -23,6 +23,8 @@ from presidio_analyzer.predefined_recognizers import IpRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
 
+from pii_store import get_store
+
 # 五识别器契约实体（票 04 契约）：列表顺序即重叠优先级，靠前/更长者优先保留
 ENTITY_TYPES = ["EMAIL_ADDRESS", "CN_ID", "PHONE_NUMBER", "CREDIT_CARD", "IP_ADDRESS"]
 
@@ -94,10 +96,23 @@ def anonymize(text: str, language: str = "zh") -> dict:
 
     start/end 指向原文（照 PRD S4 契约示例）——取自 AnalyzerEngine 结果；
     替换用类型占位符 <TYPE>（FR-S4.1），交给 AnonymizerEngine 的 replace 算子。
+
+    票 49（ADR 0004-3）：替换前按实体 span 切原文，把 占位符→原文 对旁路记进
+    mapstore（pii_store，自持 sqlite 落盘，重启不丢）——这是受控反查口
+    /pii/reveal 的粮仓。响应形状一尘不动（票 32 形状锁精神）；落盘失败让
+    异常炸出去（fail-closed）：脱敏了却不留映射 = 反查口开空头支票，不如报错。
     """
     analyzer, anonymizer = _engines()
     results = analyzer.analyze(text=text, language="en", entities=ENTITY_TYPES)
     results = _drop_overlaps(results)
+    get_store().record([
+        {
+            "placeholder": f"<{r.entity_type}>",
+            "original": text[r.start:r.end],
+            "entity_type": r.entity_type,
+        }
+        for r in results
+    ])
     out = anonymizer.anonymize(
         text=text,
         analyzer_results=results,

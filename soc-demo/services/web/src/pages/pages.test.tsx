@@ -471,6 +471,76 @@ describe("CasePage", () => {
 
     await waitFor(() => expect(screen.getByText(/查了 ssh 爆破 日志/)).toBeTruthy());
   });
+
+  // 票 49：脱敏占位符的反查入口——文本里有 <TYPE> 占位符 + duty_lead/admin 登录，
+  // 才出「反查 PII」按钮；点击带会话 Bearer 调 agent 端点，原文就地渲染。
+  const PII_DETAIL = {
+    ...DETAIL,
+    timeline: [
+      ...DETAIL.timeline,
+      {
+        id: "t3", case_id: "case_000001", kind: "investigation_report", author: "agent:investigation",
+        body: "告警涉及邮箱 <EMAIL_ADDRESS> 与手机 <PHONE_NUMBER>，建议人工核实。",
+        structured: null, created_at: 400,
+      },
+    ],
+  };
+
+  function mockCaseData(): void {
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u === "/api/v1/cases") return Promise.resolve(jsonRes2(200, [PII_DETAIL]));
+      if (u === "/api/v1/cases/case_000001") return Promise.resolve(jsonRes2(200, PII_DETAIL));
+      if (u === "/api/v1/approvals") return Promise.resolve(jsonRes2(200, { approvals: [] }));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+  }
+
+  it("duty_lead 对含占位符的时间线看到反查按钮；点击带 Bearer 反查并就地显示原文", async () => {
+    primeRoleSession("duty_lead", "duty_lead@soc.local", "值班长（SOC2+）");
+    mockCaseData();
+    render(
+      <AuthProvider>
+        <CasePage caseId="case_000001" />
+      </AuthProvider>,
+    );
+    const btn = await screen.findByRole("button", { name: "反查 PII" });
+    expect(btn).toBeTruthy();
+    // 没有占位符的普通条目不出按钮（检测驱动，不猜）
+    expect(screen.getAllByRole("button", { name: "反查 PII" })).toHaveLength(1);
+
+    const originals: Record<string, string> = {
+      "<EMAIL_ADDRESS>": "zhangsan@example.com",
+      "<PHONE_NUMBER>": "13812345678",
+    };
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u === "/api/v1/pii/reveal") {
+        expect(init!.headers).toMatchObject({ authorization: "Bearer a.b" });
+        const { placeholder } = JSON.parse(String(init!.body)) as { placeholder: string };
+        return Promise.resolve(jsonRes2(200, { placeholder, originals: [originals[placeholder]] }));
+      }
+      if (u === "/api/v1/cases") return Promise.resolve(jsonRes2(200, [PII_DETAIL]));
+      if (u === "/api/v1/cases/case_000001") return Promise.resolve(jsonRes2(200, PII_DETAIL));
+      if (u === "/api/v1/approvals") return Promise.resolve(jsonRes2(200, { approvals: [] }));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+    fireEvent.click(btn);
+    await screen.findByText(/<EMAIL_ADDRESS> → zhangsan@example.com/);
+    expect(screen.getByText(/<PHONE_NUMBER> → 13812345678/)).toBeTruthy();
+  });
+
+  it("soc1 看不到反查按钮（可见性即第一收窄；闸兜底在 agent 端点）", async () => {
+    primeRoleSession("soc1", "soc1@soc.local", "SOC1 分析师");
+    mockCaseData();
+    render(
+      <AuthProvider>
+        <CasePage caseId="case_000001" />
+      </AuthProvider>,
+    );
+    await screen.findByText(/case created from alert al_1/);
+    expect(screen.queryByRole("button", { name: "反查 PII" })).toBeNull();
+  });
 });
 
 describe("EvalPage", () => {
