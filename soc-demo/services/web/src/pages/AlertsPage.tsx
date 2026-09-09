@@ -21,7 +21,9 @@ const STATUS_COLORS: Record<string, string> = {
   Closed: "default",
 };
 
-const VERDICT_COLORS: Record<string, string> = {
+// 票 31：导出供 sse-verdict-contract.test.ts 锁键集——覆盖 fixtures/verdicts.json 的
+// m2_verdicts 全集 + tri 短别名（新结局没配色、或混进错别字键，契约测试必红）。
+export const VERDICT_COLORS: Record<string, string> = {
   false_positive: "default",
   benign_true_positive: "green",
   true_positive: "red",

@@ -1,0 +1,28 @@
+{
+  "contract_version": 1,
+  "source": "PRD §6-M3 事件闭合枚举 · §6-M8 对话 wire 契约（票 31 双端契约锁，体检对账三-14 / 结构-3：三份手抄已漂移过一次）",
+  "event_types": [
+    "node_enter",
+    "node_exit",
+    "tool_call",
+    "tool_result",
+    "approval_required",
+    "approval_decided",
+    "audit",
+    "error",
+    "token",
+    "denied",
+    "done"
+  ],
+  "event_types_note": "agent 落盘事件总线（services/agent/src/events.ts formatSse）产出的全集；web（services/web/src/sse.ts）按类型 addEventListener 消费。两端测试各读本表断言自己的本地名单——谁改名单不改本表、或改了本表对端没跟，必有一端红。",
+  "chat_wire_types": [
+    "token",
+    "tool_call",
+    "tool_result",
+    "approval_required",
+    "approval_decided",
+    "denied",
+    "done"
+  ],
+  "chat_wire_types_note": "POST /api/v1/chat 的 SSE 只出对话语义帧（services/agent/src/app.ts CHAT_WIRE_TYPES 过滤子集，⊆ event_types）；node_enter/node_exit/audit 是流水线视图帧，对话流里是噪声。"
+}

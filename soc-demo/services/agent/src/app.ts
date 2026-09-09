@@ -32,6 +32,14 @@ const RUN_KINDS = new Set(["alert_flow", "knowledge_flow", "chat_flow"]);
 // 吃 case_id（无 alert）的 kind：alert_flow 之外的两种
 const CASE_KINDS = new Set(["knowledge_flow", "chat_flow"]);
 
+// chat 流的 SSE wire 只出对话语义帧（PRD §6-M8 的 data.type 枚举 + 审批过程可见）；
+// node_enter/node_exit/audit 是流水线视图的帧（/events/stream 原样给全量），对话流里
+// 是噪声。票 31：本子集 ⊆ SSE_EVENT_TYPES（events.ts）这一事实由 sse-contract.test.ts
+// 对 fixtures/sse-events.json 锁死——改名单先改样品，两端测试各自咬住对端。
+export const CHAT_WIRE_TYPES = new Set([
+  "token", "tool_call", "tool_result", "approval_required", "approval_decided", "denied", "done",
+]);
+
 // 每-kind 的任务票规格（FR-M3.4 worker 拉起即申领最小 scope 票；INV-3：票面永不含 L2
 // ——kb_write 不在 knowledge 的 allowed_tools 里，L2 走审批卡铸 ApprovalToken）。
 const TICKET_SPECS: Record<string, { sub: string; scope: string[]; allowedTools: string[] }> = {
@@ -196,11 +204,7 @@ export function buildApp(opts: {
   // 挂起（require_approval 等审批）的流以 approval_required 帧收尾，客户端转
   // GET /events/stream?run_id= 续听（INV-7 补发语义同一张落盘总线）。
   //
-  // wire 只出对话语义帧（PRD §6-M8 的 data.type 枚举 + 审批过程可见）；node_enter/
-  // node_exit/audit 是流水线视图的帧（/events/stream 原样给全量），对话流里是噪声。
-  const CHAT_WIRE_TYPES = new Set([
-    "token", "tool_call", "tool_result", "approval_required", "approval_decided", "denied", "done",
-  ]);
+  // wire 过滤名单 CHAT_WIRE_TYPES 挪到模块顶层（票 31：词表要能被契约测试 import）。
   app.post("/api/v1/chat", async (req, reply) => {
     const key = sessionKey();
     if (!key) return reply.status(503).send({ error: "hmac_key_missing" });

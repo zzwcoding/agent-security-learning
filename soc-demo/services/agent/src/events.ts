@@ -8,18 +8,16 @@ import type { DB } from "./db.js";
 // PRD §6-M3 事件类型闭合枚举（Web 消费方靠它渲染流水线视图/审批卡/审计流）。
 // 票 18 追加 chat 三型（PRD §6-M8 对话 wire 契约：token/done/denied）——同一张落盘
 // 总线，对话流因此同样有自增 id 与 Last-Event-ID 补发（INV-7 原样继承）。
-export type SseEventType =
-  | "node_enter"
-  | "node_exit"
-  | "tool_call"
-  | "tool_result"
-  | "approval_required"
-  | "approval_decided"
-  | "audit"
-  | "error"
-  | "token"
-  | "denied"
-  | "done";
+// 票 31：枚举落成运行时数组、类型从数组推导——agent 侧值域只有这一份；web 的
+// SSE_EVENT_TYPES 是手抄副本，两端由 sse-contract.test.ts 对 fixtures/sse-events.json
+// 共读锁死（改名单先改样品，对端测试必红）。
+export const SSE_EVENT_TYPES = [
+  "node_enter", "node_exit", "tool_call", "tool_result",
+  "approval_required", "approval_decided", "audit", "error",
+  "token", "denied", "done",
+] as const;
+
+export type SseEventType = (typeof SSE_EVENT_TYPES)[number];
 
 export interface RunEvent {
   id: number;

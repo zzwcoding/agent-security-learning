@@ -1,0 +1,14 @@
+{
+  "contract_version": 1,
+  "source": "PRD §5.1 verdict 枚举 · §6-M4 输出契约（票 31 跨服务契约锁，体检结构-4：四处各持）",
+  "tri_verdicts": ["fp", "btp", "tp", "uncertain"],
+  "tri_verdicts_note": "triage worker 的 LLM 输出四分类缩写：workers/triage/prompt.ts TriVerdict（映射键）与 schema.ts VERDICT_VALUES（parseVerdict 把关值域）；web AlertsPage VERDICT_COLORS 的短别名也取自这里。",
+  "to_m2_verdict": {
+    "fp": "false_positive",
+    "btp": "benign_true_positive",
+    "tp": "true_positive",
+    "uncertain": "uncertain"
+  },
+  "m2_verdicts": ["false_positive", "benign_true_positive", "true_positive", "uncertain"],
+  "m2_verdicts_note": "M2 store（services/case-backend/src/store.ts VERDICTS）写回放行的合法值域；agent TO_M2_VERDICT 值域 ⊆ 本表、web 颜色映射必须全覆盖本表。case-backend 与 agent/web 互不 import 源码（边界规则 R1），本表是三端共读的唯一通道。"
+}
