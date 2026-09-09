@@ -1206,7 +1206,7 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 
 以下三条由阶段 0.4（C5 拆件盘点 spike，ADR 0001）引发，经用户拍板。**不改变 §12 六条已冻结决策**；正文 §4.1/§9.2/M6 的冲突描述以本记录为准：
 
-1. **Langfuse 砍出默认路径**：审计主链路走 M2 AuditEntry（§5.6 本就覆盖"谁做了什么"）；Langfuse 自托管依赖栈（postgres+clickhouse+valkey+minio）违反"一键可起"水位线，降为可选 compose profile `observability`，不进默认启动。§9.2 可观测口径相应以 AuditEntry + SSE 审计流为准。
+1. **Langfuse 砍出默认路径**：审计主链路走 M2 AuditEntry（§5.6 本就覆盖"谁做了什么"）；Langfuse 自托管依赖栈（postgres+clickhouse+valkey+minio）违反"一键可起"水位线，降为可选 compose profile `observability`，不进默认启动。§9.2 可观测口径相应以 AuditEntry + SSE 审计流为准。（票 37 落地：v2 单镜像+postgres 挂 profile；agent 侧 LANGFUSE_* env 开关的 fire-and-forget 镜像旁路，key 不配零开销）
 2. **microsandbox 保留，改挂 M6**：C5 组件清单中 microsandbox 不删，但保护对象从"shell/fetch 执行面"（本 demo 不存在）改为 **M6 富化的 analyzer 沙箱运行时**——analyzer 按 Cortex 真实架构以可执行脚本形态存在，每次富化在一次性 microVM 里真跑。
 3. **M6 升级为半真模块**：mock analyzer 中至少一个改为沙箱内真跑脚本；新增攻击面"投毒/被污染 analyzer 逃逸与外联"作为红队演示的第四攻击面（教学场景，路线 2 的逃逸/egress/密钥不可见攻击验收迁移至此）。M6 的功能点表与验收标准在阶段 B 模块规格中细化。
 4. **Alert 增加 `occurrences` 计数字段**（2026-09-04 用户提出）：重复推送同 `(source, sourceRef)` 告警时 `occurrences` +1 并刷新 `lastSeen`，仍不新建不重复触发流水线。对齐真实 SIEM 的"重复计数即信号"实践；TheHive 原行为（直接返回既有 id）保留。

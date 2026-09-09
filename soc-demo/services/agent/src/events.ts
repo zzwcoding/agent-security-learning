@@ -29,6 +29,15 @@ export interface RunEvent {
 
 const nowMs = () => Date.now();
 
+// 票 37：可选旁路 tap（Langfuse 镜像用）。默认 null = emitEvent 与今日逐字节一致
+// （ADR 0001 默认链路零改动的硬验收）；index.ts 只在三把 LANGFUSE_* env 钥匙齐时挂上。
+// tap 病了不传染主链路：调用包在 try 里，旁路永远只是事件流的读者不是闸。
+export type EventTap = (e: RunEvent) => void;
+let eventTap: EventTap | null = null;
+export function setEventTap(tap: EventTap | null): void {
+  eventTap = tap;
+}
+
 /** 发事件 = 插一行拿全局自增 id（INV-7 的「自增 id 落盘」）。 */
 export function emitEvent(
   db: DB,
@@ -40,7 +49,15 @@ export function emitEvent(
   const res = db
     .prepare("INSERT INTO run_events (run_id, type, payload, created_at) VALUES (?, ?, ?, ?)")
     .run(runId, type, JSON.stringify(payload), createdAt);
-  return { id: Number(res.lastInsertRowid), runId, type, payload, createdAt };
+  const event: RunEvent = { id: Number(res.lastInsertRowid), runId, type, payload, createdAt };
+  if (eventTap) {
+    try {
+      eventTap(event);
+    } catch {
+      // 旁路崩了不许拖垮落库主链路：吞掉，tap 实现自己负责把错记到自己的日志里
+    }
+  }
+  return event;
 }
 
 /** 补发查询：该 run 里 id > after 的事件，严格按 id 递增（INV-7 的「Last-Event-ID 补发」）。 */

@@ -1,5 +1,5 @@
 # SOC 数字员工 · 单机编排（PRD §4.1 组件清单 C1-C7；eval/MCP CLI 不进 compose）
-# 端口规划：ingest 3001 / case-backend 3002 / agent 3003 / web 5173 / guards 8001 / gateway 8002 / chroma 8000 / contextforge 4444 / openfga 18080(宿主)
+# 端口规划：ingest 3001 / case-backend 3002 / agent 3003 / web 5173 / guards 8001 / gateway 8002 / chroma 8000 / contextforge 4444 / openfga 18080(宿主) / langfuse 13000(宿主，可选)
 # 健康检查一律用 127.0.0.1 不用 localhost：alpine 镜像里 localhost 优先解析 ::1，服务只绑 IPv4 会被误判挂掉
 services:
   ingest:
@@ -19,7 +19,8 @@ services:
   case-backend:
     build: { context: ., dockerfile: services/case-backend/Dockerfile }
     ports: ["3002:3002"]
-    volumes: ["./data/case-backend:/data"]
+    # 库文件解析到 /app/data（index.ts 的 ../../../data/），必须挂这里；挂别处=每次重建丢数据
+    volumes: ["./data/case-backend:/app/data"]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/healthz"]
       interval: 5s
@@ -55,6 +56,11 @@ services:
       FGA_API_URL: ${FGA_API_URL:-http://openfga:8080}
       FGA_IDS_FILE: ${FGA_IDS_FILE:-/fga/fga_ids.json}
       FGA_MATRIX_FILE: ${FGA_MATRIX_FILE:-/fga-matrix/matrix.json}
+      # 票 37（ADR 0001）：Langfuse 可选旁路（profile observability）——key 双空 = 旁路
+      # 不启用（零开销，默认链路零改动）；.env 配上 key + 开 profile 才镜像 trace
+      LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
+      LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
+      LANGFUSE_HOST: ${LANGFUSE_HOST:-http://langfuse:3000}
     volumes:
       - "./services/gateway/plugins:/fga:ro" # store/model id 与 contextforge 插件同源一份
       - "./services/gateway/fga:/fga-matrix:ro" # matrix.json = 可见工具清单的单一来源
@@ -164,6 +170,68 @@ services:
       agent: { condition: service_healthy } # 登录/流水线 SSE（FR-M10.2）
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  # ── 票 37（ADR 0001 承诺兑现）：Langfuse 可选观测 profile ─────────────────
+  # 默认一键启动不含这两个服务（九服务拓扑不变，验收②），`docker compose --profile
+  # observability up -d` 才起。v2 单镜像 + postgres（v3 依赖栈 postgres+clickhouse+
+  # valkey+minio 违反「一键可起」水位线——PRD v1.1 变更 1 原文口径）。官方镜像按
+  # index digest 钉（= v2.95.11 / postgres 17-alpine，2026-09-09 arm64 本地实测）。
+  # 票 26 出入备案：[26-1] 常设口径钉 arm64 子 manifest，是 ghcr+containerd store 的
+  # 实证限制；Docker Hub 的 index digest 本机 daemon 实证可 pull 且 CI amd64 同用一枚
+  # （子 manifest 跨 arch 反而拉不动），故此处钉 index，升级跟踪照 [26-2] 以 index
+  # digest 前进为准。
+  langfuse:
+    image: langfuse/langfuse@sha256:85c278dcab96c15db94191a5c1664f85aba2d7fb6771a00e99681c902c4b7015
+    profiles: ["observability"]
+    # 宿主侧 13000：3000 是高频占用口（React/Next dev 默认口），同 openfga 18080 处理；
+    # 容器网络内仍是 3000，agent 侧默认 LANGFUSE_HOST=http://langfuse:3000
+    ports: ["13000:3000"]
+    environment:
+      DATABASE_URL: postgresql://langfuse:langfuse@langfuse-db:5432/langfuse
+      NEXTAUTH_URL: http://localhost:13000
+      # 教学假值当金丝雀（contextforge JWT_SECRET_KEY 同口径）：可跑通全链路，真部署
+      # 由部署环境注入，绝不放真密钥进仓库。ENCRYPTION_KEY 必须长期固定——换了它，
+      # 数据卷里已存的项目 API key 解不开（-langfuse 起不来）
+      NEXTAUTH_SECRET: "teaching-nextauth-secret-do-not-use-in-prod"
+      SALT: "teaching-salt-do-not-use-in-prod"
+      ENCRYPTION_KEY: "4ca0c2593e5012947049e369f6ba86f620a1a8ce4b245b409eb21ab07572fb46"
+      TELEMETRY_ENABLED: "false" # 离线纪律：遥测不出网
+      # 首启自动种组织/项目/用户 + 固定 API key（教学假 key，与 .env.example/冒烟脚本同串）：
+      # 免手点 UI 建 key，agent 侧旁路与 trace 查询开箱即用
+      LANGFUSE_INIT_ORG_ID: "local-demo"
+      LANGFUSE_INIT_ORG_NAME: "local-demo"
+      LANGFUSE_INIT_PROJECT_ID: "local-demo"
+      LANGFUSE_INIT_PROJECT_NAME: "local-demo"
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: "pk-lf-local-demo"
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: "sk-lf-local-demo"
+      LANGFUSE_INIT_USER_EMAIL: "demo@soc-demo.local"
+      LANGFUSE_INIT_USER_NAME: "demo"
+      LANGFUSE_INIT_USER_PASSWORD: "teaching-demo-pass-not-for-prod"
+    depends_on:
+      langfuse-db: { condition: service_healthy }
+    healthcheck:
+      # 官方镜像没有 wget/curl（debian slim + node），用镜像自带的 node 发探活
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/public/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s # 首启要跑 DB 迁移，慢是正常的
+
+  langfuse-db:
+    # postgres:17-alpine（官方 v2 compose 同款大版本）按 index digest 钉，口径见上
+    image: postgres@sha256:18cfe3ef5e6815560c98237d6216d1e5119702fb0f3894c8785dd58b8bbe5d73
+    profiles: ["observability"]
+    # 不映射宿主端口：只有 langfuse 容器内网要用（少占一个宿主口；排障 docker exec 进去）
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_PASSWORD: langfuse # 教学假值：端口不出宿主机，数据卷不外流
+      POSTGRES_DB: langfuse
+    volumes: ["./data/langfuse-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U langfuse"]
       interval: 5s
       timeout: 3s
       retries: 12

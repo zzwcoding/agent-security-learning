@@ -1,4 +1,6 @@
 import { HttpAuditSink } from "./audit.js";
+import { makeLangfuseMirror, TeeAuditSink } from "./langfuse.js";
+import { setEventTap } from "./events.js";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
@@ -79,7 +81,14 @@ const LLM_MODE = process.env.AGENT_LLM ?? "real";
 // 不阻塞业务，只打结构化日志 warn=audit_ingest_failed（审计通道病了 ≠ 业务失败；
 // fail-closed 口径若被 L0 推翻，换一行装配回 ConsoleAuditSink/补偿式 adapter）。
 // SSE 里的 audit 镜像事件（run_events 落盘）照旧，是同一 INV-8 的另一个可观察面。
-const audit = new HttpAuditSink();
+const m2Audit = new HttpAuditSink();
+// 票 37（ADR 0001 承诺兑现）：Langfuse 可选旁路——三把 env 钥匙（LANGFUSE_PUBLIC_KEY/
+// SECRET_KEY/HOST）齐了才镜像：事件经 setEventTap 挂旁路、审计经 TeeAuditSink 一弦两
+// sink（M2 真相源在前）。key 缺 = lfMirror 为 null，tap 不挂、audit 是原来的单 sink，
+// 与本票之前逐字节一致（默认链路零改动是硬验收；容器在不在不归这里管）。
+const lfMirror = makeLangfuseMirror();
+if (lfMirror) setEventTap((e) => lfMirror.onEvent(e));
+const audit = lfMirror ? new TeeAuditSink([m2Audit, lfMirror]) : m2Audit;
 // approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
 // 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
 const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : undefined;

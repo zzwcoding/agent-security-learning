@@ -24,7 +24,7 @@
 
 ## 两个暴露出来的范围问题（2026-09-04 用户已拍板）
 
-- **Langfuse 砍出默认路径**：审计主链路走 M2 AuditEntry；Langfuse 降为可选 compose profile `observability`，不进默认一键启动。**已确认。**
+- **Langfuse 砍出默认路径**：审计主链路走 M2 AuditEntry；Langfuse 降为可选 compose profile `observability`，不进默认一键启动。**已确认。**（2026-09-09 票 37 兑现：compose `langfuse`+`langfuse-db` 双服务挂 profile；agent 侧 LANGFUSE_* env 三钥匙可选镜像旁路）
 - **microsandbox 保留，改挂 M6**：用户决定不砍——M6 富化升级为"analyzer 沙箱运行时"（Cortex 真实架构：analyzer 是可执行代码，在一次性 microVM 里跑），攻击面改为刻意布置的教学场景（投毒 analyzer 逃逸/外联被拦）。**已确认，方案 A。**
 
 ## 后果

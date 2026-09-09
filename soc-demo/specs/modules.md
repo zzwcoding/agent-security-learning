@@ -377,7 +377,7 @@
 - `contextforge`（官方镜像，替代 gateway 占位 FastAPI 的 RBAC/渠道面；自写插件挂载）
 - gateway 服务形态 = **三个容器并排**（2026-09-04 用户拍板）：`contextforge` 镜像（RBAC/渠道面）+ `openfga` 镜像（FGA 裁决）+ 自写小 FastAPI（铸币 `POST /internal/mint` + 凭证代理 `/proxy/llm/*`，proxy.py 近乎原样可用）。自写件不动镜像内部，排障简单
 - `microsandbox`：不是常驻服务，按需拉起一次性 microVM（M6 调用时创建）
-- Langfuse：**不进默认 compose**（v1.1 变更 1），可选 profile `observability`
+- Langfuse：**不进默认 compose**（v1.1 变更 1），可选 profile `observability`（票 37 落地：`langfuse`+`langfuse-db` 双服务，v2 镜像按 digest 钉）
 
 ## 3. 明确砍掉/不做的
 

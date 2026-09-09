@@ -17,6 +17,20 @@ pnpm replay                   # 告警 fixture 走 ingest webhook 正门（同 w
 `AGENT_LLM=fake`（离线确定性）或 `real` + `SECRETS_LLM_API_KEY=…`（真出站，key 只挂
 gateway，票 27）。演示动线：PRD §8 六幕剧本。
 
+### 可选：Langfuse 观测 profile（票 37，ADR 0001 拍板不进默认启动）
+
+```bash
+docker compose --profile observability up -d langfuse   # v2 镜像 + postgres，宿主 13000
+# .env 追加两行并重启 agent（key 空 = 镜像旁路不启用，默认链路零改动）：
+#   LANGFUSE_PUBLIC_KEY=pk-lf-local-demo
+#   LANGFUSE_SECRET_KEY=sk-lf-local-demo
+docker compose up -d agent && pnpm replay
+```
+
+打开 http://localhost:13000（demo@soc-demo.local / teaching-demo-pass-not-for-prod）看
+run trace 时间线；每个 run 一条 trace，SSE 事件与审计五要素镜像为观察条目。
+真容器冒烟：`bash scripts/langfuse-smoke-37.sh`。
+
 ## 文档地图
 
 - PRD v1.1（冻结+变更记录）：`../deliverables/route5/product-handbook.md`
