@@ -451,3 +451,90 @@ test("REST POST /api/v1/alerts：新建 201 dedup=false，重复 200 dedup=true�
   expect(again.json().alert.id).toBe(first.json().alert.id);
   await app.close();
 });
+
+// ---------- 票 35（FR-S5「两路汇入同一 audit_entries 表」）：/internal/audit 写口 ----------
+// worker（agent HttpAuditSink）与 ingest（webhook FAILURE）的审计条目经这条内部口汇入
+// 审计真相源；五要素结构与 M2 自身 recordAudit 同形（INV-8），查询面不加区分。
+
+test("POST /internal/audit：FAILURE 五要素条目落 audit_entries，GET /api/v1/audit 可查", async () => {
+  const { app } = makeApp();
+  const res = await inject(app, "POST", "/internal/audit", {
+    action: "ingest",
+    actor: { type: "system", id: "m1:ingest" },
+    object_id: "webhook-req-35X",
+    object_type: "ingest_request",
+    details: { reasons: ["rule.id_missing"] },
+    request_id: "req-35-ingest-1",
+    result: "FAILURE",
+  });
+  expect(res.statusCode).toBe(201);
+  expect(res.json()).toMatchObject({
+    action: "ingest",
+    actor: { type: "system", id: "m1:ingest" },
+    objectId: "webhook-req-35X",
+    objectType: "ingest_request",
+    details: { reasons: ["rule.id_missing"] },
+    requestId: "req-35-ingest-1",
+    result: "FAILURE",
+  });
+  expect(typeof res.json().createdAt).toBe("number");
+  // 汇入的是同一张表：查询面按 requestId 能查到，形状与 M2 自身审计行一致
+  const list = await inject(app, "GET", "/api/v1/audit?requestId=req-35-ingest-1");
+  expect(list.statusCode).toBe(200);
+  expect(list.json()).toHaveLength(1);
+  expect((list.json() as { result: string }[])[0].result).toBe("FAILURE");
+  await app.close();
+});
+
+test("POST /internal/audit：DENIED 结果原样入账（worker DENIED 审计汇入，票 21-② 线头）", async () => {
+  const { app } = makeApp();
+  const res = await inject(app, "POST", "/internal/audit", {
+    action: "guards_block",
+    actor: { type: "agent", id: "agent:triage" },
+    object_id: "run-35X",
+    object_type: "run",
+    details: { reason: "injection_blocked" },
+    request_id: "req-35-denied",
+    result: "DENIED",
+  });
+  expect(res.statusCode).toBe(201);
+  expect(res.json().result).toBe("DENIED");
+  await app.close();
+});
+
+test("POST /internal/audit：result 缺省 SUCCESS、details 缺省 {}（薄口不逼调用方带全字段）", async () => {
+  const { app } = makeApp();
+  const res = await inject(app, "POST", "/internal/audit", {
+    action: "login",
+    actor: { type: "user", id: "soc1@soc.local" },
+    object_id: "ses-35X",
+    object_type: "session",
+    request_id: "req-35-default",
+  });
+  expect(res.statusCode).toBe(201);
+  expect(res.json().result).toBe("SUCCESS");
+  expect(res.json().details).toEqual({});
+  await app.close();
+});
+
+test("POST /internal/audit：缺必填字段 / result 白名单外 → 400 invalid_audit", async () => {
+  const { app } = makeApp();
+  const missing = await inject(app, "POST", "/internal/audit", {
+    action: "ingest",
+    object_type: "ingest_request",
+    request_id: "req-35-bad",
+  });
+  expect(missing.statusCode).toBe(400);
+  expect(missing.json().error).toBe("invalid_audit");
+  const badResult = await inject(app, "POST", "/internal/audit", {
+    action: "ingest",
+    actor: { type: "system", id: "m1:ingest" },
+    object_id: "x",
+    object_type: "ingest_request",
+    request_id: "req-35-bad2",
+    result: "MAYBE",
+  });
+  expect(badResult.statusCode).toBe(400);
+  expect(badResult.json().error).toBe("invalid_audit");
+  await app.close();
+});

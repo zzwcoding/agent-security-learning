@@ -51,6 +51,7 @@ const FACET_LABELS: Record<string, string> = {
   behavior_gate: "行为兜底 403/无票",
   review_reject: "人审驳回 D8",
   sandbox_boundary: "沙箱边界",
+  credential_boundary: "凭证边界 INV-4", // 票 35：m9 金丝雀（SECRETS 值不落持久面）
 };
 
 export interface FacetCount {

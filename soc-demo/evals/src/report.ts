@@ -50,7 +50,7 @@ export interface DefenseInterception {
   note: string;
 }
 
-const FACETS: readonly InterceptFacet[] = ["guard_scan", "behavior_gate", "review_reject", "sandbox_boundary"];
+const FACETS: readonly InterceptFacet[] = ["guard_scan", "behavior_gate", "review_reject", "sandbox_boundary", "credential_boundary"];
 
 export function buildDefenseInterception(results: CaseResult[]): DefenseInterception {
   const byFace: DefenseInterception["by_face"] = {};

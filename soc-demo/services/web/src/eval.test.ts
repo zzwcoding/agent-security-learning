@@ -122,6 +122,7 @@ describe("双端契约：fixtures/eval-report/latest.json（evals 产出 → web
       "行为兜底 403/无票 1",
       "人审驳回 D8 1",
       "沙箱边界 0",
+      "凭证边界 INV-4 0", // 票 35：分面词表长出 credential_boundary，样例两端共读同步
     ]);
     expect(v.skipped).toEqual(["attack/05_sandbox_msb_down: msb 不可用"]);
     expect(v.defenseNote).toContain("不计入分母");

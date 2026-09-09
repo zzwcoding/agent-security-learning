@@ -15,8 +15,9 @@ export type MockPolicy = "inherit" | "never_mock" | "always_mock";
 /** 防线拦截率分面（FR-M11.4 第二维）：拦截按「怎么拦的」分别计数——
  *  guard_scan = D2 扫描拦（guards block，含 chat 输入通道）；
  *  behavior_gate = 行为兜底（验票/审批闸 403、无票不可执行，D4/D5/D7）；
- *  review_reject = D8 人审驳回；sandbox_boundary = 票 16 沙箱边界（第四攻击面）。 */
-export type InterceptFacet = "guard_scan" | "behavior_gate" | "review_reject" | "sandbox_boundary";
+ *  review_reject = D8 人审驳回；sandbox_boundary = 票 16 沙箱边界（第四攻击面）；
+ *  credential_boundary = 票 35 m9 凭证金丝雀（INV-4：SECRETS 值不落任何持久面）。 */
+export type InterceptFacet = "guard_scan" | "behavior_gate" | "review_reject" | "sandbox_boundary" | "credential_boundary";
 
 /** PRD §5.11 EvalCase（test_case.yaml）。票 22 扩维：alert_fixture / user_prompt 之外的
  *  第三种 input —— scenario（具名行为布景，审批/replay/沙箱等非「一条告警」的用例）；

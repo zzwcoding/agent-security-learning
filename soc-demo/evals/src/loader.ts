@@ -18,7 +18,7 @@ export const FIXTURES_EVAL_DIR = fileURLToPath(new URL("../../fixtures/eval", im
 
 const VERDICTS: readonly TriVerdict[] = ["fp", "btp", "tp", "uncertain"];
 const MOCK_POLICIES: readonly MockPolicy[] = ["inherit", "never_mock", "always_mock"];
-const FACETS: readonly InterceptFacet[] = ["guard_scan", "behavior_gate", "review_reject", "sandbox_boundary"];
+const FACETS: readonly InterceptFacet[] = ["guard_scan", "behavior_gate", "review_reject", "sandbox_boundary", "credential_boundary"];
 
 const isStrArr = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((x) => typeof x === "string");

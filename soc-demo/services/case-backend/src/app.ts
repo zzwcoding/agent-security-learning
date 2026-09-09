@@ -18,6 +18,7 @@ import {
   getAlert,
   getCaseDetail,
   ingestAlert,
+  ingestAuditEntry,
   listAlerts,
   listCases,
   listTimeline,
@@ -291,6 +292,42 @@ export function buildApp(opts: { db?: DB } = {}) {
     const hit = lookupUsedToken(db, (req.params as { jti: string }).jti);
     if (!hit) return reply.status(404).send({ error: "not_found" });
     return hit;
+  });
+
+  // 票 35（FR-S5 两路汇入）：跨服务审计写口（内部面先例 /internal/used-tokens、/internal/mint）。
+  // agent HttpAuditSink 与 ingest webhook FAILURE 把五要素条目 POST 进来，落 audit_entries
+  // 真相源（INV-8）。M2 信任内网调用方传入的 actor/五要素（同 ctxOf 的内网信任口径）；
+  // 薄口只拦必填缺失与 result 白名单外——字段层校验，不做业务裁决。
+  const AUDIT_RESULTS = new Set(["SUCCESS", "FAILURE", "DENIED"]);
+  app.post("/internal/audit", (req, reply) => {
+    const body = (req.body ?? {}) as {
+      action?: string;
+      actor?: { type?: string; id?: string };
+      object_id?: string;
+      object_type?: string;
+      details?: unknown;
+      request_id?: string;
+      result?: string;
+      created_at?: number;
+    };
+    const filled = (v: string | undefined): v is string => typeof v === "string" && v.length > 0;
+    const resultOk = body.result === undefined || AUDIT_RESULTS.has(body.result);
+    if (!filled(body.action) || !filled(body.object_id) || !filled(body.object_type) ||
+        !filled(body.request_id) || !resultOk) {
+      return reply.status(400).send({ error: "invalid_audit" });
+    }
+    return reply.status(201).send(
+      ingestAuditEntry(db, {
+        action: body.action,
+        actor: { type: body.actor?.type ?? "system", id: body.actor?.id ?? "external" },
+        objectId: body.object_id,
+        objectType: body.object_type,
+        details: body.details,
+        requestId: body.request_id,
+        result: body.result,
+        createdAt: body.created_at,
+      }),
+    );
   });
 
   return app;

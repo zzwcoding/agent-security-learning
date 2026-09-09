@@ -32,8 +32,21 @@ export interface IngestResult {
   dedup: boolean;
 }
 
+// 票 35（票 09-3 线头）：webhook 校验失败/畸形 JSON 的 422 路径向 M2 审计 FAILURE 条目
+// （PRD §6-M1「422 且进审计」的后半句）。M2Client seam 同步长出第二个出站口——审计真相
+// 在 M2 audit_entries（FR-S5 两路汇入），ingest 只报五要素里的可变部分，action/actor/
+// result 这些 ingest 恒定的面由 adapter 固定，链路代码不重复。
+export interface AuditFailureInput {
+  /** 被拒请求的溯源锚：尽力取声明告警 id，取不到 unknown 占位。 */
+  objectId: string;
+  /** 原因摘要（与 422 响应体的 details 同源，不复制整包载荷）。 */
+  details: Record<string, unknown>;
+  requestId: string;
+}
+
 export interface M2Client {
   ingestAlert(input: AlertInput): Promise<IngestResult>;
+  auditFailure(input: AuditFailureInput): Promise<void>;
 }
 
 // 真实 adapter：POST {baseUrl}/api/v1/alerts（见 case-backend app.ts）。
@@ -55,6 +68,35 @@ export class HttpM2Client implements M2Client {
     }
     throw new Error(`m2 ingest failed: HTTP ${res.status} ${JSON.stringify(body)}`);
   }
+
+  // 票 35：auditFailure 自己吞错——422 是业务结论，审计通道病了只降级记结构化日志，
+  // 绝不让 422 变 500，也不让调用方等一个注定失败的请求超过 2s。
+  async auditFailure(input: AuditFailureInput): Promise<void> {
+    try {
+      const res = await fetch(`${this.baseUrl}/internal/audit`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "ingest",
+          actor: { type: "system", id: "m1:ingest" },
+          object_id: input.objectId,
+          object_type: "ingest_request",
+          details: input.details,
+          request_id: input.requestId,
+          result: "FAILURE",
+        }),
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!res.ok) throw new Error(`audit ingest failed: HTTP ${res.status}`);
+    } catch (e: unknown) {
+      console.error(JSON.stringify({
+        warn: "audit_ingest_failed",
+        objectId: input.objectId,
+        requestId: input.requestId,
+        error: String(e),
+      }));
+    }
+  }
 }
 
 // 内存 stub（m1 卡 Seam 的单测 adapter）：按 (source, sourceRef) 计数，模拟 M2 唯一
@@ -63,6 +105,8 @@ export class HttpM2Client implements M2Client {
 export class MemoryM2Client implements M2Client {
   readonly calls: AlertInput[] = [];
   readonly results: IngestResult[] = [];
+  /** 票 35：422 路径发来的 FAILURE 审计请求（单测断言面）。 */
+  readonly auditFailures: AuditFailureInput[] = [];
   private readonly byRef = new Map<string, string>();
   private seq = 0;
 
@@ -76,5 +120,9 @@ export class MemoryM2Client implements M2Client {
     if (!existing) this.byRef.set(key, result.alertId);
     this.results.push(result);
     return result;
+  }
+
+  async auditFailure(input: AuditFailureInput): Promise<void> {
+    this.auditFailures.push(input);
   }
 }

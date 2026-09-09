@@ -1,4 +1,4 @@
-import { ConsoleAuditSink } from "./audit.js";
+import { HttpAuditSink } from "./audit.js";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app.js";
@@ -61,7 +61,12 @@ const fgaForChat = makeFgaChecker();
 // uncertain + 人工（fail-closed，见 workers/triage/llm-real.ts）。
 const LLM_MODE = process.env.AGENT_LLM ?? "real";
 
-const audit = new ConsoleAuditSink();
+// 审计 sink 生产装配（票 35·FR-S5 两路汇入）：HttpAuditSink 把五要素条目异步汇入 M2
+// audit_entries（与 M2 自身业务审计同一张表、同一查询面 GET /api/v1/audit）。出站失败
+// 不阻塞业务，只打结构化日志 warn=audit_ingest_failed（审计通道病了 ≠ 业务失败；
+// fail-closed 口径若被 L0 推翻，换一行装配回 ConsoleAuditSink/补偿式 adapter）。
+// SSE 里的 audit 镜像事件（run_events 落盘）照旧，是同一 INV-8 的另一个可观察面。
+const audit = new HttpAuditSink();
 // approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
 // 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
 const nodes = process.env.AGENT_FLOW === "approval_demo" ? APPROVAL_DEMO_FLOW : undefined;
@@ -115,9 +120,6 @@ const makeNodes = nodes
     });
   };
 
-// 审计 sink 当前是 ConsoleAuditSink（进 compose 日志可观察）+ SSE 里的 audit 镜像事件
-// （run_events 落盘）；M2 开出审计写入口后换 HttpAuditSink 汇入同一 audit_entries 表。
-//
 // 跨进程焚毁读口（票 34·G2-1 清偿）：生产装配把 M2 used_tokens 读口接进验票闸——
 // 跨进程 ApprovalToken 重放第二次必 403 token_used（INV-2），不再只靠 executed_at +
 // 300s TTL 兜底；读口不可达 fail-closed 拒绝执行（INV-1）。写侧（用后焚毁登记）仍是

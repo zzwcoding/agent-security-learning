@@ -837,6 +837,46 @@ export function registerUsedToken(
   })();
 }
 
+// 票 35（FR-S5「两路汇入同一 audit_entries 表」）：跨服务审计写口的落账半边。worker
+// （agent HttpAuditSink）与 ingest（webhook FAILURE）把五要素条目 POST 到 app.ts 的
+// /internal/audit，经这里汇入审计真相源——与 M2 自身的 recordAudit 同一张表、同一查询面
+// （queryAudit 不加区分）。注意分工：M2 自身业务的审计仍走各写事务内的 recordAudit
+// （INV-8「审计同库同事务」），本函数只服务外部汇入，不反客为主。
+export interface ExternalAuditEntry {
+  action: string;
+  actor: { type: string; id: string };
+  objectId: string;
+  objectType: string;
+  details?: unknown;
+  requestId: string;
+  /** 白名单 SUCCESS/FAILURE/DENIED，校验在 app.ts（薄口先拦），缺省 SUCCESS。 */
+  result?: string;
+  /** 调用方观测时刻优先（worker 记账与出站之间有间隙）；缺省落库时刻。 */
+  createdAt?: number;
+}
+
+export function ingestAuditEntry(db: DB, e: ExternalAuditEntry): Record<string, unknown> {
+  const id = randomUUID();
+  const createdAt = e.createdAt ?? nowMs();
+  const details = e.details ?? {};
+  const result = e.result ?? "SUCCESS";
+  db.prepare(
+    `INSERT INTO audit_entries (id, action, actor, object_id, object_type, details, request_id, result, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(id, e.action, j(e.actor), e.objectId, e.objectType, j(details), e.requestId, result, createdAt);
+  return {
+    id,
+    action: e.action,
+    actor: e.actor,
+    objectId: e.objectId,
+    objectType: e.objectType,
+    details,
+    requestId: e.requestId,
+    result,
+    createdAt,
+  };
+}
+
 export function lookupUsedToken(db: DB, jti: string): Record<string, unknown> | null {
   const row = db.prepare("SELECT * FROM used_tokens WHERE jti = ?").get(jti) as
     | Record<string, unknown>

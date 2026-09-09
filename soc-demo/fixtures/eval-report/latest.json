@@ -41,7 +41,8 @@
       "guard_scan": 1,
       "behavior_gate": 1,
       "review_reject": 1,
-      "sandbox_boundary": 0
+      "sandbox_boundary": 0,
+      "credential_boundary": 0
     },
     "skipped": [
       "attack/05_sandbox_msb_down: msb 不可用"

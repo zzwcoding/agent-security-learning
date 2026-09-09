@@ -1,4 +1,5 @@
 import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
 import { mapWazuhAlert, validateWazuhAlert } from "./wazuh.js";
 import { HttpM2Client, type M2Client } from "./m2client.js";
 
@@ -17,10 +18,32 @@ export function buildApp(opts: { m2?: M2Client } = {}) {
   app.setErrorHandler((err, _req, reply) => {
     const status = (err as { statusCode?: number }).statusCode;
     if (err instanceof SyntaxError || status === 400) {
-      return reply.status(422).send({ error: "invalid_alert", details: [err instanceof Error ? err.message : String(err)] });
+      const reasons = [err instanceof Error ? err.message : String(err)];
+      // 票 35（票 09-3）：422 且进审计（PRD 异常与边界）——畸形 JSON 的 FAILURE 条目，
+      // body 解析不了所以 objectId=unknown。auditFailure 自吞错，绝不改变 422 本身。
+      if (_req.url?.startsWith("/api/v1/webhooks")) {
+        void m2.auditFailure({
+          objectId: "unknown",
+          details: { reasons },
+          requestId: requestIdOf(_req.headers),
+        });
+      }
+      return reply.status(422).send({ error: "invalid_alert", details: reasons });
     }
     return reply.status(500).send({ error: "internal_error" });
   });
+
+  // 票 35：422 的 FAILURE 审计——objectId 尽力取声明告警 id（顶层 id 或 rule.id），
+  // 取不到 unknown 占位；details 与 422 响应体的 reasons 同源（摘要，不复制整包载荷）。
+  const asObj = (v: unknown): Record<string, unknown> =>
+    typeof v === "object" && v !== null ? (v as Record<string, unknown>) : {};
+  const declaredAlertId = (w: unknown): string => {
+    const o = asObj(w);
+    const id = asObj(o.rule).id ?? o.id;
+    return id === undefined || id === null || id === "" ? "unknown" : String(id);
+  };
+  const requestIdOf = (h: Record<string, unknown>): string =>
+    (typeof h["x-request-id"] === "string" && h["x-request-id"]) || randomUUID();
 
   app.post("/api/v1/webhooks/alerts", async (req, reply) => {
     const body: unknown = req.body;
@@ -31,6 +54,14 @@ export function buildApp(opts: { m2?: M2Client } = {}) {
       if (!v.ok) details.push(...v.details.map((d) => `[${i}] ${d}`));
     });
     if (details.length > 0 || alerts.length === 0) {
+      // 票 35（票 09-3）：校验失败 422 同时向 M2 审计 FAILURE（actor=ingest），
+      // objectId 取批里第一条声明的告警 id（溯源锚）；await 但 adapter 自吞错——
+      // 审计挂了 422 照发，只是本地多一行 warn 日志。
+      await m2.auditFailure({
+        objectId: alerts.length > 0 ? declaredAlertId(alerts[0]) : "unknown",
+        details: { reasons: details.length > 0 ? details : ["empty_body"] },
+        requestId: requestIdOf(req.headers as Record<string, unknown>),
+      });
       return reply.status(422).send({ error: "invalid_alert", details });
     }
     const results: { alert_id: string; dedup: boolean }[] = [];

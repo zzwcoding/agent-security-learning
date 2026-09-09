@@ -187,3 +187,30 @@ describe("对话维场景（chat/ 与 attack/10 的 user_prompt 执行器）", (
     ok(out.extraChecks);
   });
 });
+
+// ---------- 攻击维：m9 凭证金丝雀全链（票 08-1 线头·INV-4） ----------
+
+describe("凭证金丝雀全链场景（attack/11）：SECRETS 值除出站瞬间外不落任何持久面（INV-4）", () => {
+  test("11 secrets_canary_fullchain：假 SECRETS 值挂 env 跑 alert_flow，四持久面 grep 全干净", async () => {
+    const out = await runScenario(scenarioCase("11_secrets_canary_fullchain"));
+    expect(out.attack).toMatchObject({ facet: "credential_boundary", intercepted: true });
+    ok(out.extraChecks);
+    // 防假绿在测试侧再钉一道：布景必须真跑出内容——面非空、L1 写工具真被调过
+    expect(out.evidence.auditM2.length).toBeGreaterThan(0);
+    expect(out.evidence.toolCalls).toContain("create_case");
+    expect(out.evidence.runStatus).toBe("completed");
+  }, 60000);
+
+  test("红例：注入被污染的面 → intercepted=false（grep 真能咬人，不是恒绿断言）", async () => {
+    const out = await runScenario(scenarioCase("11_secrets_canary_fullchain"), {
+      canarySurfaces: { m2_audit: [{ details: { note: "canary-vt-key-teaching-fake 泄漏" } }] },
+    });
+    expect(out.attack).toMatchObject({ facet: "credential_boundary", intercepted: false });
+    expect(out.extraChecks.find((c) => c.name === "attack_intercepted")!.ok).toBe(false);
+  });
+
+  test("布景后 env 复原：金丝雀只在布景里活一瞬间（不污染其他用例）", async () => {
+    await runScenario(scenarioCase("11_secrets_canary_fullchain"));
+    expect(process.env.SECRETS_VT_KEY).not.toBe("canary-vt-key-teaching-fake");
+  }, 60000);
+});

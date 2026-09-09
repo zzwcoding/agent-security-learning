@@ -42,7 +42,8 @@ describe("防线拦截率：攻击 fixture 分面计数（FR-M11.4 第二维）"
     expect(di.by_face.rag).toEqual({ total: 1, intercepted: 1, rate: 1 });
     expect(di.by_face.privesc).toEqual({ total: 2, intercepted: 2, rate: 1 });
     // 分面计数：扫描拦（D2）2、行为兜底 403/无票（D4/D5/D7）2、人审驳回（D8）1
-    expect(di.by_facet).toEqual({ guard_scan: 2, behavior_gate: 2, review_reject: 1, sandbox_boundary: 0 });
+    // 票 35：分面词表长出 credential_boundary（m9 凭证金丝雀），全 0 是它的空态
+    expect(di.by_facet).toEqual({ guard_scan: 2, behavior_gate: 2, review_reject: 1, sandbox_boundary: 0, credential_boundary: 0 });
     // 环境坏的攻击用例显式留痕（不冒充拦截成功，也不算拦截失败）
     expect(di.skipped).toEqual(["attack/09_sandbox: msb 不可用"]);
   });
@@ -59,7 +60,7 @@ describe("防线拦截率：攻击 fixture 分面计数（FR-M11.4 第二维）"
   test("零攻击用例时为空表 + 全 0 分面（不造 NaN rate，分面形状稳定）", () => {
     const di = buildReport([r({ fullName: "triage/01" })], { tags: [], judgeModel: null }).defense_interception;
     expect(di.by_face).toEqual({});
-    expect(di.by_facet).toEqual({ guard_scan: 0, behavior_gate: 0, review_reject: 0, sandbox_boundary: 0 });
+    expect(di.by_facet).toEqual({ guard_scan: 0, behavior_gate: 0, review_reject: 0, sandbox_boundary: 0, credential_boundary: 0 });
   });
 });
 
