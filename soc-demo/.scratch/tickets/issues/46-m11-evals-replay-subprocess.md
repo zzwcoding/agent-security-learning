@@ -8,8 +8,8 @@
 
 **Belongs to spec:** specs/modules.md
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] rigs/replay.ts 零 scripts import，replay 两用例语义保持（源：收尾体检对账二-7·票 28 E3 同款）
-- [ ] 边界规则表 R4 措辞扩 evals，check_boundary.py self-test 补该向红样本（源：核心原则 7）
-- [ ] 全仓门禁绿，测试零删除（源：体检口径）
+- [x] rigs/replay.ts 零 scripts import，replay 两用例语义保持（源：收尾体检对账二-7·票 28 E3 同款）
+- [x] 边界规则表 R4 措辞扩 evals，check_boundary.py self-test 补该向红样本（源：核心原则 7）
+- [x] 全仓门禁绿，测试零删除（源：体检口径）

@@ -224,10 +224,13 @@ def check_r3(edges, root, v):
 
 
 def check_r4(edges, v):
-    """services 反引仓库级 scripts/ → replay 类走子进程（scripts 不在模块图内）。"""
+    """services/、evals/ 反引仓库级 scripts/ → replay 类走子进程（scripts 不在模块图内）。
+
+    票 46：R2 只圈 services 向，evals 反引 scripts 曾落在 R2/R4 之间的盲区——检查器
+    与规则表 R4 措辞同步扩到 evals（测试与 rig 同口径，replay 类走子进程）。"""
     for src, dst_rel, dst, f, line, spec in edges:
-        if src and src.startswith("services/") and dst == "scripts":
-            v.append(("R4", f, line, f"services 反引 scripts/（{spec}）；replay 类改子进程执行"))
+        if src and (src.startswith("services/") or src == "evals") and dst == "scripts":
+            v.append(("R4", f, line, f"反引 scripts/（{spec}）；replay 类改子进程执行"))
 
 
 def check_r5(edges, v):
@@ -347,6 +350,8 @@ def write_samples(root, bad):
         w("services/agent/src/self.ts", 'import { helper } from "./util.js";\nexport const y = helper;\n')
         # R4：services 测试反引 scripts/
         w("services/agent/workers/x.test.ts", 'import { replay } from "../../../scripts/replay.js";\n')
+        # R4：evals rig 反引 scripts/（票 46 收口——R2 只管 services 向，这里原是盲区）
+        w("evals/src/rigs/replay.ts", 'import { replay } from "../../../scripts/replay.js";\n')
         # R2：非豁免文件 / 豁免文件触禁触库
         w("evals/src/other.ts", 'import { buildApp } from "../../services/agent/src/app.js";\n')
         w("evals/src/scenarios.ts", 'import { openDb } from "../../services/case-backend/src/db.js";\n')
@@ -387,7 +392,8 @@ def self_test():
     got = {(v[1], v[0]) for v in run_gate(root)}
     for f, rid in [
         ("services/agent/src/a.ts", "R1"), ("services/agent/src/a.ts", "R8"),
-        ("services/agent/workers/x.test.ts", "R4"), ("evals/src/other.ts", "R2"),
+        ("services/agent/workers/x.test.ts", "R4"), ("evals/src/rigs/replay.ts", "R4"),
+        ("evals/src/other.ts", "R2"),
         ("evals/src/scenarios.ts", "R2"), ("scripts/bad.ts", "R3"),
         ("packages/mcp-audit/src/bad.ts", "R5"), ("services/web/src/bad.ts", "R6"),
         ("services/gateway/plugins/p.py", "R7"), ("services/ingest/src/app.ts", "R9"),
