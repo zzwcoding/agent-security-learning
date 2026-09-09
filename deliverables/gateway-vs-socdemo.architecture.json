@@ -1,0 +1,291 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "soc-demo v1 vs 安防网关：控制面从「内置」到「外置产品」",
+    "locale": "zh-CN",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1380,
+      700
+    ]
+  },
+  "components": [
+    {
+      "id": "w",
+      "type": "backend",
+      "label": "4 个 worker agent",
+      "sublabel": "分诊 / 调查 / 富化 / 沉淀",
+      "pos": [
+        100,
+        150
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "m9",
+      "type": "security",
+      "label": "M9 安全控制面",
+      "sublabel": "闸长在自己体内",
+      "tag": "TS 闸 + Py 件",
+      "pos": [
+        100,
+        310
+      ],
+      "size": [
+        160,
+        64
+      ]
+    },
+    {
+      "id": "llm1",
+      "type": "external",
+      "label": "LLM",
+      "pos": [
+        60,
+        490
+      ],
+      "size": [
+        130,
+        56
+      ]
+    },
+    {
+      "id": "tools1",
+      "type": "backend",
+      "label": "工具 / 案件后端 M2",
+      "pos": [
+        230,
+        490
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "c1",
+      "type": "backend",
+      "label": "soc-demo workers",
+      "tag": "第一个客户(狗粮)",
+      "pos": [
+        620,
+        110
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "c2",
+      "type": "external",
+      "label": "其他企业 agent",
+      "sublabel": "OpenClaw / OpenAI 兼容",
+      "pos": [
+        620,
+        240
+      ],
+      "size": [
+        170,
+        64
+      ]
+    },
+    {
+      "id": "gw",
+      "type": "security",
+      "label": "安防网关",
+      "sublabel": "身份注册 + 验票 + 审批 + 审计",
+      "pos": [
+        880,
+        170
+      ],
+      "size": [
+        180,
+        80
+      ]
+    },
+    {
+      "id": "llm2",
+      "type": "external",
+      "label": "LLM provider",
+      "pos": [
+        1200,
+        110
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "tools2",
+      "type": "backend",
+      "label": "企业工具 / API",
+      "pos": [
+        1200,
+        240
+      ],
+      "size": [
+        150,
+        56
+      ]
+    },
+    {
+      "id": "console",
+      "type": "frontend",
+      "label": "管理台",
+      "sublabel": "agent / 审批 / 审计 三页",
+      "pos": [
+        880,
+        360
+      ],
+      "size": [
+        180,
+        56
+      ]
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "label": "身份账 + 审计库",
+      "pos": [
+        1200,
+        380
+      ],
+      "size": [
+        150,
+        56
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "现状 · soc-demo v1(单个 compose,闸只保护自家 worker)",
+      "wraps": [
+        "w",
+        "m9",
+        "llm1",
+        "tools1"
+      ],
+      "pad": 24
+    },
+    {
+      "kind": "region",
+      "label": "将来 · 安防网关(独立仓库的开源产品,服务全企业 agent)",
+      "wraps": [
+        "c1",
+        "c2",
+        "gw",
+        "llm2",
+        "tools2",
+        "console",
+        "ledger"
+      ],
+      "pad": 24
+    }
+  ],
+  "connections": [
+    {
+      "from": "w",
+      "to": "m9",
+      "label": "一切调用先过闸",
+      "variant": "emphasis",
+      "labelDy": 24
+    },
+    {
+      "from": "m9",
+      "to": "llm1",
+      "label": "凭证代理注入真 key",
+      "fromSide": "left",
+      "toSide": "top"
+    },
+    {
+      "from": "m9",
+      "to": "tools1",
+      "label": "验票通过才执行",
+      "fromSide": "right",
+      "toSide": "top"
+    },
+    {
+      "from": "c1",
+      "to": "gw",
+      "label": "base_url 指过来即接入",
+      "variant": "emphasis",
+      "labelDx": -20,
+      "labelDy": 29
+    },
+    {
+      "from": "c2",
+      "to": "gw",
+      "label": "同一条接入路",
+      "variant": "emphasis",
+      "labelDy": 30
+    },
+    {
+      "from": "gw",
+      "to": "llm2",
+      "label": "凭证注入"
+    },
+    {
+      "from": "gw",
+      "to": "tools2",
+      "label": "验票 / 审批后放行",
+      "labelAt": [
+        1075,
+        285
+      ]
+    },
+    {
+      "from": "console",
+      "to": "gw",
+      "label": "查询与审批操作"
+    },
+    {
+      "from": "gw",
+      "to": "ledger",
+      "label": "身份与审计落账"
+    },
+    {
+      "from": "m9",
+      "to": "gw",
+      "label": "抽件泛化,不重抄",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "区别一:闸的位置",
+      "items": [
+        "v1:闸是 agent 服务里的中间件,只保护自家 4 个 worker",
+        "网关:闸外置成独立服务,任何 agent 接入即被保护",
+        "同一套闸,服务对象从「自己的 worker」泛化成「全企业任意 agent」"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "区别二:谁是被治理对象",
+      "items": [
+        "v1:worker 是代码内子模块,没有身份,不是被治理对象",
+        "网关:每个接入 agent 注册长期身份,票据/审批/审计都挂在身份上",
+        "这就是白皮书七原则里的「资产域」,也是开源界的空白"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "迁移方式:抽件不搬仓",
+      "items": [
+        "verifyTicket 抽成 npm 包、proxy.py 逻辑 TS 重写、票面 fixture 拷贝",
+        "soc-demo 不降格:它是网关的第一个客户,六幕剧本改走网关重跑",
+        "网关不是 soc-demo 的一部分,soc-demo 只是网关的租户之一"
+      ]
+    }
+  ]
+}
