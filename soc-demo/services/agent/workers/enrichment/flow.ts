@@ -21,7 +21,7 @@
 //   ⑤ artifacts 回写（analyzer 提取的新 observable 经 add_observable L1 写回，M2 按
 //      dataType+data 去重合并）
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
 import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
 import { ANALYZERS, tlpPapGate, type AnalyzerBackend, type AnalyzerCall, type AnalyzerName, type AnalyzerResult } from "./analyzers.js";
@@ -83,36 +83,23 @@ export function makeEnrichmentFlow(deps: EnrichmentDeps): FlowNode[] {
 
   /** 工具调用唯一入口：广播 tool_call → verifyTicket（L1 任务票）→ 放行执行 →
    *  tool_result。闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。
-   *  与票 13/14 同款——全 worker 一个安全骨架，差别只在执行体。 */
+   *  票 43：闸体收进共享 makeGatedCall（与票 13/14 同款——全 worker 一个安全骨架，
+   *  差别只在执行体与本文件的三个差异点声明）。 */
   const cursor = { node: "" };
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { ticket: deps.ticket, runId: deps.runId },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny",
-        objectId: deps.runId,
-        objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`enrichment_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+  const gated = makeGatedCall({
+    prefix: "enrichment",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   /** analyzer 工具的执行包装层：签名契约 → 验票闸（gated）→ TLP/PAP 确定性闸门 →
    *  才轮到 backend。闸拒在包装层就地解决：DENIED 审计 + refused 结论，不外发、

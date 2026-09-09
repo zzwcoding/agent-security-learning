@@ -2,6 +2,9 @@
 // PRD S3 异常与边界 + INV-1：服务不可达/扫描超时（默认 2s）一律 fail-closed——
 // 不可信段不进 prompt，调用方据 blocked=true 走转人工/拒答；GUARDS_FAIL_MODE=flag
 // 可切「仅标记」降级模式（演示默认 fail-closed）。
+// 票 43（F3）：超时/错误分类收进共享出站件 outbound.ts——reason 判定（TimeoutError
+// 与 AbortError 都算超时）与 llm/fga 同一口径，本文件不再自持一份。
+import { isOutboundTimeout, outboundTimeoutReason, timeoutSignal } from "./outbound.js";
 
 export const DEFAULT_TIMEOUT_MS = 2000;
 
@@ -49,7 +52,7 @@ export async function scanInjection(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ text, channel }),
-      signal: AbortSignal.timeout(timeoutMs),
+      signal: timeoutSignal(timeoutMs),
     });
     if (!res.ok) {
       return unreachable(failMode, `guards_http_${res.status}`);
@@ -67,8 +70,7 @@ export async function scanInjection(
       text: data.text,
     };
   } catch (e) {
-    const timedOut = e instanceof Error && e.name === "TimeoutError";
-    return unreachable(failMode, timedOut ? "guards_timeout" : "guards_unreachable");
+    return unreachable(failMode, outboundTimeoutReason("guards", isOutboundTimeout(e)));
   }
 }
 

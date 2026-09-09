@@ -14,7 +14,7 @@
 //   - 拾取告警先向 M2 claim verdict（FR-M4.5 条件更新锁）：抢锁失败的 run 让路，
 //     「并发同告警只分诊 1 次」。
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import { scanInjection, type ScanChannel, type ScanOptions } from "../../src/guards-client.js";
 import type { AuditSink } from "../../src/audit.js";
 import {
@@ -77,37 +77,24 @@ export function makeTriageFlow(deps: TriageDeps): FlowNode[] {
 
   /** 工具调用唯一入口：广播 tool_call → verifyTicket（L1 任务票）→ 放行执行 →
    *  tool_result。闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。
-   *  注意 worker 里没有 awaitApproval/executeApproved——L2 的正门不在它的能力面内。 */
+   *  注意 worker 里没有 awaitApproval/executeApproved——L2 的正门不在它的能力面内。
+   *  票 43：闸体收进共享 makeGatedCall（本文件只声明差异点：前缀/凭据/审计落点）。 */
   const cursor = { node: "" }; // 节点名仅供审计细节；权威节点轨迹走 runner 的 node_enter 事件
 
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { ticket: deps.ticket, runId: deps.runId },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny",
-        objectId: deps.runId,
-        objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`triage_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+  const gated = makeGatedCall({
+    prefix: "triage",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   /** 一个不可信段进 prompt 前的完整安检：guards 扫描 → 按裁决清洗。block/fail_closed
    *  → 占位符 + 审计 DENIED（原文不进 prompt，INV-1）；wrapUntrusted 包装在

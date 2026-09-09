@@ -13,7 +13,7 @@
 //   - INV-9：对话历史里的「已批准」文字不构成授权——执行只有一条路：审批卡 → 签名
 //     ApprovalToken → 验票闸。本文件从头到尾没有一行读消息文本来判断「是否已批准」。
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import { scanInjection, type ScanChannel, type ScanOptions } from "../../src/guards-client.js";
 import type { AuditSink } from "../../src/audit.js";
 import type { FgaChecker } from "../../src/fga-client.js";
@@ -138,33 +138,23 @@ export function makeChatFlow(deps: ChatDeps): FlowNode[] {
 
   /** 只读工具唯一入口：广播 tool_call → verifyTicket（chat 任务票）→ 放行执行 → tool_result。
    *  闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。这里没有 executeApproved——
-   *  动作意图走 intent_gate 之后的独立分支，票面也根本没有 L2 工具（INV-3）。 */
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { ticket: deps.ticket, runId: deps.runId, ...(deps.caseId ? { caseId: deps.caseId } : {}) },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny", objectId: deps.runId, objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`chat_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, tier: tierOf(tool), params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+   *  动作意图走 intent_gate 之后的独立分支，票面也根本没有 L2 工具（INV-3）。
+   *  票 43：闸体收进共享 makeGatedCall——差异点：前缀 chat / 凭据 caseId 仅在有值时传 /
+   *  tool_call 多一个 tier 字段（web 时间线的分级徽标用它）。 */
+  const gated = makeGatedCall({
+    prefix: "chat",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId, ...(deps.caseId ? { caseId: deps.caseId } : {}) }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, tier: tierOf(tool), params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   const chatFlags = (ctx: NodeCtx): { refused: boolean; clarify: boolean; denied: boolean } => {
     const chat = ctx.state.chat as { refused?: boolean; clarify?: boolean; denied?: boolean } | undefined;

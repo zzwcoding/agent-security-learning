@@ -26,7 +26,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import { paramsHash } from "../../src/verify-ticket.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
 import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
 import { buildDecidePrompt, buildPlanPrompt, buildReportPrompt, validateToolCall, type CaseView, type ObsEntry, type PlanCall, type ReportCall, type SummarizeCall } from "./prompt.js";
@@ -106,36 +107,23 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
   };
 
   /** 工具调用唯一入口：广播 tool_call → verifyTicket（L1 任务票）→ 放行执行 →
-   *  tool_result。闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。 */
+   *  tool_result。闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。
+   *  票 43：闸体收进共享 makeGatedCall（差异点只有前缀/凭据/审计落点三个声明）。 */
   const cursor = { node: "" };
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { ticket: deps.ticket, runId: deps.runId },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny",
-        objectId: deps.runId,
-        objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`investigation_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+  const gated = makeGatedCall({
+    prefix: "investigation",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   // ---- 案件视图（load_case 的产出，plan/decide/report 的共同输入） ----
 

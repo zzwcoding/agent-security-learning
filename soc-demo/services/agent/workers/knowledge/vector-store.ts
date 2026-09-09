@@ -17,6 +17,12 @@
 //
 // INV-5 的结构性保证在这里：本 seam 的 upsert 只被 kb_write 动作（ApprovalToken 正门）
 // 调用——proposed/rejected 条目没有任何代码路径能写入检索面。
+//
+// 票 43（F3）：与 guards/llm/fga 客户端同形态的出站骨架（超时 signal/ProbeResult/
+// 冒烟探测）收进共享出站件 src/outbound.ts，本文件只留 chroma 自己的 REST 语义。
+import { smokeHttpProbe, timeoutSignal, type ProbeResult } from "../../src/outbound.js";
+
+export type { ProbeResult };
 
 /** 检索注入 top-k（PRD 决策记录 #6：top-k 越小投毒演示攻击面越可控 → 定 5）。 */
 export const KB_TOP_K = 5;
@@ -151,7 +157,7 @@ export class RealChromaClient implements VectorStore {
       method,
       headers: body === undefined ? {} : { "content-type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
-      signal: AbortSignal.timeout(5000),
+      signal: timeoutSignal(5000),
     });
     if (!res.ok) throw new Error(`chroma_${method}_failed:http_${res.status}`);
     return (await res.json().catch(() => ({}))) as Record<string, unknown>;
@@ -208,22 +214,17 @@ export class RealChromaClient implements VectorStore {
 
 // ---------- 真容器冒烟能力探测（票 16 msbProbe 先例） ----------
 
-export type ProbeResult = { ok: true } | { ok: false; reason: string };
-
 /** chroma 容器可达才允许真冒烟；否则显式带原因返回（测试据此 skip 并打印）。
  *  CI 无 docker/容器 → 显式 skip 是合法结局，绝不静默装绿。
- *  默认宿主口 18000（compose 映射 18000:8000；8000 高频占用，见 compose 注释）。 */
+ *  默认宿主口 18000（compose 映射 18000:8000；8000 高频占用，见 compose 注释）。
+ *  骨架（fetch+超时+ProbeResult）走共享 smokeHttpProbe（票 43·F3）。 */
 export async function chromaSmokeProbe(baseUrl?: string): Promise<ProbeResult> {
   const base = (baseUrl ?? process.env.KB_CHROMA_SMOKE_URL ?? "http://127.0.0.1:18000").replace(/\/$/, "");
-  try {
-    const res = await fetch(`${base}/api/v2/heartbeat`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return { ok: false, reason: `chroma heartbeat http_${res.status}（${base}）` };
-    return { ok: true };
-  } catch {
-    return {
-      ok: false,
-      reason: `chroma 容器不可达（${base}）——真容器冒烟 skip（CI 无 docker，显式 skip 留痕。` +
-        "要跑：docker compose up -d chroma 后重跑本文件）",
-    };
-  }
+  return smokeHttpProbe(`${base}/api/v2/heartbeat`, {
+    timeoutMs: 3000,
+    onHttpStatus: (status) => `chroma heartbeat http_${status}（${base}）`,
+    onUnreachable: () =>
+      `chroma 容器不可达（${base}）——真容器冒烟 skip（CI 无 docker，显式 skip 留痕。` +
+      "要跑：docker compose up -d chroma 后重跑本文件）",
+  });
 }

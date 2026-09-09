@@ -9,14 +9,13 @@
 // schema 的标记回包（reason code 藏在 verdict 位，parseVerdict 报 bad_verdict:llm_upstream_*），
 // 让 worker 既有「重试 1 次 → uncertain + 人工」降级路径原样接管，与 Fake 版行为完全一致
 // （宁可升级人工不可猜）。schema 把关仍在 worker（parseVerdict），adapter 只剥围栏不硬修。
-import { LlmUpstreamError, unwrapJsonText, type LlmChatResult } from "../../src/llm-client.js";
+import { LlmUpstreamError, unwrapJsonText, type ChatSeam } from "../../src/llm-client.js";
 import type { TriageLlm } from "./llm.js";
 import type { LlmCall, LlmReply } from "./prompt.js";
 
-/** adapter 依赖的窄缝：只要会 chat（GatewayLlmClient 结构适配；测试注入确定性假件）。 */
-export interface ChatSeam {
-  chat(content: string, opts: { node: string }): Promise<LlmChatResult>;
-}
+/** adapter 依赖的窄缝：只要会 chat（GatewayLlmClient 结构适配；测试注入确定性假件）。
+ *  票 43·F5：接口本体上提 src/llm-client.ts，此处再出口兼容既有引用（chat 侧）。 */
+export type { ChatSeam };
 
 export class RealTriageLlm implements TriageLlm {
   private readonly seam: ChatSeam;

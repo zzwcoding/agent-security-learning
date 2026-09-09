@@ -8,6 +8,7 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 
+/** tools/list 的 wire 形（票 43·F5 收敛：与 tier.ts 的两处手抄并成这一份定义）。 */
 export interface McpTool {
   name: string;
   description?: string;

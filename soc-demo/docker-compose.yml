@@ -129,8 +129,12 @@ services:
   # （铸币/凭证代理）。官方镜像一律不重建不 patch，自写件以挂载/env/旁路接入。
   openfga:
     # 内存存储（run 子命令）：容器一停授权世界全没，scripts/setup-openfga.sh
-    # 幂等重建 30 秒恢复——教学口径，与 ADR 0001 参考工程一致
-    image: openfga/openfga:v1.19.0
+    # 幂等重建 30 秒恢复——教学口径，与 ADR 0001 参考工程一致。
+    # 票 43（F4·对账一-2）：官方镜像按 digest 钉（票 26 先例——tag 漂移不可接受）。
+    # digest = openfga/openfga:v1.19.0 的多 arch index（2026-09-09 实测：registry API
+    # 查得 + 本机 arm64 daemon pull 验证与 tag 同一镜像；票 37 口径：Docker Hub 的
+    # index digest 本机可 pull、CI amd64 同用一枚，升级跟踪以 index digest 前进为准）。
+    image: openfga/openfga@sha256:78d1fa601d42340ecb131305d80d3767d0f254f9b1bc3646f9a557e11b24c63a
     command: ["run"]
     # 宿主侧用 18080：8080 是高频占用口（本机就有 http.server 盘踞），容器网络内仍是 8080
     ports: ["18080:8080"]

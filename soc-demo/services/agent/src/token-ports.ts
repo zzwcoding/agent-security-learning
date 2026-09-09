@@ -51,19 +51,13 @@ export class HttpMintClient implements MintClient {
     this.baseUrl = baseUrl;
   }
 
-  async mintTaskTicket(req: TaskTicketRequest): Promise<MintedToken> {
+  /** 两个 mint 方法的共同出站块（票 43·F5 收敛）：同一 POST /internal/mint、同一
+   *  超时与错误口径——wire 形（type + 各自 claims 字段）留在各方法里可读。 */
+  private async postMint(body: Record<string, unknown>): Promise<MintedToken> {
     const res = await fetch(`${this.baseUrl}/internal/mint`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        type: "task_ticket",
-        jti: req.jti,
-        sub: req.sub,
-        case_id: req.caseId ?? "",
-        run_id: req.runId,
-        scope: req.scope,
-        allowed_tools: req.allowedTools,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(2000),
     });
     if (!res.ok) {
@@ -72,25 +66,28 @@ export class HttpMintClient implements MintClient {
     return (await res.json()) as MintedToken;
   }
 
-  async mintApprovalToken(req: MintRequest): Promise<MintedToken> {
-    const res = await fetch(`${this.baseUrl}/internal/mint`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        type: "approval_token",
-        jti: req.jti,
-        approval_id: req.approvalId,
-        approved_by: req.approvedBy,
-        tool: req.tool,
-        params: req.params,
-        case_id: req.caseId ?? "",
-      }),
-      signal: AbortSignal.timeout(2000),
+  async mintTaskTicket(req: TaskTicketRequest): Promise<MintedToken> {
+    return this.postMint({
+      type: "task_ticket",
+      jti: req.jti,
+      sub: req.sub,
+      case_id: req.caseId ?? "",
+      run_id: req.runId,
+      scope: req.scope,
+      allowed_tools: req.allowedTools,
     });
-    if (!res.ok) {
-      throw new Error(`gateway mint failed: HTTP ${res.status}`);
-    }
-    return (await res.json()) as MintedToken;
+  }
+
+  async mintApprovalToken(req: MintRequest): Promise<MintedToken> {
+    return this.postMint({
+      type: "approval_token",
+      jti: req.jti,
+      approval_id: req.approvalId,
+      approved_by: req.approvedBy,
+      tool: req.tool,
+      params: req.params,
+      case_id: req.caseId ?? "",
+    });
   }
 }
 

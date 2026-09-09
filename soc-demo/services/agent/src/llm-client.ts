@@ -15,6 +15,16 @@
 // 出站 seam：fetchImpl 可注入（票 08 test_proxy.py 的 httpx.MockTransport 先例在 TS 侧的
 // 等价物）——契约测试用它捕获请求形态，绝不真出网。
 import { budgetFromEnv } from "./budget.js";
+import { isOutboundTimeout, smokeHttpProbe, timeoutSignal, type ProbeResult } from "./outbound.js";
+
+export type { ProbeResult };
+
+/** adapter 依赖的窄缝（票 43·F5 收敛：triage/investigation/knowledge 三份手抄上提至此，
+ *  chat 侧经 triage 再出口的引用也回到这一份）：只要会 chat——生产 GatewayLlmClient
+ *  结构适配，测试注入确定性假件。 */
+export interface ChatSeam {
+  chat(content: string, opts: { node: string }): Promise<LlmChatResult>;
+}
 
 /** 上游病了的类型化错误：code 是稳定 reason code（审计/降级标记可读），message 只带 code。 */
 export class LlmUpstreamError extends Error {
@@ -90,11 +100,11 @@ export class GatewayLlmClient {
           temperature: 0, // SOC 判定要稳定，不要创造性
           messages: [{ role: "user", content }],
         }),
-        signal: AbortSignal.timeout(this.timeoutMs(opts.node)),
+        signal: timeoutSignal(this.timeoutMs(opts.node)),
       });
     } catch (e) {
-      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-      throw new LlmUpstreamError(timedOut ? "timeout" : "unreachable");
+      // 票 43：超时判定（TimeoutError||AbortError）收进共享出站件，与 guards/fga 同口径
+      throw new LlmUpstreamError(isOutboundTimeout(e) ? "timeout" : "unreachable");
     }
     if (!res.ok) {
       // 只记状态码不记正文：上游错误文本是 provider 可控内容，不许进我们的审计/事件面
@@ -130,14 +140,12 @@ export function unwrapJsonText(s: string): string {
   return (fenced ? fenced[1] : noThink).trim();
 }
 
-export type ProbeResult =
-  | { ok: true }
-  | { ok: false; reason: string };
-
 /** 真网冒烟能力探测（验收⑤，票 16 msbProbe 先例）：SECRETS_LLM_API_KEY 有真值且
  *  gateway /proxy/llm 可达才允许真出网；否则显式带原因返回（测试据此 skip 并打印），
  *  绝不静默。key 指真值仓的 provider key——它只该出现在网关进程，测试进程里只是
- *  「本机是否有真凭证」的探针，本身不进任何出站体。 */
+ *  「本机是否有真凭证」的探针，本身不进任何出站体。
+ *  票 43（F3）：探测骨架（fetch+超时+ProbeResult）走共享 smokeHttpProbe——本探针不判
+ *  HTTP 状态码（代理有回话即算可达），不传 onHttpStatus 即是这一口径。 */
 export async function llmSmokeProbe(baseUrl?: string): Promise<ProbeResult> {
   if (!process.env.SECRETS_LLM_API_KEY) {
     return {
@@ -147,10 +155,9 @@ export async function llmSmokeProbe(baseUrl?: string): Promise<ProbeResult> {
     };
   }
   const base = baseUrl ?? process.env.SOC_LLM_SMOKE_URL ?? "http://127.0.0.1:8002/proxy/llm";
-  try {
-    await fetch(`${base}/v1/models`, { signal: AbortSignal.timeout(5000) });
-    return { ok: true };
-  } catch {
-    return { ok: false, reason: `gateway /proxy/llm 不可达（${base}）——先 docker compose up -d gateway 再重跑` };
-  }
+  return smokeHttpProbe(`${base}/v1/models`, {
+    timeoutMs: 5000,
+    onUnreachable: () =>
+      `gateway /proxy/llm 不可达（${base}）——先 docker compose up -d gateway 再重跑`,
+  });
 }

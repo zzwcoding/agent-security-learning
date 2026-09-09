@@ -11,14 +11,12 @@
 //     回包（不裸抛），降级路径原样接管，与 Fake 版一致；
 //   - plan / decide / summarize：worker 无降级路径 → 抛 LlmUpstreamError，由 m3 runner
 //     强杀 run（failed + 审计 + error 事件）——绝不硬编造任务清单/finish 收工/摘要。
-import { LlmUpstreamError, unwrapJsonText, type LlmChatResult } from "../../src/llm-client.js";
+import { LlmUpstreamError, unwrapJsonText, type ChatSeam, type LlmChatResult } from "../../src/llm-client.js";
 import type { InvestigationLlm, LoopDecision } from "./llm.js";
 import type { DecideCall, PlanCall, ReportCall, SummarizeCall } from "./prompt.js";
 
-/** adapter 依赖的窄缝（同 triage/llm-real.ts）：GatewayLlmClient 结构适配。 */
-export interface ChatSeam {
-  chat(content: string, opts: { node: string }): Promise<LlmChatResult>;
-}
+// adapter 依赖的窄缝 ChatSeam（GatewayLlmClient 结构适配）在 src/llm-client.ts——
+// 票 43·F5 把 triage/investigation/knowledge 三份手抄收成一份。
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);

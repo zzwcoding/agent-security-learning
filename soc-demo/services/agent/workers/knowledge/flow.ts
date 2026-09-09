@@ -20,7 +20,7 @@
 //   - resume 重入幂等：M2 裁决 409（已裁决）视为已完成，chroma upsert 本身幂等——
 //     「action 执行后、执行标记落库前崩溃」的窗口重放不会重复入账。
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
 import type { UntrustedField } from "../triage/prompt.js";
 import { buildKnowledgePrompt } from "./prompt.js";
@@ -61,38 +61,25 @@ export function makeKnowledgeFlow(deps: KnowledgeDeps): FlowNode[] {
   };
 
   /** 工具调用唯一入口（L1）：广播 tool_call → verifyTicket → 放行 → tool_result。
-   *  闸拒 = 审计 DENIED + 抛错（runner 强杀；INV-1 不吞错）。与 triage gated 同款。 */
+   *  闸拒 = 审计 DENIED + 抛错（runner 强杀；INV-1 不吞错）。票 43：闸体收进共享
+   *  makeGatedCall——差异点：前缀 knowledge / 凭据带 caseId（案件绑定校验 FR-S2.2：
+   *  沉淀票只对本 run 的 case 有效）。 */
   const cursor = { node: "" };
 
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      // 案件绑定校验（FR-S2.2）：沉淀票只对本 run 的 case 有效
-      { ticket: deps.ticket, runId: deps.runId, caseId: deps.caseId },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny",
-        objectId: deps.runId,
-        objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`knowledge_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+  const gated = makeGatedCall({
+    prefix: "knowledge",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId, caseId: deps.caseId }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   const skipped = (ctx: NodeCtx): boolean =>
     (ctx.state.knowledge as { skipped?: boolean } | undefined)?.skipped === true;

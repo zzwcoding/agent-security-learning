@@ -1,10 +1,10 @@
 // 权限面报告（FR-M12.3）：按 PRD §5.7 工具分级口径给建议分级。
 // L0 只读免验 / L1 写需任务票 / L2 高危需审批（isolate/删除/执行/外发一类）。
-export interface McpTool {
-  name: string;
-  description?: string;
-  inputSchema?: object;
-}
+// McpTool 是 tools/list 的 wire 形，本体在 transports.ts（票 43·F5 收敛两处手抄），
+// 这里再出口保持 index.ts 的库出口不变。
+import type { McpTool } from "./transports.js";
+
+export type { McpTool };
 
 export interface TierSuggestion {
   tier: "L0" | "L1" | "L2";

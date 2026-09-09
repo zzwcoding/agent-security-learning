@@ -4,19 +4,14 @@
 // fail-closed 语义（m4 RealTriageLlm 先例）：上游病了不裸抛——回一个必然不合草稿 schema
 // 的标记回包，让 worker 既有「重试 1 次 → skip + 审计」降级路径接管（宁可不错提，不可
 // 编造）。schema 把关仍在 worker（parseDraft），adapter 只剥围栏不硬修。
-import { LlmUpstreamError, unwrapJsonText, type LlmChatResult } from "../../src/llm-client.js";
+import { LlmUpstreamError, unwrapJsonText, type ChatSeam } from "../../src/llm-client.js";
 import type { KnowledgeLlm } from "./llm.js";
 import type { LlmCall, LlmReply } from "./prompt.js";
 
-/** adapter 依赖的窄缝：只要会 chat（GatewayLlmClient 结构适配；测试注入确定性假件）。 */
-export interface KnowledgeChatSeam {
-  chat(content: string, opts: { node: string }): Promise<LlmChatResult>;
-}
-
 export class RealKnowledgeLlm implements KnowledgeLlm {
-  private readonly seam: KnowledgeChatSeam;
+  private readonly seam: ChatSeam;
 
-  constructor(seam: KnowledgeChatSeam) {
+  constructor(seam: ChatSeam) {
     this.seam = seam;
   }
 

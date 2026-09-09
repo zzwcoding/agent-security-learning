@@ -12,8 +12,8 @@
 //   - 预检三连（建议在不在 / verdict 定没定 / 是不是已关）都给具名错误——failReason
 //     与 error 事件带出去，web 侧逐条映射成人话（409/已关/未分诊各有话术）。
 //   - 确认人（deps.actor）进审计五要素（INV-8：确认动作要记是谁按的按钮）。
-import type { FlowNode, NodeCtx } from "../../src/graph.js";
-import { paramsHash, verifyTicket } from "../../src/verify-ticket.js";
+import type { FlowNode } from "../../src/graph.js";
+import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
 import type { TriageM2 } from "./m2.js";
 
@@ -49,35 +49,22 @@ export function makeCloseFlow(deps: CloseFlowDeps): FlowNode[] {
 
   /** 工具调用唯一入口：广播 tool_call → verifyTicket（L1 任务票）→ 放行执行 →
    *  tool_result。闸拒 = 审计 DENIED + 抛错（runner 强杀 run；INV-1 不吞错）。
-   *  与 triage flow 的 gated 同款——各 worker 自持一份闭包是本仓既有形态。 */
-  async function gated<T>(
-    ctx: NodeCtx,
-    tool: string,
-    params: Record<string, unknown>,
-    action: () => Promise<T>,
-  ): Promise<T> {
-    const hash = paramsHash(params);
-    const verdict = verifyTicket(
-      { name: tool, params },
-      { ticket: deps.ticket, runId: deps.runId },
-      Math.floor(Date.now() / 1000),
-      { hmacKey: deps.hmacKey },
-    );
-    if (!verdict.allow) {
-      record({
-        action: "deny",
-        objectId: deps.runId,
-        objectType: "tool_call",
-        details: { tool, reason: verdict.reason, params_hash: hash, node: cursor.node },
-        result: "DENIED",
-      });
-      throw new Error(`triage_gate_denied:${verdict.reason}`);
-    }
-    ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash });
-    const result = await action();
-    ctx.emit("tool_result", { node: cursor.node, tool, ok: true });
-    return result;
-  }
+   *  与 triage flow 的 gated 同款——票 43 起两处都直接用共享 makeGatedCall，
+   *  不再各持一份闭包（审计记的 actor 是本流程的确认人 deps.actor，经 record 闭包带上）。 */
+  const gated = makeGatedCall({
+    prefix: "triage",
+    hmacKey: deps.hmacKey,
+    creds: () => ({ ticket: deps.ticket, runId: deps.runId }),
+    deny: () => ({
+      record,
+      objectId: deps.runId,
+      objectType: "tool_call",
+      extraDetails: { node: cursor.node },
+    }),
+    emitToolCall: (ctx, { tool, paramsHash: hash }) =>
+      ctx.emit("tool_call", { node: cursor.node, tool, params_hash: hash }),
+    emitToolResult: (ctx, { tool }) => ctx.emit("tool_result", { node: cursor.node, tool, ok: true }),
+  });
 
   // ---- 子图（两节点：先看清楚，再动手）----
 

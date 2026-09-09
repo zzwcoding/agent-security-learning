@@ -253,7 +253,12 @@ export class MsbAnalyzerBackend implements AnalyzerBackend {
 }
 
 /** 真跑能力探测：有 microVM 环境才允许真断言；否则显式返回原因（测试据此 skip 并
- *  打印——CI 没有 KVM 属预期，skip 必须可见，不静默降级）。探测本身也是一次真拉起。 */
+ *  打印——CI 没有 KVM 属预期，skip 必须可见，不静默降级）。探测本身也是一次真拉起。
+ *
+ *  msb 版本记录（票 43·F4·对账一-3）：microsandbox CLI 无 registry 可钉，版本按
+ *  「探测先行例」落在这里备查——本仓演示/冒烟实测版本为 msb 0.6.16（2026-09-09，
+ *  `msb --version` 实读）；msb CLI 升级不视为破坏性变更，行为口径以本文件的命令行
+ *  拓扑（buildMsbArgs）与 VM 侧协议（RESULT_MARKER）为准。 */
 export async function msbProbe(
   opts: { msbBin?: string; image?: string } = {},
 ): Promise<{ ok: true } | { ok: false; reason: string }> {

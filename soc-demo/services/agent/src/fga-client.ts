@@ -9,8 +9,18 @@
 // { allowed:false, reason }——deny 覆盖 allow，绝不带着「裁判瞎了」放行。
 // 出站 seam：fetchImpl 可注入（票 08 test_proxy.py MockTransport 先例的 TS 对位），
 // 契约测试捕获请求形态，绝不真出网；真容器冒烟走 fgaSmokeProbe 显式探测。
+// 票 43（F3）：超时/错误分类/ProbeResult/冒烟骨架收进共享出站件 outbound.ts。
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import {
+  isOutboundTimeout,
+  outboundTimeoutReason,
+  smokeHttpProbe,
+  timeoutSignal,
+  type ProbeResult,
+} from "./outbound.js";
+
+export type { ProbeResult };
 
 export interface FgaIds {
   store_id: string;
@@ -60,7 +70,7 @@ export async function queryOpenfga(
       tuple_key: { user: fgaUser, relation: "can_execute", object: toolObj },
       authorization_model_id: ids.model_id,
     }),
-    signal: AbortSignal.timeout(timeoutMs),
+    signal: timeoutSignal(timeoutMs),
   });
   if (!res.ok) throw new Error(`fga_http_${res.status}`);
   const obj = (await res.json()) as { allowed?: unknown };
@@ -93,30 +103,23 @@ export function makeFgaChecker(opts: FgaClientOpts = {}): FgaChecker {
       const allowed = await queryOpenfga(apiUrl, ids, user, `tool:${tool}`, timeoutMs, opts.fetchImpl);
       return allowed ? { allowed: true } : { allowed: false, reason: "fga_denied" };
     } catch (e) {
-      const timedOut = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError");
-      return { allowed: false, reason: timedOut ? "fga_timeout" : "fga_unreachable" };
+      return { allowed: false, reason: outboundTimeoutReason("fga", isOutboundTimeout(e)) };
     }
   };
 }
 
-export type ProbeResult =
-  | { ok: true }
-  | { ok: false; reason: string };
-
 /** 真 OpenFGA 容器冒烟能力探测（票 16 msbProbe / 票 27 llmSmokeProbe 先例）：
  *  /healthz 可达且 fga_ids.json 可读才允许真裁决；否则显式带原因返回（测试据此
- *  skip 并打印），绝不静默。 */
+ *  skip 并打印），绝不静默。骨架（fetch+超时+ProbeResult）走共享 smokeHttpProbe。 */
 export async function fgaSmokeProbe(apiUrl?: string): Promise<ProbeResult> {
   const base = apiUrl ?? process.env.FGA_API_URL ?? "http://127.0.0.1:18080";
-  try {
-    const res = await fetch(`${base}/healthz`, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return { ok: false, reason: `openfga /healthz HTTP ${res.status}` };
-  } catch {
-    return {
-      ok: false,
-      reason: `openfga 不可达（${base}）——真容器冒烟 skip。要跑：docker compose up -d openfga && bash scripts/setup-openfga.sh`,
-    };
-  }
+  const reachable = await smokeHttpProbe(`${base}/healthz`, {
+    timeoutMs: 3000,
+    onHttpStatus: (status) => `openfga /healthz HTTP ${status}`,
+    onUnreachable: () =>
+      `openfga 不可达（${base}）——真容器冒烟 skip。要跑：docker compose up -d openfga && bash scripts/setup-openfga.sh`,
+  });
+  if (!reachable.ok) return reachable;
   try {
     loadFgaIds.load();
   } catch {

@@ -29,10 +29,10 @@ import type { AuditSink } from "./audit.js";
 import { findDecidableCard, markApprovalExecuted, openApprovalCard } from "./approvals.js";
 import {
   paramsHash,
-  verifyTicket,
   type ApprovalClaims,
   type BurnRegistry,
 } from "./verify-ticket.js";
+import { makeGatedCall } from "./gated-call.js";
 import type { TokenBurner, UsedTokenReader } from "./token-ports.js";
 import { InvalidRunTransitionError } from "./statemachine.js";
 
@@ -293,43 +293,44 @@ function compileFlowGraph(plan: CompilePlan) {
     const token = decision.token;
     return (async () => {
       const used = await resolveUsed(token);
-      const verdict = verifyTicket(
-        { name: tool, params },
-        { approvalToken: token, caseId: opts.caseId, used },
-        Math.floor(Date.now() / 1000),
-        { hmacKey: deps.hmacKey },
-      );
-      if (!verdict.allow) {
-        // 闸拒 = 授权链有缺口（票过期/参数被换/重放/读口不可达），fail-closed：
-        // 审计 DENIED 后强杀
-        deps.ctx.audit.record({
-          action: "deny",
-          actor,
+      // 票 43（F1）：验票 + 闸拒（DENIED 审计条目与 `${prefix}_gate_denied` 错误拼法）
+      // 走共享 makeGatedCall——审批变体与 worker 任务票闸的差异只剩凭据形态
+      // （ApprovalToken + 焚毁读口，非任务票）与放行后的收尾（下面的焚毁/执行标记/
+      // 带 result 的 tool_result 事件，事件顺序一动就是行为变化，不并进共享件）。
+      let jti = "";
+      const gatedApproval = makeGatedCall({
+        prefix: "approval",
+        hmacKey: deps.hmacKey,
+        creds: () => ({ approvalToken: token, caseId: opts.caseId, used }),
+        deny: () => ({
+          record: (entry) =>
+            deps.ctx.audit.record({
+              ...entry,
+              actor,
+              requestId: deps.ctx.requestId,
+              createdAt: Date.now(),
+            }),
           objectId: decision.approvalId,
           objectType: "approval",
-          details: { tool, reason: verdict.reason, params_hash: paramsHash(params) },
-          requestId: deps.ctx.requestId,
-          result: "DENIED",
-          createdAt: Date.now(),
-        });
-        throw new Error(`approval_gate_denied:${verdict.reason}`);
-      }
-      const jti = (verdict.payload as ApprovalClaims).jti;
-      // 票 17：动作允许异步（kb_write 出站 chroma）。收尾（焚毁/执行标记/tool_result）
-      // 统一走 finish——同步动作原地收尾（与票 11 逐字节同序），异步动作由节点 await。
-      const finish = (result: Record<string, unknown>): ExecutionOutcome => {
-        deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
-        markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
-        emitEvent(db, runId, "tool_result", {
-          node: cursor.node,
-          tool,
-          ok: true,
-          approval_id: decision.approvalId,
-          result,
-        });
-        return { executed: true, approvalId: decision.approvalId, jti, result };
-      };
-      return finish(await action(params));
+        }),
+        onAllow: (v) => {
+          jti = (v.payload as ApprovalClaims).jti;
+        },
+      });
+      // 闸拒 = 授权链有缺口（票过期/参数被换/重放/读口不可达），共享件内 fail-closed：
+      // 审计 DENIED 后抛错强杀。票 17：动作允许异步（kb_write 出站 chroma）。
+      const result = await gatedApproval(nctx, tool, params as Record<string, unknown>, async () =>
+        (await action(params)) as Record<string, unknown>);
+      deps.burn?.burn(jti, "approval"); // INV-2：用后即焚（生产 = M2 used_tokens）
+      markApprovalExecuted(db, decision.approvalId, jti, deps.ctx);
+      emitEvent(db, runId, "tool_result", {
+        node: cursor.node,
+        tool,
+        ok: true,
+        approval_id: decision.approvalId,
+        result,
+      });
+      return { executed: true, approvalId: decision.approvalId, jti, result };
     })();
   };
 
