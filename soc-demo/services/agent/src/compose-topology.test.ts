@@ -156,3 +156,41 @@ describe.skipIf(!dockerUp)("票 38 compose config 语义（默认不含 wazuh-ma
     expect(svcs).toContain("wazuh-manager");
   });
 });
+
+// ---------- 票 41：agent 数据卷（B5·对账一-4 清偿：runs/checkpoints/审批卡不再容器层易失） ----------
+
+describe("票 41 静态拓扑：agent 挂数据卷（m3 卡「杀进程重启恢复」演示在 compose 下成立）", () => {
+  test("agent 服务有 ./data/agent:/app/data 的非只读 bind 挂载", () => {
+    const block = serviceBlock("agent");
+    // 落点必须是 /app/data 不是票 10 注释里写的 /data：代码侧 dataDir 从
+    // services/agent/src/ 往上三级（同 case-backend 的 ../../../data/ 口径），
+    // 容器内 WORKDIR=/app/services/agent → 解析到 /app/data——挂 /data 等于没挂，
+    // 库文件照旧落容器层，重启照丢。真容器证据见 scripts/agent-smoke-41.sh。
+    expect(block, "agent 缺数据卷（重启丢 runs/审批卡=验收①不成立）").toContain("./data/agent:/app/data");
+    // 非只读：resume 要写 checkpoint、批准要裁决卡——:ro 结尾直接废掉恢复链路
+    expect(block, "数据卷不许 :ro（恢复链路要写盘）").not.toContain("./data/agent:/app/data:ro");
+  });
+
+  test("case-backend 同口径对称（两个 index.ts 的 ../../../data/ 容器内都解析到 /app/data）", () => {
+    expect(serviceBlock("case-backend"), "case-backend 先例挂载丢了").toContain("./data/case-backend:/app/data");
+  });
+
+  test("FGA 两挂载保持只读（对账一-4 证据里原有的两面不动：插件同源一份 + matrix 单一来源）", () => {
+    const block = serviceBlock("agent");
+    expect(block).toContain(":/fga:ro");
+    expect(block).toContain(":/fga-matrix:ro");
+  });
+});
+
+describe.skipIf(!dockerUp)("票 41 compose config 语义：agent 数据卷渲染成真 bind mount", () => {
+  const agentConfig = (): string =>
+    spawnSync("docker", ["compose", "-f", `${ROOT}docker-compose.yml`, "config", "agent"], {
+      encoding: "utf8",
+    }).stdout;
+
+  test("渲染面：bind 源指向 ./data/agent，容器内落点 /app/data", () => {
+    const cfg = agentConfig();
+    expect(cfg, "渲染后没有 data/agent 的 bind 源").toMatch(/source:.*data[/\\]agent/);
+    expect(cfg, "渲染后容器内落点不是 /app/data").toMatch(/target: \/app\/data/);
+  });
+});

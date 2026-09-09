@@ -4,7 +4,7 @@ export type DB = Database.Database;
 
 // m3 supervisor 自持三张表（票 10）。注意：run/checkpoint/事件流是编排侧自己的状态，
 // 不进 M2 的六实体库——m3 卡把 checkpointer/SSE 总线划给 agent 服务，SQLite 落自己的卷
-// （compose：./data/agent:/data）。JSON 字段存 TEXT；时间一律 epoch 毫秒。
+// （compose：./data/agent:/app/data，票 41 口径）。JSON 字段存 TEXT；时间一律 epoch 毫秒。
 const DDL = `
 -- run 实体（CONTEXT.md 状态机：queued→running→awaiting_approval→running→completed/failed）
 CREATE TABLE IF NOT EXISTS runs (

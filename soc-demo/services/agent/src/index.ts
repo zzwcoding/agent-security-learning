@@ -44,8 +44,9 @@ import { ChromaKb } from "../workers/knowledge/kb.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 // 编排侧自己的库（runs/run_events/checkpoints/approvals）落 soc-demo/data；
-// AGENT_DB_PATH 可覆盖。compose 给 agent 挂 ./data/agent:/data 的卷，落盘才有
-// 断线补发与杀进程可恢复可言。
+// AGENT_DB_PATH 可覆盖。compose 给 agent 挂 ./data/agent:/app/data 的卷（票 41：
+// 本文件 dataDir 往上三级，容器内解析到 /app/data，同 case-backend 口径），落盘
+// 才有断线补发与杀进程可恢复可言。
 const dataDir = new URL("../../../data/", import.meta.url);
 mkdirSync(dataDir, { recursive: true });
 const dbPath = process.env.AGENT_DB_PATH ?? fileURLToPath(new URL("agent.sqlite", dataDir));

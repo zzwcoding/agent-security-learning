@@ -67,6 +67,13 @@ services:
       # 缺省 on；EVENT_DRIVEN=off 可关（手动 POST /internal/runs 与 evals 不受影响）。
       EVENT_DRIVEN: ${EVENT_DRIVEN:-on}
     volumes:
+      # 票 41（B5·对账一-4 清偿）：runs/run_events/checkpoints/审批卡落宿主盘，
+      # 审批 interrupt 处杀进程重启可恢复（m3 卡测试计划）。落点 /app/data 不是
+      # 票 10 注释里的 /data：index.ts 的 ../../../data/ 从 services/agent/src/
+      # 往上三级，容器内 WORKDIR=/app/services/agent → 解析到 /app/data，同
+      # case-backend 口径（挂 /data 等于没挂，库照旧落容器层重启照丢）。
+      # 真容器证据：bash scripts/agent-smoke-41.sh
+      - "./data/agent:/app/data"
       - "./services/gateway/plugins:/fga:ro" # store/model id 与 contextforge 插件同源一份
       - "./services/gateway/fga:/fga-matrix:ro" # matrix.json = 可见工具清单的单一来源
     healthcheck:
