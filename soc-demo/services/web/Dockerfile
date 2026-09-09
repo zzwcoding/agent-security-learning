@@ -7,6 +7,10 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml .npmrc ./
 COPY services/web/package.json services/web/
 RUN pnpm install --frozen-lockfile --filter @soc-demo/web...
 
+# 票 20：fixtures/alerts/ 打包进镜像——回放按钮（FR-M10.1）从构建期 glob 里
+# 把 fixture POST 进 ingest webhook 正门（src/fixtures.ts）
+COPY fixtures/ fixtures/
+
 COPY tsconfig.base.json ./
 COPY services/web/ services/web/
 

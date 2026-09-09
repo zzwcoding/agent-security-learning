@@ -142,9 +142,16 @@ services:
   web:
     build: { context: ., dockerfile: services/web/Dockerfile }
     ports: ["5173:5173"]
+    # 票 20：vite dev 代理的上游（vite.config.ts 读这三个 env；本机开发缺省 127.0.0.1）
+    environment:
+      AGENT_URL: http://agent:3003
+      M2_URL: http://case-backend:3002
+      INGEST_URL: http://ingest:3001
     depends_on:
+      ingest: { condition: service_healthy } # 回放按钮的正门（FR-M10.1）
+      case-backend: { condition: service_healthy } # 告警/审计查询（FR-M10.1/.5）
       gateway: { condition: service_healthy }
-      agent: { condition: service_healthy }
+      agent: { condition: service_healthy } # 登录/流水线 SSE（FR-M10.2）
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:5173/"]
       interval: 5s

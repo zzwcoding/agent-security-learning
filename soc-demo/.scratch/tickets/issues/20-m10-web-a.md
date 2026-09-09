@@ -8,10 +8,10 @@
 
 **Belongs to spec:** specs/modules.md
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Vite + React + antd 脚手架；不引状态管理库；4 预置身份登录（源：m10 卡技术选型·2026-09-08 拍板）
-- [ ] 告警列表页：dedup 标记/severity/状态 + 回放按钮（源：PRD FR-M10.1）
-- [ ] 流水线实时视图：SSE 推送 run 节点图高亮 + 每 worker 在干嘛一屏看全（源：PRD FR-M10.2）
-- [ ] 审计流页：实时滚动 + 按 requestId/case 过滤（源：PRD FR-M10.5）
-- [ ] SSE 断线自动重连 + Last-Event-ID 补发（源：决策记录 #9）
+- [x] Vite + React + antd 脚手架；不引状态管理库；4 预置身份登录（源：m10 卡技术选型·2026-09-08 拍板）
+- [x] 告警列表页：dedup 标记/severity/状态 + 回放按钮（源：PRD FR-M10.1）
+- [x] 流水线实时视图：SSE 推送 run 节点图高亮 + 每 worker 在干嘛一屏看全（源：PRD FR-M10.2）
+- [x] 审计流页：实时滚动 + 按 requestId/case 过滤（源：PRD FR-M10.5）
+- [x] SSE 断线自动重连 + Last-Event-ID 补发（源：决策记录 #9）
