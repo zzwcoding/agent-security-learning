@@ -36,7 +36,12 @@ export interface VectorDoc {
 
 export interface VectorHit {
   id: string;
-  /** 相似度得分（cosine 相似：越大越近；chroma 返回 distance 时取 1-distance）。 */
+  /** 检索得分（票 51 口径修正）：只保证「越大越近」（排序单调），绝对数值不可
+   *  跨实现互读、不承诺余弦语义。内存件 MemoryVectorStore：L2 归一化向量的点积
+   *  （数学上等价 cosine，取值 [-1,1]）；真 chroma 件：集合建在 chroma 默认的
+   *  L2 距离空间（实测集合配置 "space":"l2"，见 3.2），score = 1 - distance 可为负
+   *  （3.4 教具 S3 实测 -0.949）。score 只用于排序、无分数门槛——「命中≠相关」
+   *  （护栏留生产化，记票 51）。 */
   score: number;
   text: string;
   metadata: VectorDoc["metadata"];
