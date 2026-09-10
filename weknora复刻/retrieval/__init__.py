@@ -30,7 +30,22 @@ _CJK = re.compile(r"[一-鿿]")
 class ScoredChunk:
     chunk: store.Chunk
     score: float
-    source: str  # "bm25" / "vector" / "rrf" / "rerank"（RRF 与重排是阶段 4 的事）
+    source: str  # "bm25" / "vector" / "rrf" / "rerank"（重排是步 4.2 的事）
+
+
+@dataclass
+class SearchTrace:
+    """一次混合检索的中间态全记录——页面对照视图的数据面（不另开查询面）。
+
+    reranked 字段步 4.2 才长出来（LLM 教学版重排）。
+    """
+
+    bm25_hits: list[ScoredChunk]
+    vector_hits: list[ScoredChunk]
+    fused: list[ScoredChunk]
+
+
+RRF_K = 60  # 平滑常数（书 3.2 常取值）：压低前几名之间的分差
 
 
 def tokenize(text: str) -> list[str]:
@@ -93,3 +108,27 @@ def vector_search(kb_id: int, query: str, top_k: int = 10) -> list[ScoredChunk]:
         hits.append(ScoredChunk(chunks_by_id[chunk_id], cos, "vector"))
     hits.sort(key=lambda h: -h.score)
     return hits[:top_k]
+
+
+def _rrf_fuse(lanes: list[list[ScoredChunk]], top_k: int) -> list[ScoredChunk]:
+    """倒数排名融合：抛开原始分数只看名次，得分 = Σ 1/(60+rank)（书 3.2 混合检索节）。
+
+    为什么不能用原始分数直接加：余弦在 0~1，BM25 是 0~几十，尺度完全不同——
+    两个评委一个打百分制一个打十分制，直接加总等于让百分制评委独裁。
+    RRF 的办法：都只许报名次，名次换成倒数分再相加。
+    """
+    scores: dict[int, float] = {}
+    by_id: dict[int, store.Chunk] = {}
+    for hits in lanes:
+        for rank, h in enumerate(hits, 1):
+            scores[h.chunk.id] = scores.get(h.chunk.id, 0.0) + 1.0 / (RRF_K + rank)
+            by_id[h.chunk.id] = h.chunk
+    ranked = sorted(scores.items(), key=lambda kv: -kv[1])[:top_k]
+    return [ScoredChunk(by_id[cid], s, "rrf") for cid, s in ranked]
+
+
+def hybrid_search(kb_id: int, query: str, top_k: int = 10) -> SearchTrace:
+    """混合检索：两路并行召回 → RRF 融合（重排步 4.2 接在 fused 之后）。"""
+    b = bm25_search(kb_id, query, top_k)
+    v = vector_search(kb_id, query, top_k)
+    return SearchTrace(bm25_hits=b, vector_hits=v, fused=_rrf_fuse([b, v], top_k))
