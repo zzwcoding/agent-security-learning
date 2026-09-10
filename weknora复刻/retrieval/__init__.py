@@ -12,6 +12,9 @@ import math
 import re
 from dataclasses import dataclass
 
+import numpy as np
+
+import llm_gateway
 import store
 
 K1 = 1.2  # 词频饱和速度
@@ -62,5 +65,29 @@ def bm25_search(kb_id: int, query: str, top_k: int = 10) -> list[ScoredChunk]:
             scores[i] = scores.get(i, 0.0) + idf * tf * (K1 + 1) / (tf + K1 * (1 - B + B * dl / avgdl))
 
     hits = [ScoredChunk(chunks[i], s, "bm25") for i, s in scores.items() if s > 0]
+    hits.sort(key=lambda h: -h.score)
+    return hits[:top_k]
+
+
+def index_chunks(kb_id: int) -> int:
+    """建/重建向量投影：子块（INV-1）→ llm_gateway.embed 批量嵌入 → 存 blob。返回索引条数。"""
+    chunks = store.list_child_chunks(kb_id)
+    if not chunks:
+        return 0
+    vecs = llm_gateway.embed([c.text for c in chunks])
+    store.save_embeddings(kb_id, [(c.id, v) for c, v in zip(chunks, vecs, strict=True)])
+    return len(chunks)
+
+
+def vector_search(kb_id: int, query: str, top_k: int = 10) -> list[ScoredChunk]:
+    """稠密向量检索：查询词也 embed 成向量，numpy 手写余弦，暴力全扫（PRD §5：<100ms）。"""
+    chunks_by_id = {c.id: c for c in store.list_child_chunks(kb_id)}
+    qv = np.asarray(llm_gateway.embed([query])[0], dtype=np.float32)
+    hits = []
+    for chunk_id, vec in store.load_embeddings(kb_id):
+        if chunk_id not in chunks_by_id:
+            continue  # 孤儿投影（chunk 已删）不碰——INV-2 的防守
+        cos = float(np.dot(qv, vec) / (np.linalg.norm(qv) * np.linalg.norm(vec) + 1e-9))
+        hits.append(ScoredChunk(chunks_by_id[chunk_id], cos, "vector"))
     hits.sort(key=lambda h: -h.score)
     return hits[:top_k]

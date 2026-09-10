@@ -11,6 +11,8 @@ import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 _conn: sqlite3.Connection | None = None
 
 
@@ -47,6 +49,9 @@ def init_db(path: str) -> None:
         );
         CREATE TABLE IF NOT EXISTS chunk (
             id INTEGER PRIMARY KEY, doc_id INTEGER, seq INTEGER, text TEXT
+        );
+        CREATE TABLE IF NOT EXISTS embedding (
+            kb_id INTEGER, chunk_id INTEGER PRIMARY KEY, vector BLOB
         );
         """
     )
@@ -120,3 +125,19 @@ def list_child_chunks(kb_id: int) -> list[Chunk]:
         (kb_id,),
     ).fetchall()
     return [Chunk(id=r["id"], doc_id=r["doc_id"], seq=r["seq"], text=r["text"]) for r in rows]
+
+
+def save_embeddings(kb_id: int, items: list[tuple[int, list[float]]]) -> None:
+    """存向量投影（chunk 的派生物，INV-2）。按 KB 先清后写——投影随 chunk 整批重建。"""
+    _conn.execute("DELETE FROM embedding WHERE kb_id = ?", (kb_id,))
+    _conn.executemany(
+        "INSERT INTO embedding (kb_id, chunk_id, vector) VALUES (?, ?, ?)",
+        [(kb_id, cid, np.asarray(v, dtype=np.float32).tobytes()) for cid, v in items],
+    )
+    _conn.commit()
+
+
+def load_embeddings(kb_id: int) -> list[tuple[int, "np.ndarray"]]:
+    """读向量投影：返回 [(chunk_id, numpy 向量)]。数学运算不归本模块（归 retrieval）。"""
+    rows = _conn.execute("SELECT chunk_id, vector FROM embedding WHERE kb_id = ?", (kb_id,)).fetchall()
+    return [(r["chunk_id"], np.frombuffer(r["vector"], dtype=np.float32)) for r in rows]
