@@ -4,9 +4,8 @@ mapstore 路径经 PII_MAPSTORE_PATH env 注入（agent 侧 TOOLS_MANIFEST_FILE 
 接缝），生产缺省 data/pii-mapstore.sqlite。autouse 保证既有测试（票 04/24/32）
 一行不改就回到隔离库上跑——不污染开发机的 data/，用例之间互不见对方的映射。
 """
-import pytest
-
 import pii_store
+import pytest
 
 
 @pytest.fixture(autouse=True)

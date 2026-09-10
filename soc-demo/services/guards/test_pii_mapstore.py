@@ -11,10 +11,9 @@
 """
 from pathlib import Path
 
-from fastapi.testclient import TestClient
-
 import pii_store
 from app import app
+from fastapi.testclient import TestClient
 
 client = TestClient(app)
 

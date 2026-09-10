@@ -10,7 +10,6 @@ from pathlib import Path
 
 from app import app
 from fastapi.testclient import TestClient
-
 from injection_scan import CHANNEL_POLICY, THRESHOLD
 
 ROOT = Path(__file__).parents[2]

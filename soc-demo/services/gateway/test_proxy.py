@@ -189,10 +189,10 @@ def test_gateway_selfbuilt_image_carries_mint_and_proxy():
     这里锁的是「自写件不缺文件、真值仓 env 不断线」两处最容易漏的接线。
     """
     dockerfile = (Path(__file__).parent / "Dockerfile").read_text(encoding="utf-8")
-    copy_lines = [l for l in dockerfile.splitlines()
-                  if l.startswith("COPY") and "requirements.txt" not in l]
-    assert any(all(m in l for m in ("app.py", "mint.py", "proxy.py"))
-               for l in copy_lines), copy_lines
+    copy_lines = [line for line in dockerfile.splitlines()
+                  if line.startswith("COPY") and "requirements.txt" not in line]
+    assert any(all(m in line for m in ("app.py", "mint.py", "proxy.py"))
+               for line in copy_lines), copy_lines
     compose = (Path(__file__).parents[2] / "docker-compose.yml").read_text(encoding="utf-8")
     assert "SECRETS_LLM_API_KEY" in compose  # provider 真 key（pass-through 注入）
     assert "SECRETS_VT_KEY" in compose  # 工具凭证真值仓（教学假值）

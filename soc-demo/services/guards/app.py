@@ -12,7 +12,6 @@ POST /pii/reveal      {"placeholder"}     → {"placeholder","originals",[...],"
 """
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
-
 from injection_scan import scan
 from pii import anonymize
 from pii_store import get_store

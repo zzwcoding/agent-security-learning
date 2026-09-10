@@ -12,6 +12,7 @@ memory_guard.py 同款做法。
 import re
 from functools import lru_cache
 
+from pii_store import get_store
 from presidio_analyzer import (
     AnalyzerEngine,
     Pattern,
@@ -22,8 +23,6 @@ from presidio_analyzer.nlp_engine import NlpEngineProvider
 from presidio_analyzer.predefined_recognizers import IpRecognizer
 from presidio_anonymizer import AnonymizerEngine
 from presidio_anonymizer.entities import OperatorConfig
-
-from pii_store import get_store
 
 # 五识别器契约实体（票 04 契约）：列表顺序即重叠优先级，靠前/更长者优先保留
 ENTITY_TYPES = ["EMAIL_ADDRESS", "CN_ID", "PHONE_NUMBER", "CREDIT_CARD", "IP_ADDRESS"]
