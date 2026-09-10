@@ -1,6 +1,6 @@
 # #52 · CI ruff 步骤两代尺子皆红 + 远端 CI 从未执勤
 
-- Status: open
+- Status: done（2026-09-10，c588894）
 - Priority: P2
 - Discovered: 2026-09-10（场景 8 步 8.5 收官实测，教学导览发现）
 - Modules: guards / gateway / CI

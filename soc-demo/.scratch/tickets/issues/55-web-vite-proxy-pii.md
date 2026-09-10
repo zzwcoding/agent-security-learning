@@ -1,6 +1,6 @@
 # #55 · web 反查按钮走线断在 vite proxy 缺行
 
-- Status: open
+- Status: done（2026-09-10，f8f592d；web 容器已重建，:5173 真机冒烟 200/403）
 - Priority: P2
 - Discovered: 2026-09-10（场景 6 步 6.4 收官实测，教学导览发现）
 - Modules: web

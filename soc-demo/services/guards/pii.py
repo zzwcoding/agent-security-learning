@@ -104,6 +104,11 @@ def anonymize(text: str, language: str = "zh") -> dict:
     analyzer, anonymizer = _engines()
     results = analyzer.analyze(text=text, language="en", entities=ENTITY_TYPES)
     results = _drop_overlaps(results)
+    # 票 56：豁免上移到清单层。内建 PhoneRecognizer 会把 192.168.1.100 点分隔凑成
+    # 3-3-4 电话形态抢命中（score 0.4 顶掉自家豁免版 IpRecognizer），识别器内部的
+    # 豁免只管自家结果、管不住隔壁抢座；对最终清单再过一遍 RFC1918（决策 #8），
+    # 谁抢到内网 IP 的座都无效。正则锚定全文匹配，公网 IP（8.8.8.8 等）不受影响。
+    results = [r for r in results if not RFC1918.match(text[r.start:r.end])]
     get_store().record([
         {
             "placeholder": f"<{r.entity_type}>",

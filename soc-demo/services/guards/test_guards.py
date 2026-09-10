@@ -112,6 +112,36 @@ def test_rfc1918_internal_ip_exempt_public_masked():
     assert text[ip_entities[0]["start"]:ip_entities[0]["end"]] == "8.8.8.8"
 
 
+def test_rfc1918_three_ranges_survive_phone_seat_steal_ticket56():
+    """票 56：192.168.1.100 曾被内建 PhoneRecognizer 抢座（点分隔凑 3-3-4，score
+    0.4 顶掉自家豁免版 IpRecognizer 的 overlap 裁决）误标 <PHONE_NUMBER>——识别器
+    内部豁免管不住隔壁抢座。修复=豁免上移清单层（_drop_overlaps 之后对最终清单
+    再过一遍 RFC1918）：三段内网 IP 全存活、公网对照照脱（决策 #8 资产标识不脱）。"""
+    text = "跳板 10.20.30.40、172.31.99.5、192.168.1.100，出口 198.51.100.7"
+    out = anonymize(text, "zh")
+    for internal in ["10.20.30.40", "172.31.99.5", "192.168.1.100"]:
+        assert internal in out["text"], f"内网 IP 被误脱敏: {internal}"
+    assert "<PHONE_NUMBER>" not in out["text"]  # 抢到座的电话识别器也被清单层拦下
+    ip_entities = [e for e in out["entities"] if e["type"] == "IP_ADDRESS"]
+    assert len(ip_entities) == 1, f"应只命中公网 IP 一处: {ip_entities}"
+    assert text[ip_entities[0]["start"]:ip_entities[0]["end"]] == "198.51.100.7"
+
+
+def test_internal_ip_original_never_enters_mapstore_ticket56():
+    """票 56 验收（函数级复验口径）：内网 IP 原文不再进 mapstore。6.1 捣乱 B 留档
+    的 ' 192.168.1.100' 库存行是永久教具不动；修复后新账面从此干净——真手机
+    （对照组）照脱照收，内网 IP 存活即无原文可收，五个占位符逐个查实。"""
+    out = anonymize("证人 192.168.1.100 与手机 13812345678 在场")
+    assert "192.168.1.100" in out["text"]
+    assert "<PHONE_NUMBER>" in out["text"]  # 真手机照脱（对照组）
+    for t in ["IP_ADDRESS", "PHONE_NUMBER", "EMAIL_ADDRESS", "CN_ID", "CREDIT_CARD"]:
+        r = client.post("/pii/reveal", json={"placeholder": f"<{t}>"})
+        if r.status_code != 200:
+            continue  # 该占位符本场无原文，404 = 查无此人
+        originals = r.json()["originals"]
+        assert originals == ["13812345678"], f"<{t}> 账面混入了不该收的原文: {originals}"
+
+
 def test_pii_en_entities():
     text = "contact alice@example.com or +1-202-555-0173 from 8.8.8.8, card 4111 1111 1111 1111"
     out = anonymize(text, "en")
