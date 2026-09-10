@@ -1,9 +1,5 @@
-"""weknora复刻 · 阶段 0 占位入口（阶段 1 起替换为 Streamlit 页面）。"""
+"""Streamlit 入口。启动：.venv/bin/streamlit run main.py"""
 
+import webui
 
-def hello() -> str:
-    return "weknora-rebuild skeleton"
-
-
-if __name__ == "__main__":
-    print(hello())
+webui.main()

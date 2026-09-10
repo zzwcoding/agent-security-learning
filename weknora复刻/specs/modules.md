@@ -76,7 +76,7 @@
 
 - 初始化：`init_db(path: str) -> None`（建表幂等）
 - KB：`create_kb(name: str) -> int`、`get_kb(kb_id) -> KB`、`list_kbs() -> list[KB]`
-- 文档：`create_document(kb_id, filename, fmt) -> int`、`get_document(doc_id) -> Document`、`list_documents(kb_id) -> list[Document]`、`set_document_status(doc_id, status) -> None`
+- 文档：`create_document(kb_id, filename, fmt, path="") -> int`、`get_document(doc_id) -> Document`、`list_documents(kb_id) -> list[Document]`、`set_document_status(doc_id, status) -> None`（path 记录原文件路径，reingest 重建时按它重读原文——阶段 1.2 落位）
 - chunk：`replace_chunks(doc_id, chunks: list[Chunk]) -> None`（重新入库幂等：先清旧 chunk 及其全部投影，PRD §7-⑨）、`list_chunks(doc_id) -> list[Chunk]`（含父块）、`list_child_chunks(kb_id) -> list[Chunk]`（只含子块=可索引集合）、`get_chunk(chunk_id) -> Chunk`
 - 向量投影：`save_embeddings(kb_id, items: list[tuple[int, list[float]]]) -> None`、`load_embeddings(kb_id) -> list[tuple[int, numpy.ndarray]]`（存 blob，数学运算不归本模块）
 - 图谱投影：`add_graph(kb_id, doc_id, entities: list[Entity], relations: list[Relation]) -> None`、`del_graph(doc_id) -> None`（重入库清理）、`search_node(kb_id, entity_name) -> tuple[Entity | None, list[Relation]]`、`list_entities(kb_id) -> list[Entity]`、`list_relations(kb_id, entity_name: str | None = None) -> list[Relation]`

@@ -9,6 +9,7 @@
 
 import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 
 _conn: sqlite3.Connection | None = None
 
@@ -34,6 +35,8 @@ class Chunk:
 def init_db(path: str) -> None:
     """建库建表（幂等）。测试传 ":memory:" 起一座用完即焚的临时库。"""
     global _conn
+    if path != ":memory:":
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
     _conn = sqlite3.connect(path)
     _conn.row_factory = sqlite3.Row
     _conn.executescript(
@@ -91,3 +94,19 @@ def list_chunks(doc_id: int) -> list[Chunk]:
 def set_document_status(doc_id: int, status: str) -> None:
     _conn.execute("UPDATE document SET status = ? WHERE id = ?", (status, doc_id))
     _conn.commit()
+
+
+def list_kbs() -> list[dict]:
+    rows = _conn.execute("SELECT id, name FROM kb ORDER BY id").fetchall()
+    return [{"id": r["id"], "name": r["name"]} for r in rows]
+
+
+def list_documents(kb_id: int) -> list[Document]:
+    rows = _conn.execute(
+        "SELECT id, kb_id, filename, fmt, status, path FROM document WHERE kb_id = ? ORDER BY id",
+        (kb_id,),
+    ).fetchall()
+    return [
+        Document(id=r["id"], kb_id=r["kb_id"], filename=r["filename"], fmt=r["fmt"], status=r["status"], path=r["path"])
+        for r in rows
+    ]
