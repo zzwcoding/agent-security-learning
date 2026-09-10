@@ -194,3 +194,33 @@ describe.skipIf(!dockerUp)("票 41 compose config 语义：agent 数据卷渲染
     expect(cfg, "渲染后容器内落点不是 /app/data").toMatch(/target: \/app\/data/);
   });
 });
+
+// ---------- 票 53：封条总闸——凡 image: 行必按 @sha256 digest 钉（全量扫描，含 profiles 内服务） ----------
+// 票 37/38 的钉断言是逐枚点名（langfuse 对 + wazuh-manager），默认栈 chroma/openfga/
+// contextforge 三枚封条被 override 摘钉后无人红（8.4 捣乱 B 实测：compose config 语法
+// 闸不校验封条）。上面逐枚断言一条不删，这里补一条全量规则管现在与未来：新加服务只要
+// 写了 image: 行就自动被覆盖，无需再记得来加断言。
+describe("票 53 静态拓扑：凡 image: 行必按 @sha256 digest 钉（全量扫描，含 profiles 内服务）", () => {
+  const imageLines = (): { no: number; line: string }[] =>
+    composeText()
+      .split("\n")
+      .map((line, idx) => ({ no: idx + 1, line }))
+      .filter(({ line }) => /^\s*image:/.test(line)); // 顶格 # 注释不算；缩进的真 image: 键才算
+
+  test("每个 image: 行的镜像值都以 @sha256:<64hex> 收尾，缺钉逐行点名", () => {
+    const offenders = imageLines()
+      .filter(({ line }) => {
+        const value = line.match(/^\s*image:\s*(\S+)/)?.[1] ?? "";
+        return !/@sha256:[0-9a-f]{64}$/.test(value);
+      })
+      .map(({ no, line }) => `docker-compose.yml:${no}\t${line.trim()}`);
+    expect(offenders, "封条总闸（票 53）：以下 image 行未按 @sha256 digest 钉").toEqual([]);
+  });
+
+  test("扫描非空（防 vacuous pass：一枚 image 都扫不到时总闸会空转放行）", () => {
+    expect(
+      imageLines().length,
+      "compose 里一枚 image: 都没扫到——封条总闸空转，先查文件路径与内容",
+    ).toBeGreaterThanOrEqual(1);
+  });
+});
