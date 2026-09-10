@@ -20,6 +20,7 @@ class Document:
     filename: str
     fmt: str
     status: str  # "done" / "failed"
+    path: str  # 原文件路径——reingest 重建时要按它重读原文
 
 
 @dataclass
@@ -39,7 +40,7 @@ def init_db(path: str) -> None:
         """
         CREATE TABLE IF NOT EXISTS kb (id INTEGER PRIMARY KEY, name TEXT);
         CREATE TABLE IF NOT EXISTS document (
-            id INTEGER PRIMARY KEY, kb_id INTEGER, filename TEXT, fmt TEXT, status TEXT
+            id INTEGER PRIMARY KEY, kb_id INTEGER, filename TEXT, fmt TEXT, status TEXT, path TEXT
         );
         CREATE TABLE IF NOT EXISTS chunk (
             id INTEGER PRIMARY KEY, doc_id INTEGER, seq INTEGER, text TEXT
@@ -54,13 +55,20 @@ def create_kb(name: str) -> int:
     return cur.lastrowid
 
 
-def create_document(kb_id: int, filename: str, fmt: str) -> int:
+def create_document(kb_id: int, filename: str, fmt: str, path: str = "") -> int:
     cur = _conn.execute(
-        "INSERT INTO document (kb_id, filename, fmt, status) VALUES (?, ?, ?, 'done')",
-        (kb_id, filename, fmt),
+        "INSERT INTO document (kb_id, filename, fmt, status, path) VALUES (?, ?, ?, 'done', ?)",
+        (kb_id, filename, fmt, path),
     )
     _conn.commit()
     return cur.lastrowid
+
+
+def get_document(doc_id: int) -> Document:
+    r = _conn.execute(
+        "SELECT id, kb_id, filename, fmt, status, path FROM document WHERE id = ?", (doc_id,)
+    ).fetchone()
+    return Document(id=r["id"], kb_id=r["kb_id"], filename=r["filename"], fmt=r["fmt"], status=r["status"], path=r["path"])
 
 
 def replace_chunks(doc_id: int, chunks: list[Chunk]) -> None:
