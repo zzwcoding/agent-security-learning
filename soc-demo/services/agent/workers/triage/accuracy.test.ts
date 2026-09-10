@@ -110,6 +110,11 @@ describe("标注集宏准确率（m4 卡：≥80%）", () => {
 });
 
 describe("全标注集横切断言（防线与可检验 artifact）", () => {
+  // 票 #54：本用例在一个 test 里串行 triageOne 全部 11 条标注告警，每案走真管道
+  //（起真 case-backend 子进程 + guards 通道扫描 + 生产 HttpTriageM2），单跑实测
+  // 3.9-4.8s，vitest 默认 5s 无余量——全量并发跑时偶发超时翻红。显式放大到 15s
+  //（≈3 倍余量，写法同 run-dispatcher.test.ts 的 test 级 15_000），保留真管道横切
+  // 守门语义，不换 fakeScan、不动 maxWorkers。
   test("注入变体：guards DENIED 全部落审计；全部 11 条 0 次 L2 工具调用", async () => {
     for (const labeled of LABELED) {
       const r = await triageOne(labeled.file);
@@ -126,7 +131,7 @@ describe("全标注集横切断言（防线与可检验 artifact）", () => {
         });
       }
     }
-  });
+  }, 15_000);
 });
 
 // 原始 fixture 里的注入载荷标记（教学：标注集与攻击载荷的关系一眼可见）
