@@ -20,7 +20,8 @@
 //   - 每个工具调用先过 validateToolCall（签名契约）再过 verifyTicket（gated 唯一
 //     入口，票面 scope 无 L2，INV-1/INV-3）；闸拒 = 审计 DENIED + 抛错强杀。
 //   - 工具输出进上下文前过 guards tool_output 通道（票 36 接通 G2-6；票 04 策略 =
-//     flag 打标不拦），打标进观察元数据 + 审计。
+//     flag 打标不拦），打标进观察元数据 + 审计。票 50：扫描显式 failMode:"flag"——
+//     guards 不可达折成 flag 打标留痕（reason 可 grep），不再静默放行。
 //   - worker 没有 awaitApproval/executeApproved——调查报告的 recommended_actions
 //     只是建议，「只提建议不动手」落在结构上：isolate_host 永远到不了执行层。
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -29,7 +30,7 @@ import type { FlowNode, NodeCtx } from "../../src/graph.js";
 import { paramsHash } from "../../src/verify-ticket.js";
 import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
-import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
+import type { ScanChannel, ScanDecision, ScanOptions } from "../../src/guards-client.js";
 import { buildDecidePrompt, buildPlanPrompt, buildReportPrompt, validateToolCall, type CaseView, type ObsEntry, type PlanCall, type ReportCall, type SummarizeCall } from "./prompt.js";
 import { parseReport, renderReportMarkdown } from "./schema.js";
 import type { InvestigationLlm } from "./llm.js";
@@ -68,8 +69,11 @@ export interface InvestigationDeps {
   kb: TriageKb;
   llm: InvestigationLlm;
   /** guards 扫描口（票 36·G2-6：工具输出的 tool_output 通道扫描；票 04 策略 = flag
-   *  打标不拦。生产 = scanInjection，测试 = fakeScan——enrichment 同款必填 seam）。 */
-  scan: (text: string, channel: ScanChannel) => Promise<ScanDecision>;
+   *  打标不拦。生产 = scanInjection，测试 = fakeScan——enrichment 同款必填 seam）。
+   *  票 50（方案 a）：消费点显式传 {failMode:"flag"}——guards 不可达时客户端折成
+   *  flag 打标裁决（reason=guards_unreachable 可 grep），不再按缺省 block 折成
+   *  fail_closed 被消费点落空即静默放行。签名风格与 triage 的 ScanFn 一致。 */
+  scan: (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<ScanDecision>;
   audit: AuditSink;
   /** spill 落盘根目录（默认 workspace/spill，PRD §6-M5；测试注入 tmpdir）。 */
   spillDir?: string;
@@ -225,18 +229,22 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
     // SIEM/KB/关联告警都是可被污染的数据源——命中注入特征的输出照常进上下文（证据
     // 一个字节不丢），但打标 + 审计留痕待人复核。不拦 ≠ 没看见：flag 在观察元数据和
     // 审计两处同时可查。位置在治理阈值之前——超大/摘要路径的输出同样要被打标。
+    // 票 50（方案 a）：显式传 failMode:"flag"——guards 不可达时客户端折成
+    // {action:"flag", reason:"guards_unreachable"} 走同一打标语义（原文保留待人工
+    // 复核），降级成为看得见的事件；details 的 score/reason 一律 ?? null 兜底，
+    // 不落 undefined 字段（JSON 序列化不丢键）。
     let flagged = false;
-    const decision = await deps.scan(text, "tool_output");
+    const decision = await deps.scan(text, "tool_output", { failMode: "flag" });
     if (decision.action === "flag") {
       flagged = true;
       record({
         action: "tool_output_flagged",
         objectId: deps.runId,
         objectType: "tool_output",
-        details: { tool, channel: "tool_output", score: decision.score },
+        details: { tool, channel: "tool_output", score: decision.score ?? null, reason: decision.reason ?? null },
         result: "SUCCESS",
       });
-      ctx.emit("audit", { action: "tool_output_flagged", tool, channel: "tool_output", score: decision.score });
+      ctx.emit("audit", { action: "tool_output_flagged", tool, channel: "tool_output", score: decision.score ?? null, reason: decision.reason ?? null });
     }
 
     if (text.length > spillThreshold) {

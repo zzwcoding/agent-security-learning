@@ -10,7 +10,7 @@ import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { loadRunState } from "../../src/checkpointer.js";
 import { verifyTicket } from "../../src/verify-ticket.js";
-import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
+import type { ScanChannel, ScanDecision, ScanOptions } from "../../src/guards-client.js";
 import { MemoryKb } from "../triage/kb.js";
 import { fakeScan, httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, type CaseBackend } from "../triage/testkit.js";
 import { makeInvestigationFlow, LOOP_MAX_STEPS } from "./flow.js";
@@ -59,7 +59,7 @@ async function rig(over: {
   llm?: Partial<InvestigationLlm>;
   siem?: SiemBackend;
   ticketTools?: string[];
-  scan?: (text: string, channel: ScanChannel) => Promise<ScanDecision>;
+  scan?: (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<ScanDecision>;
 } = {}) {
   const caseBackend: CaseBackend = await startCaseBackend();
   const db: DB = openDb(":memory:");
@@ -519,6 +519,53 @@ describe("guards tool_output 通道：调查循环的观察面（票 36·G2-6·D
     const loop = loopState(r.db, runId);
     expect(loop.observations.some((o) => o.flagged)).toBe(false);
     expect(r.audit.entries.some((e) => e.action === "tool_output_flagged")).toBe(false);
+  });
+
+  // 票 50（方案 a）：guards 停机不再静默放行——消费点显式传 failMode:"flag"，
+  // 不可达折成 flag 打标裁决（原文保留待人工复核），降级痕迹可 grep：
+  // 审计 details 带 reason=guards_unreachable，score 缺省 null（不许 undefined 丢键）。
+  test("guards 不可达 → 降级 flag 打标留痕：run 照常完成，details.reason=guards_unreachable、score=null", async () => {
+    // 形状 = scanInjection 不可达 + failMode:"flag" 的真实返回（guards-client.test.ts 已锁）
+    const seenOpts: unknown[] = [];
+    const unreachableFlag = async (
+      _text: string,
+      channel: ScanChannel,
+      opts?: ScanOptions,
+    ): Promise<ScanDecision> => {
+      seenOpts.push(opts);
+      return channel === "tool_output"
+        ? { blocked: false, action: "flag", reason: "guards_unreachable" }
+        : { blocked: false, action: "allow", score: 0 };
+    };
+    const r = await track(await rig({ scan: unreachableFlag }));
+    const { caseId } = await r.seedCaseFromFixture("ssh-5712-real.json");
+
+    const { done, runId } = await r.runCase(caseId);
+    expect(done.status).toBe("completed"); // 降级 ≠ 强杀：调查照常跑完出报告
+    expect(done.failReason).toBeNull();
+
+    // 消费点显式传了 failMode:"flag"（降级语义是调用点选择，不是 env 缺省碰运气）
+    expect(seenOpts.length).toBeGreaterThanOrEqual(1);
+    for (const opts of seenOpts) expect(opts).toMatchObject({ failMode: "flag" });
+
+    // 打标痕迹：每条成功观察都带 flagged 元数据（原文一个字节没丢，待人复核）
+    const loop = loopState(r.db, runId);
+    const okObs = loop.observations.filter((o) => o.ok);
+    expect(okObs.length).toBeGreaterThanOrEqual(1);
+    for (const o of okObs) expect(o.flagged).toBe(true);
+    expect(JSON.stringify(loop.observations)).toContain("Invalid user blimey");
+
+    // 审计 details：reason 具名在场；score 缺省 null——序列化后仍是 score:null 的键，
+    // 不是 undefined 被 JSON 丢掉（两种形态在这里可区分）
+    const flagged = r.audit.entries.filter((e) => e.action === "tool_output_flagged");
+    expect(flagged.length).toBeGreaterThanOrEqual(1);
+    for (const e of flagged) {
+      expect(e.details).toMatchObject({ channel: "tool_output", reason: "guards_unreachable", score: null });
+      const serialized = JSON.parse(JSON.stringify(e.details)) as Record<string, unknown>;
+      expect(serialized).toHaveProperty("score", null);
+      expect(serialized).toHaveProperty("reason", "guards_unreachable");
+    }
+    expect(flagged[0].details).toMatchObject({ tool: "siem_query" });
   });
 });
 

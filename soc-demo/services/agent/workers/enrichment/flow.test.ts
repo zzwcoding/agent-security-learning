@@ -7,6 +7,7 @@ import { executeRun } from "../../src/graph.js";
 import { MemoryAuditSink } from "../../src/audit.js";
 import { eventsAfter, type RunEvent } from "../../src/events.js";
 import { httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend, fakeScan, type CaseBackend } from "../triage/testkit.js";
+import type { ScanChannel, ScanDecision, ScanOptions } from "../../src/guards-client.js";
 import { makeEnrichmentFlow } from "./flow.js";
 import { ENRICHMENT_TOOLS } from "./tools.js";
 import { FixtureAnalyzerTable, type AnalyzerBackend, type AnalyzerCall, type AnalyzerName } from "./analyzers.js";
@@ -38,7 +39,11 @@ function probeTi(base: FixtureAnalyzerTable, probe: Probe): AnalyzerBackend {
   };
 }
 
-async function rig(over: { ti?: AnalyzerBackend; ticketTools?: string[] } = {}) {
+async function rig(over: {
+  ti?: AnalyzerBackend;
+  ticketTools?: string[];
+  scan?: (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<ScanDecision>;
+} = {}) {
   const caseBackend: CaseBackend = await startCaseBackend();
   const db: DB = openDb(":memory:");
   const audit = new MemoryAuditSink();
@@ -56,7 +61,7 @@ async function rig(over: { ti?: AnalyzerBackend; ticketTools?: string[] } = {}) 
       hmacKey: KEY,
       m2,
       analyzers: ti,
-      scan: fakeScan,
+      scan: over.scan ?? fakeScan,
       audit,
     });
     const done = await executeRun(db, run.id, { nodes: flow, audit, requestId: "req-enrich", hmacKey: KEY });
@@ -304,6 +309,54 @@ describe("analyzer 输出 = tool_output 通道（票 04 策略 flag）：投毒�
     const poisoned = structured.results.find((x) => x.data === "198.51.100.23");
     expect(poisoned).toMatchObject({ ok: true, level: "suspicious", flagged: true });
     expect(tl.find((e) => e.kind === "enrichment_report")?.body).toContain("guards");
+  });
+
+  // 票 50（方案 a）：guards 停机不再静默放行——analyzer 输出消费点显式传
+  // failMode:"flag"，不可达折成 flag 打标裁决（原文保留待人工复核），审计 details
+  // 带 reason=guards_unreachable、score 缺省 null（不许 undefined 字段序列化丢键）。
+  test("guards 不可达 → 降级 flag 打标留痕：run 照常完成，details.reason=guards_unreachable、score=null", async () => {
+    // 形状 = scanInjection 不可达 + failMode:"flag" 的真实返回（guards-client.test.ts 已锁）
+    const seenOpts: unknown[] = [];
+    const unreachableFlag = async (
+      _text: string,
+      channel: ScanChannel,
+      opts?: ScanOptions,
+    ): Promise<ScanDecision> => {
+      seenOpts.push(opts);
+      return channel === "tool_output"
+        ? { blocked: false, action: "flag", reason: "guards_unreachable" }
+        : { blocked: false, action: "allow", score: 0 };
+    };
+    const r = await track(await rig({ scan: unreachableFlag }));
+    const { caseId } = await r.seedCaseFromFixture("vt-87105-malware.json");
+
+    const { done } = await r.runCase(caseId);
+    expect(done.status).toBe("completed"); // 降级 ≠ 强杀：富化照常跑完出报告
+    expect(done.failReason).toBeNull();
+
+    // 消费点显式传了 failMode:"flag"（降级语义是调用点选择，不是 env 缺省碰运气）
+    expect(seenOpts.length).toBeGreaterThanOrEqual(1);
+    for (const opts of seenOpts) expect(opts).toMatchObject({ failMode: "flag" });
+
+    // 审计 details：reason 具名在场；score 缺省 null——序列化后仍是 score:null 的键，
+    // 不是 undefined 被 JSON 丢掉（两种形态在这里可区分）
+    const flag = r.audit.entries.find((e) => e.action === "tool_output_flagged");
+    expect(flag).toBeDefined();
+    expect(flag).toMatchObject({ objectType: "analyzer_output", result: "SUCCESS" });
+    expect(flag?.details).toMatchObject({
+      analyzer: "vt_lookup",
+      channel: "tool_output",
+      reason: "guards_unreachable",
+      score: null,
+    });
+    const serialized = JSON.parse(JSON.stringify(flag?.details)) as Record<string, unknown>;
+    expect(serialized).toHaveProperty("score", null);
+    expect(serialized).toHaveProperty("reason", "guards_unreachable");
+
+    // 报告面同样留痕：结果项 flagged: true，原文保留待人复核
+    const tl = await r.timeline(caseId);
+    const structured = structuredOf(tl.find((e) => e.kind === "enrichment_report"));
+    expect(structured.results.find((x) => x.dataType === "hash")).toMatchObject({ ok: true, flagged: true });
   });
 });
 

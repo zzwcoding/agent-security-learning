@@ -17,13 +17,14 @@
 //   ③ analyzer 查询（FixtureAnalyzerTable / 将来 microsandbox 真跑，票 16）
 //   ④ guards 扫描 analyzer 输出（tool_output 通道 = flag 策略，票 04：投毒输出放行
 //      但打标，原文保留待人工复核——analyzer 是第三方可污染件，这是第四攻击面的
-//      内容半边）
+//      内容半边）。票 50：扫描显式 failMode:"flag"——guards 不可达折成 flag 打标
+//      留痕（reason 可 grep），不再静默放行。
 //   ⑤ artifacts 回写（analyzer 提取的新 observable 经 add_observable L1 写回，M2 按
 //      dataType+data 去重合并）
 import type { FlowNode, NodeCtx } from "../../src/graph.js";
 import { makeGatedCall } from "../../src/gated-call.js";
 import type { AuditSink } from "../../src/audit.js";
-import type { ScanChannel, ScanDecision } from "../../src/guards-client.js";
+import type { ScanChannel, ScanDecision, ScanOptions } from "../../src/guards-client.js";
 import { ANALYZERS, tlpPapGate, type AnalyzerBackend, type AnalyzerCall, type AnalyzerName, type AnalyzerResult } from "./analyzers.js";
 import { validateToolCall } from "./tools.js";
 import { renderReportMarkdown, worstLevel, type EnrichedItem } from "./report.js";
@@ -53,8 +54,11 @@ export interface EnrichmentDeps {
   m2: EnrichmentM2;
   /** analyzer backend（m6 卡 Seam ①：fixture 表 mock / microsandbox 真跑）。 */
   analyzers: AnalyzerBackend;
-  /** guards 扫描口（tool_output 通道；生产 = scanInjection，测试 = fakeScan）。 */
-  scan: (text: string, channel: ScanChannel) => Promise<ScanDecision>;
+  /** guards 扫描口（tool_output 通道；生产 = scanInjection，测试 = fakeScan）。
+   *  票 50（方案 a）：消费点显式传 {failMode:"flag"}——guards 不可达时客户端折成
+   *  flag 打标裁决（reason=guards_unreachable 可 grep），不再按缺省 block 折成
+   *  fail_closed 被消费点落空即静默放行。签名风格与 triage 的 ScanFn 一致。 */
+  scan: (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<ScanDecision>;
   audit: AuditSink;
 }
 
@@ -164,6 +168,10 @@ export function makeEnrichmentFlow(deps: EnrichmentDeps): FlowNode[] {
 
           // guards：analyzer 输出属 tool_output 通道（票 04 策略表 = flag）——analyzer
           // 是可被污染的第三方件，命中注入特征的输出放行但打标，原文保留待人复核。
+          // 票 50（方案 a）：显式传 failMode:"flag"——guards 不可达时客户端折成
+          // {action:"flag", reason:"guards_unreachable"} 走同一打标语义，降级成为
+          // 看得见的事件；details 的 score/reason 一律 ?? null 兜底，不落 undefined
+          // 字段（JSON 序列化不丢键）。
           const payload = outcome.payload;
           let flagged = false;
           if (!payload.success) {
@@ -172,14 +180,14 @@ export function makeEnrichmentFlow(deps: EnrichmentDeps): FlowNode[] {
             state.items.push({ analyzer, ...call, ok: false, refused: payload.errorMessage ?? "analyzer_error" });
             continue;
           }
-          const decision = await deps.scan(JSON.stringify(payload), "tool_output");
+          const decision = await deps.scan(JSON.stringify(payload), "tool_output", { failMode: "flag" });
           if (decision.action === "flag") {
             flagged = true;
             record({
               action: "tool_output_flagged",
               objectId: deps.caseId,
               objectType: "analyzer_output",
-              details: { analyzer, data: call.data, dataType: call.dataType, channel: "tool_output", score: decision.score },
+              details: { analyzer, data: call.data, dataType: call.dataType, channel: "tool_output", score: decision.score ?? null, reason: decision.reason ?? null },
               result: "SUCCESS",
             });
           }

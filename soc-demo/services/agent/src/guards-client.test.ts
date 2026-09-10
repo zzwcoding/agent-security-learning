@@ -86,4 +86,16 @@ describe("guards 客户端（调用方 fail-closed，INV-1）", () => {
     expect(d.blocked).toBe(false);
     expect(d.action).toBe("flag");
   });
+
+  // 票 50（方案 a）：tool_output 消费点显式传 failMode:"flag"——不可达折成 flag 打标
+  // 裁决（原文保留待人工复核），reason 具名可 grep，score 缺省 undefined 由消费点
+  // ?? null 兜住（details 不许落 undefined 字段）。
+  test("票 50：不可达 + failMode:flag → {action:flag, reason:guards_unreachable}，score 为 undefined", async () => {
+    const d = await scanInjection("whatever", "tool_output", {
+      baseUrl: "http://127.0.0.1:1", // closed port：连接拒绝 = 不可达（非超时）
+      failMode: "flag",
+    });
+    expect(d).toEqual({ blocked: false, action: "flag", reason: "guards_unreachable" });
+    expect(d.score).toBeUndefined();
+  });
 });
