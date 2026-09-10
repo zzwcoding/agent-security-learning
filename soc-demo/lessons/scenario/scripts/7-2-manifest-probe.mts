@@ -17,7 +17,7 @@ function head(t: string): void {
 }
 
 // ---- S1 · 健康表：登记行说什么，闸信什么 ----
-head("S1 健康表：真登记表（24 行）");
+head("S1 健康表：真登记表（25 行 = A.1 的 24 + get_case 点名偏差）");
 console.log(`list_approvals tierOf = ${tierOf("list_approvals")}（L1：无票 no_ticket）`);
 console.log(`get_alert      tierOf = ${tierOf("get_alert")}（L0：无票 allow）`);
 console.log(`kb_write       tierOf = ${tierOf("kb_write")}（L2：无票 require_approval）`);
