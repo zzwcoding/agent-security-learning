@@ -2,5 +2,6 @@
 streamlit      # 可观察界面（阶段 1 起每阶段页面）
 pymupdf        # PDF 解析（txt/md 用内置解析器）
 numpy          # 手写向量存储（余弦相似度）
+httpx          # llm_gateway 真实后端的 HTTP 调用（modules.md llm_gateway 卡点名）
 pytest         # 测试
 ruff           # lint
