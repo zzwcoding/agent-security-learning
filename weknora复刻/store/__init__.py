@@ -110,3 +110,13 @@ def list_documents(kb_id: int) -> list[Document]:
         Document(id=r["id"], kb_id=r["kb_id"], filename=r["filename"], fmt=r["fmt"], status=r["status"], path=r["path"])
         for r in rows
     ]
+
+
+def list_child_chunks(kb_id: int) -> list[Chunk]:
+    """KB 下全部可索引卡片（阶段 5 引入父子块后只含子块；现在所有卡片都是子块）。"""
+    rows = _conn.execute(
+        "SELECT c.id, c.doc_id, c.seq, c.text FROM chunk c"
+        " JOIN document d ON c.doc_id = d.id WHERE d.kb_id = ? ORDER BY c.id",
+        (kb_id,),
+    ).fetchall()
+    return [Chunk(id=r["id"], doc_id=r["doc_id"], seq=r["seq"], text=r["text"]) for r in rows]
