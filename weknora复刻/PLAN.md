@@ -64,4 +64,6 @@ sdd-flow（骨架，L0/L1）          learn-by-rebuild（执行，L2 互动档�
 - [x] 决策拍板（4 项，MISSION.md）
 - [x] 状态文件落盘（MISSION/RESOURCES/NOTES/PLAN）
 - [x] **步 0：骨架 + CI**（2026-09-10：四道门本地全绿——spec gate / boundary gate / ruff / pytest；CI 工作流 `.github/workflows/ci-weknora.yml` 与 soc-demo 同款按子目录 paths 过滤）
-- [ ] **步 1：PRD 定稿 + 术语表（sdd-flow 阶段 1）** ← 下一步，等用户说"下一步"
+- [x] **步 1：PRD 定稿 + 术语表（sdd-flow 阶段 1）**（PRD v1.0 定稿 → v1.1 变更：安全防线接入椒图 M3 预留，ADR 0002）
+- [x] **步 2：模块划分 + 架构图过审（sdd-flow 阶段 2）**（8 模块卡 + 边界规则 7 条 + 页面映射 12 行；架构图 v1 过审 ADR 0001；目录骨架已建，四道门 0 警告全绿）
+- [ ] **步 3：第一幕 spec 定稿 + 拆票（sdd-flow 阶段 3+4）** ← 下一步，等用户说"下一步"
