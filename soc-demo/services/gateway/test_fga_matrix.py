@@ -11,7 +11,8 @@ import yaml
 
 GW = Path(__file__).parent
 
-# PRD 附录 A.1 工具分级表全量 23 个工具名（含 L2 五件）
+# FGA 矩阵侧工具全集 = PRD A.1 收编 24 工具中进族的 23 个（含 L2 五件）；
+# list_approvals（场景 7）是矩阵外登记例外，见 test_tool_manifest_matches_matrix_families
 A1_L2 = {"kb_write", "isolate_host", "block_ip", "deisolate_host", "unblock_ip"}
 A1_ALL = {
     "kb_lookup", "search_cases_by_host", "get_alert", "siem_query",
@@ -68,7 +69,8 @@ def test_tool_manifest_matches_matrix_families():
     """票 48（ADR 0004-2）：fixtures/tools.manifest.json 是工具分级/族的登记单一来源；
     matrix.json 是族→角色的 FGA 授权面。两个机读面的族归属与分级必须逐字一致：
     矩阵里的每个工具在 manifest 同名同族同级；manifest 比矩阵多出的登记必须单独
-    点名（当前唯一：get_case，票 17 引入的沉淀读案工具，A.1/矩阵暂未收——记票 48 出入①）。"""
+    点名（当前两个：get_case，票 17 引入的沉淀读案工具；list_approvals，场景 7 的
+    审批台账读口——两者都是「登记先行、矩阵暂未收」的点名例外）。"""
     entries = {t["name"]: t for t in load_tool_manifest()["tools"]}
     fams = load_matrix()["families"]
     matrix_tools = {t for fam in fams.values() for t in fam["tools"]}
@@ -78,7 +80,7 @@ def test_tool_manifest_matches_matrix_families():
             assert entries[tool]["family"] == fam, f"{tool} family 与矩阵漂移"
             assert entries[tool]["tier"] == spec["tier"], f"{tool} tier 与矩阵漂移"
     extra = set(entries) - matrix_tools
-    assert extra == {"get_case"}, f"manifest 比矩阵多出的登记须点名复核：{sorted(extra)}"
+    assert extra == {"get_case", "list_approvals"}, f"manifest 比矩阵多出的登记须点名复核：{sorted(extra)}"
 
 
 def test_no_direct_grant_on_l2_anywhere():

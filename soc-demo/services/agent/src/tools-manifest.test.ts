@@ -69,8 +69,8 @@ describe("ToolManifest ≡ PRD A.1（文档面：漂移必红）", () => {
   const manifest = loadToolsManifest().tools.map((t) => ({ name: t.name, tier: t.tier }));
   const a1 = parsePrdA1();
 
-  test("A.1 全量 23 工具已登记且分级逐字一致（PRD 改表不改 manifest → 红）", () => {
-    expect(a1.length).toBe(23); // 快照：A.1 若增删行，这里先红，逼人走「先 manifest 后文档」
+  test("A.1 全量 24 工具已登记且分级逐字一致（PRD 改表不改 manifest → 红）", () => {
+    expect(a1.length).toBe(24); // 快照：A.1 若增删行，这里先红，逼人走「先 manifest 后文档」（场景 7：list_approvals 落表后 23→24）
     const byName = new Map(manifest.map((t) => [t.name, t.tier]));
     for (const row of a1) {
       expect(byName.get(row.name), `A.1 工具 ${row.name} 未登记`).toBeTypeOf("string");

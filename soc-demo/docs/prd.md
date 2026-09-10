@@ -1161,6 +1161,7 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 | `block_ip` | 无（仅审批链） | L2 | 总是 | mock 防火墙封禁 |
 | `deisolate_host` / `unblock_ip` | 无（仅审批链） | L2 | 总是 | 回滚动作同等级审批 |
 | `case_assign` / `case_update` | 调查（经审批参数规则） | L1 | `severity` 上调至 4 时升 L2 | 参数级升降级示例（HolmesGPT 参数级审批） |
+| `list_approvals` | 无（只读登记；台账读口待接对话面） | L1 | — | 审批台账查询（场景 7 经 gen:tool 落地：只读审批卡 id/工具/状态/案号；更严口径按 L1 过任务票，不做免验——get_case 同款先例；FGA 矩阵暂未收，不在 chat 可见面） |
 
 设计说明：L2 工具「无任何 worker 持票」是 D7 的核心——遏制工具不在任何 agent 的能力面内，只能由审批回路铸一次性票执行（对照 M507：EDR 破坏性工具直接暴露给 LLM 无 HITL）。
 

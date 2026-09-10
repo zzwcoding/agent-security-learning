@@ -28,6 +28,7 @@
     { "name": "unblock_ip", "tier": "L2", "family": "incident_response", "owner_card": "m9", "description": "封禁回滚（同等级审批）" },
     { "name": "case_assign", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "案件指派（参数级升降级示例：severity 上调至 4 时升 L2）" },
     { "name": "case_update", "tier": "L1", "family": "case_write", "owner_card": "m5", "description": "案件更新（同上参数级规则）" },
-    { "name": "get_case", "tier": "L1", "family": "readonly_query", "owner_card": "m7", "description": "读案件详情（票 17 引入的沉淀读案面；更严口径按 L1 过任务票，不做免验。A.1 表暂未列——已知偏差，见票 48 出入①）" }
+    { "name": "get_case", "tier": "L1", "family": "readonly_query", "owner_card": "m7", "description": "读案件详情（票 17 引入的沉淀读案面；更严口径按 L1 过任务票，不做免验。A.1 表暂未列——已知偏差，见票 48 出入①）" },
+    { "name": "list_approvals", "tier": "L1", "family": "readonly_query", "owner_card": "m3", "description": "审批台账查询（场景 7 首个 gen:tool 落地工具：只读审批卡 id/工具/状态/案号；更严口径按 L1 过任务票，不做免验——get_case 同款。A.1 已同步，FGA 矩阵暂未收：不在 chat 可见面，读口待接线）" }
   ]
 }
