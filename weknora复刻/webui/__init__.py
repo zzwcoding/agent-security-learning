@@ -12,6 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 import ingest
+import retrieval
 import store
 
 DB_PATH = "data/app.db"
@@ -25,7 +26,7 @@ def page_ingest() -> None:
     if not kbs:
         st.warning("还没有知识库，先跑种子脚本：`.venv/bin/python scripts/seed_kb.py`")
         return
-    kb_id = st.selectbox("知识库", kbs, format_func=lambda k: f"{k['name']}（id={k['id']}）")["id"]
+    kb_id = st.selectbox("知识库", kbs, format_func=lambda k: f"{k['name']}（id={k['id']}）", key="ingest_kb")["id"]
 
     uploaded = st.file_uploader("上传 txt 文档", type=["txt"])
     if uploaded and st.button("入库"):
@@ -52,9 +53,29 @@ def page_ingest() -> None:
                 st.text(c.text)
 
 
+def page_search() -> None:
+    """检索试验台：输入查询词，看 BM25 带分排序（阶段 4 这里会长出双路对照视图）。"""
+    st.header("🔍 检索试验台")
+    kbs = store.list_kbs()
+    if not kbs:
+        return
+    kb_id = st.selectbox("知识库", kbs, format_func=lambda k: f"{k['name']}（id={k['id']}）", key="search_kb")["id"]
+    query = st.text_input("查询词", placeholder="试试：知识 / 卡片 / 检索")
+    if not query:
+        return
+    hits = retrieval.bm25_search(kb_id, query)
+    st.write(f"BM25 命中 **{len(hits)}** 张卡片（按相关度排序）")
+    for i, h in enumerate(hits, 1):
+        doc = store.get_document(h.chunk.doc_id)
+        with st.expander(f"#{i} 得分 {h.score:.4f} · {doc.filename} · 卡片 {h.chunk.seq}"):
+            st.text(h.chunk.text)
+
+
 def main() -> None:
     """Streamlit 入口。阶段标记：让你一眼看到项目跑到哪了。"""
     store.init_db(DB_PATH)
     st.title("WeKnora 复刻 · 学习控制台")
-    st.write("✅ 阶段 1 跑通：上传 txt → 固定分块 → SQLite 账本 → 页面看卡片")
+    st.write("✅ 阶段 1 入库闭环 ｜ ✅ 阶段 2 BM25 关键词检索（试验台已开）")
     page_ingest()
+    st.divider()
+    page_search()

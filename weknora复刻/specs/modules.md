@@ -219,7 +219,7 @@
 
 ### 依赖
 
-- 模块: `ingest`、`qa`、`graph`、`wiki`、`store`（store 仅用于列表/配置类只读查询：文档列表、chunk 列表、四开关状态、ExtractConfig）
+- 模块: `ingest`、`qa`、`graph`、`wiki`、`store`（store 仅用于列表/配置类只读查询：文档列表、chunk 列表、四开关状态、ExtractConfig）、`retrieval`（阶段 2 起：检索试验台直调 bm25_search 等查询面——只读展示检索中间态，不编排；L0 2026-09-10 裁决，裁决理由：试验台是检索结果的观察窗，经 qa 转发只会造浅接口）
 - 外部: Streamlit（技术栈点名框架，PRD §0.2-2）
 
 ### Seam 与测试
@@ -247,6 +247,7 @@
 | 入库页 | 文档列表、chunk 列表（含父块扩展） | `store` list_documents / list_chunks |
 | 入库页 | 四开关当前状态读取与修改（需要新采集：IndexingStrategy 配置存储） | `store` get_strategy / set_strategy |
 | 入库页 | 上传文件触发解析/分块/索引管线、重新入库 | `ingest` ingest_file / reingest_document |
+| 问答页 | 关键词检索试验台（阶段 2 先行：BM25 带分排序展示；阶段 4 长成双路对照视图） | `retrieval` bm25_search |
 | 问答页 | 双路召回结果与 RRF 融合分对比视图（需要新查询面：检索函数返回中间态） | `qa` ask(...).trace（SearchTrace 中间态，由 `retrieval` hybrid_search 产出） |
 | 问答页 | 带引用来源编号的回答、命中 chunk 的来源信息 | `qa` ask(...).text / .citations |
 | 问答页 | 图谱关系链并行汇入上下文的前后对比 | `qa` ask(..., use_graph=...).graph_hits |

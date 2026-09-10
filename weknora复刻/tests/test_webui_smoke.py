@@ -11,3 +11,8 @@ def test_webui_smoke_ingest_page():
     """spec 验收第 4 行：入口 main 与入库页 page_ingest 存在且可调用。"""
     assert callable(webui.main)
     assert callable(webui.page_ingest)
+
+
+def test_webui_smoke_search_page():
+    """阶段 2 页面：检索试验台 page_search 存在且可调用。"""
+    assert callable(webui.page_search)
