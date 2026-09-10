@@ -24,12 +24,21 @@ _TOKEN = re.compile(r"[a-z0-9]+|[一-鿿]")
 
 
 def _cfg() -> tuple[str, str, str, str]:
-    """配置面：全部走环境变量（base_url / api_key / 两个模型名），读取时机=调用时。"""
+    """配置面：全部走环境变量，读取时机=调用时（测试中途改 env 也生效）。"""
     return (
         os.environ.get("WEKNORA_LLM_BASE_URL", _DEFAULT_BASE_URL),
         os.environ.get("WEKNORA_LLM_API_KEY", ""),
         os.environ.get("WEKNORA_CHAT_MODEL", "glm-4-flash"),
-        os.environ.get("WEKNORA_EMBED_MODEL", "embedding-3"),
+        os.environ.get("WEKNORA_EMBED_MODEL", "embo-01"),
+    )
+
+
+def _embed_cfg() -> tuple[str, str, str]:
+    """embed 路独立配置（2026-09-10 变更：embedding 走 MiniMax，chat 走 GLM——ADR 0003）。"""
+    return (
+        os.environ.get("WEKNORA_EMBED_BASE_URL", "https://api.minimaxi.com/v1"),
+        os.environ.get("WEKNORA_EMBED_API_KEY", os.environ.get("WEKNORA_LLM_API_KEY", "")),
+        os.environ.get("WEKNORA_EMBED_MODEL", "embo-01"),
     )
 
 
@@ -46,6 +55,11 @@ def use_fake_backend() -> None:
 
 def _post(url: str, api_key: str, payload: dict) -> dict:
     """真实后端的唯一 HTTP 出口（OpenAI 兼容）。测试可替换它以断言 URL/载荷。"""
+    if not api_key:
+        raise RuntimeError(
+            "LLM API key 为空——请用 bash scripts/run-with-keychain.sh 启动"
+            "（key 从 Keychain 注入环境变量；直接 streamlit run 没有 key）"
+        )
     resp = httpx.post(url, json=payload, headers={"Authorization": f"Bearer {api_key}"}, timeout=60)
     resp.raise_for_status()
     return resp.json()
@@ -73,10 +87,17 @@ def chat(messages: list[dict], *, temperature: float = 0.2) -> str:
 
 
 def embed(texts: list[str]) -> list[list[float]]:
-    """批量嵌入：返回与输入等长的向量列表（默认 2048 维）。"""
+    """批量嵌入：返回与输入等长的向量列表（维度随供应商：MiniMax embo-01=1536）。
+
+    响应形状按内容自适应（duck typing）：MiniMax 给 {"vectors": [...]}，
+    OpenAI 兼容给 {"data": [{"embedding": ...}]}——换供应商只改 env，不改代码。
+    MiniMax 的 type="db"/"query" 非对称嵌入是有意简化：统一用 "db"（对账报告交代）。
+    """
     dim = int(os.environ.get("WEKNORA_EMBED_DIM", "2048"))
     if _backend == "fake":
         return [_fake_embed(t, dim) for t in texts]
-    base_url, api_key, _, embed_model = _cfg()
-    data = _post(f"{base_url}/embeddings", api_key, {"model": embed_model, "input": texts})
-    return [item["embedding"] for item in data["data"]]
+    base_url, api_key, model = _embed_cfg()
+    data = _post(f"{base_url}/embeddings", api_key, {"model": model, "texts": texts, "input": texts, "type": "db"})
+    if "vectors" in data:  # MiniMax 形状
+        return data["vectors"]
+    return [item["embedding"] for item in data["data"]]  # OpenAI 兼容形状

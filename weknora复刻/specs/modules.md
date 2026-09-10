@@ -219,7 +219,7 @@
 
 ### 依赖
 
-- 模块: `ingest`、`qa`、`graph`、`wiki`、`store`（store 仅用于列表/配置类只读查询：文档列表、chunk 列表、四开关状态、ExtractConfig）、`retrieval`（阶段 2 起：检索试验台直调 bm25_search 等查询面——只读展示检索中间态，不编排；L0 2026-09-10 裁决，裁决理由：试验台是检索结果的观察窗，经 qa 转发只会造浅接口）
+- 模块: `ingest`、`qa`、`graph`、`wiki`、`store`（store 仅用于列表/配置类只读查询：文档列表、chunk 列表、四开关状态、ExtractConfig）、`retrieval`（阶段 2 起：检索试验台直调 bm25_search 等查询面——只读展示检索中间态，不编排；L0 2026-09-10 裁决，裁决理由：试验台是检索结果的观察窗，经 qa 转发只会造浅接口）、`llm_gateway`（阶段 3 起：仅 backend_name 只读展示当前后端，不发起调用）
 - 外部: Streamlit（技术栈点名框架，PRD §0.2-2）
 
 ### Seam 与测试

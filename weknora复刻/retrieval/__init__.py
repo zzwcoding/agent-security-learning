@@ -5,7 +5,9 @@
   不用逐张翻（书 3.2 实验 3-5 原文比喻）。
 - BM25 在 TF-IDF 上修两处：词频饱和（k1=1.2：出现 10 次不值 5 次的两倍）、
   长度归一化（b=0.75：长文档不能光凭字多拿高分）。公式照书 3.2 手写，不调库。
-- IDF 按下限 0 截断（书 3.2：词出现在过半文档时取值为负，"实现中通常给它设一个下限"）。
+- IDF 用工程变体 ln(1+(N−df+0.5)/(df+0.5))：恒非负。书上原公式 ln((N−df+0.5)/(df+0.5))
+  在小语料（词出现在过半卡片）时取负值——2026-09-10 实踩：库里只有 1 张卡片时
+  任何词 IDF 都是负的、截断后零命中。Lucene/Elasticsearch 同款变体，排序性质不变。
 """
 
 import math
@@ -59,7 +61,7 @@ def bm25_search(kb_id: int, query: str, top_k: int = 10) -> list[ScoredChunk]:
     for qt in set(tokenize(query)):
         if qt not in inv:
             continue  # 词不在库里，倒排直接告诉我们：零命中
-        idf = max(0.0, math.log((n - len(inv[qt]) + 0.5) / (len(inv[qt]) + 0.5)))
+        idf = math.log(1 + (n - len(inv[qt]) + 0.5) / (len(inv[qt]) + 0.5))  # 恒非负变体（见模块注释）
         for i, tf in inv[qt]:
             dl = len(docs_tokens[i])
             scores[i] = scores.get(i, 0.0) + idf * tf * (K1 + 1) / (tf + K1 * (1 - B + B * dl / avgdl))

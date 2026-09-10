@@ -54,3 +54,34 @@ def test_gateway_base_url_configurable(monkeypatch):
     monkeypatch.setenv("WEKNORA_LLM_BASE_URL", "http://localhost:9000")  # 改指椒图=只改这里
     llm_gateway.chat([{"role": "user", "content": "hi"}])
     assert captured["url"] == "http://localhost:9000/chat/completions"
+
+
+def test_embed_base_url_and_minimax_shape(monkeypatch):
+    """embed 路独立配置：默认 MiniMax 端点；MiniMax 响应形状 {"vectors": ...} 正确解析。"""
+    captured = {}
+
+    def spy_post(url, api_key, payload):
+        captured["url"] = url
+        return {"vectors": [[0.1, 0.2], [0.3, 0.4]]}  # MiniMax 形状
+
+    monkeypatch.setattr(llm_gateway, "_post", spy_post)
+    monkeypatch.setattr(llm_gateway, "_backend", "glm")
+    monkeypatch.delenv("WEKNORA_EMBED_BASE_URL", raising=False)
+    vecs = llm_gateway.embed(["a", "b"])
+    assert captured["url"] == "https://api.minimaxi.com/v1/embeddings"
+    assert vecs == [[0.1, 0.2], [0.3, 0.4]]
+
+    monkeypatch.setenv("WEKNORA_EMBED_BASE_URL", "http://localhost:9000")
+    llm_gateway.embed(["a"])
+    assert captured["url"] == "http://localhost:9000/embeddings"
+
+
+def test_empty_key_fails_with_human_message(monkeypatch):
+    """缺 key 要在 gateway 层说人话，不许漏出 httpx 天书（2026-09-10 实踩）。"""
+    import pytest
+
+    monkeypatch.setattr(llm_gateway, "_backend", "glm")
+    monkeypatch.delenv("WEKNORA_EMBED_API_KEY", raising=False)
+    monkeypatch.delenv("WEKNORA_LLM_API_KEY", raising=False)
+    with pytest.raises(RuntimeError, match="run-with-keychain"):
+        llm_gateway.embed(["a"])

@@ -12,6 +12,7 @@ from pathlib import Path
 import streamlit as st
 
 import ingest
+import llm_gateway
 import retrieval
 import store
 
@@ -53,29 +54,51 @@ def page_ingest() -> None:
                 st.text(c.text)
 
 
-def page_search() -> None:
-    """检索试验台：输入查询词，看 BM25 带分排序（阶段 4 这里会长出双路对照视图）。"""
-    st.header("🔍 检索试验台")
-    kbs = store.list_kbs()
-    if not kbs:
-        return
-    kb_id = st.selectbox("知识库", kbs, format_func=lambda k: f"{k['name']}（id={k['id']}）", key="search_kb")["id"]
-    query = st.text_input("查询词", placeholder="试试：知识 / 卡片 / 检索")
-    if not query:
-        return
-    hits = retrieval.bm25_search(kb_id, query)
-    st.write(f"BM25 命中 **{len(hits)}** 张卡片（按相关度排序）")
+def _show_hits(hits) -> None:
+    """渲染一路检索结果：名次 + 得分 + 出处 + 原文预览。"""
     for i, h in enumerate(hits, 1):
         doc = store.get_document(h.chunk.doc_id)
         with st.expander(f"#{i} 得分 {h.score:.4f} · {doc.filename} · 卡片 {h.chunk.seq}"):
             st.text(h.chunk.text)
 
 
+def page_search() -> None:
+    """检索试验台：BM25 与向量两路并排对照（阶段 4 这里长出 RRF 融合栏）。"""
+    st.header("🔍 检索试验台")
+    kbs = store.list_kbs()
+    if not kbs:
+        return
+    kb_id = st.selectbox("知识库", kbs, format_func=lambda k: f"{k['name']}（id={k['id']}）", key="search_kb")["id"]
+    if st.button("🔄 建/重建向量索引"):
+        n = retrieval.index_chunks(kb_id)
+        st.success(f"向量索引已建：{n} 张卡片（后端：{llm_gateway.backend_name()}）")
+    query = st.text_input("查询词", placeholder="中文试：知识 / 卡片；英文试 kitty（库里只有 cat 时看向量路魔法）")
+    if not query:
+        return
+    col_bm25, col_vector = st.columns(2)
+    with col_bm25:
+        st.subheader("BM25（关键词）")
+        hits = retrieval.bm25_search(kb_id, query)
+        st.write(f"命中 {len(hits)} 张")
+        _show_hits(hits)
+    with col_vector:
+        st.subheader("向量（语义）")
+        try:
+            vhits = retrieval.vector_search(kb_id, query)
+        except RuntimeError as e:
+            vhits = []
+            st.error(str(e))
+        if not vhits:
+            st.info("向量索引为空——先点上面的「建/重建向量索引」")
+        _show_hits(vhits)
+
+
 def main() -> None:
     """Streamlit 入口。阶段标记：让你一眼看到项目跑到哪了。"""
     store.init_db(DB_PATH)
     st.title("WeKnora 复刻 · 学习控制台")
-    st.write("✅ 阶段 1 入库闭环 ｜ ✅ 阶段 2 BM25 关键词检索（试验台已开）")
+    st.write("✅ 阶段 1 入库闭环 ｜ ✅ 阶段 2 BM25 ｜ ✅ 阶段 3 向量检索（双路对照）")
+    st.caption(f"LLM 后端：{llm_gateway.backend_name()}（glm=真实 API / fake=测试桩）")
     page_ingest()
     st.divider()
     page_search()

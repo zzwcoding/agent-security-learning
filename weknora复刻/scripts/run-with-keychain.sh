@@ -3,5 +3,6 @@
 # 用法：bash scripts/run-with-keychain.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
-export WEKNORA_LLM_API_KEY="$(agent-key glm)"
+export WEKNORA_LLM_API_KEY="$(agent-key glm)"        # chat 走 GLM（glm-4-flash 免费档）
+export WEKNORA_EMBED_API_KEY="$(agent-key minimax)"  # embedding 走 MiniMax（embo-01；智谱 embedding 未充值）
 exec .venv/bin/streamlit run main.py
