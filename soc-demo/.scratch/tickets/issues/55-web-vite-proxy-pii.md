@@ -23,13 +23,34 @@
 
 ## 验收清单
 
-- [ ] vite.config.ts proxy 表含 `/api/v1/pii` 行，写法与相邻行一致
-- [ ] 新增静态对账单测绿；人为摘掉该行测试变红（自证有效）后还原
-- [ ] `:5173/api/v1/pii/reveal` 真请求非 404（duty_lead 角色 200 / soc1 403，证明已穿透到 agent）
-- [ ] web 包全量测试绿、零删除
-- [ ] `6-4.md` 文末追加备注（照 2-2.md 票 50 先例）："票 55 修复后 :5173 反查按钮走线已通"，原文正文零改动
-- [ ] 手改代码风格与文件现状一致；不碰无关文件
+- [x] vite.config.ts proxy 表含 `/api/v1/pii` 行，写法与相邻行一致
+- [x] 新增静态对账单测绿；人为摘掉该行测试变红（自证有效）后还原
+- [x] `:5173/api/v1/pii/reveal` 真请求非 404（duty_lead 角色 200 / soc1 403，证明已穿透到 agent）（注：:5173 容器镜像烤的是修复前源码、无 bind mount，restart 吃不到新配置——按票内预案改用**同一份修后 vite.config.ts** 的本地临时 dev server :5174 等价验证 200/403，用完即拆；:5173 待主窗口 `docker compose build web && up -d web` 一次即生效，详见实现记录③）
+- [x] web 包全量测试绿、零删除（108 → 110，+2 为新增对账测试）
+- [x] `6-4.md` 文末追加备注（照 2-2.md 票 50 先例）："票 55 修复后 :5173 反查按钮走线已通"，原文正文零改动
+- [x] 手改代码风格与文件现状一致；不碰无关文件
 
-## 实现记录
+## 实现记录（2026-09-10，修复执行子 agent）
 
-（待填）
+**① proxy 补行**：`vite.config.ts:52` 新增 `"/api/v1/pii": { target: agent, changeOrigin: true },`（events 行与 `/internal` 行之间、agent 组内，写法缩进与相邻行同款），上方分叉规则注释同步补 `pii`（防止注释与表失配）。
+
+**② 静态对账单测**：新增 `services/web/src/vite-proxy.test.ts`（vitest，与既有测试同放 src/、中文头注同风格）。设计：不 mock、不 import 配置模块（vite.config.ts 不在 tsconfig include 内，对账只关心文本），直接读两份源码文本对账——
+
+- 读 `vite.config.ts`，正则抓 proxy 表 `"/…": { target: … }` 形前缀行，取 `/api/v1/*` 行第三段（解析自检：一行都抓不到先红，防空对空放行）；
+- `readdir` 递归扫 `src/` 运行时代码（剔除 `*.test.*` 与 `test/` 测试替身），正则抓**带引号**（`'` `"` `` ` ``）的 `/api/v1/<seg>`——引号锚定调用点，注释里的路径不入集（解析自检同上）；
+- 断言 api 侧前缀集合 ⊆ proxy 侧。现账：api 9 个（alerts/approvals/audit/auth/cases/chat/events/pii/webhooks）⊆ proxy 9+kb；红时点名缺行前缀。口径：只对账 `/api/v1/*`（`/internal/runs` 走独立 `/internal` 行、`/eval-results` 是静态面非代理，注释里写明不在本闸范围）。
+- 实现坑（已在测试头注钉死防"简化"再踩）：`new URL(x, import.meta.url)` 内联写法会被 vite 当静态资产 URL 特征模式改写，jsdom 环境下产物非 file: 协议、`fileURLToPath` 必炸——`import.meta.url` 过一道中间变量即绕开模式匹配。
+- **红绿自证**：人为摘掉 `/api/v1/pii` 行 → `AssertionError: expected [ 'pii' ] to deeply equal []`（点名缺行）→ 还原 → 2/2 绿。
+
+**③ 端到端冒烟**（真请求，占位符用 mapstore 教具 `<CN_ID>`）：
+
+- 先按原案 `docker compose restart web`（回 healthy）再对 `:5173/api/v1/pii/reveal` 发真请求 → **仍 404 空 body**。查因（读 docker-compose.yml web 服务 + Dockerfile + `docker inspect`）：web 容器 CMD 是 `pnpm dev`（dev 模式），但源码是构建期 `COPY services/web/` 烤进镜像的、**无 bind mount（Mounts=[]）**——镜像内是修复前配置，restart 不换源码；重建镜像超本票授权（Docker 只许 restart web），按预案转临时 dev server 等价验证。**交接：主窗口跑一次 `docker compose build web && docker compose up -d web`，:5173 即吃到新配置。**
+- 临时 dev server（本机 `AGENT_URL=http://127.0.0.1:3003 pnpm exec vite --port 5174 --strictPort`，同一份修后 vite.config.ts，冒烟完 kill、端口已释放）：
+  - duty_lead（会话本身也经同一代理 `:5174/api/v1/auth/login` 取得）：`POST :5174/api/v1/pii/reveal {"placeholder":"<CN_ID>"}` → `{"placeholder":"<CN_ID>","originals":["110101199003071234"]} [200]`
+  - soc1 同参 → `{"error":"pii_reveal_forbidden"} [403]`
+  - 判读：非 404 且响应是 agent 的 JSON body（vite 自身的 404 是空 body）= 已穿透到 agent；200 全链走到 guards/mapstore，403 是 agent 角色白名单的裁决——与 6-3 直连 ：3003 的四角色对照表完全同型。
+- 拆除后复点：5174 端口释放、web 容器 healthy，布景零损失。
+
+**④ 全量测试**：`cd soc-demo/services/web && pnpm test` → **15 文件 / 110 passed（0 failed 0 skipped）**，修复前基线实测同命令 108 passed（与 8-5 收官账 web 108 一致）→ 110，只增不减（+2 为新增对账测试，既有测试零删除零改动）；`pnpm typecheck`（tsc --noEmit）exit 0。
+
+改动面：`services/web/vite.config.ts`（+2/-1）、`services/web/src/vite-proxy.test.ts`（新增）；另有授权内文档回填：`6-4.md` 文末备注、`00-导览总纲.md` 学习日志 +1 条与"发现的问题"#55 条目回填。git 零写操作，待主窗口验收后统一提交。
