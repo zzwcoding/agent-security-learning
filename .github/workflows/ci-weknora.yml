@@ -1,0 +1,29 @@
+# weknora复刻 CI 守门（sdd-flow 阶段 0/6 产物；仓库根是父仓，本工程在 weknora复刻/ 子目录）
+# 最小门禁：spec gate + 边界闸 + lint + 测试。不绿不合并。CI 先于第一行业务代码存在。
+name: ci-weknora
+
+on:
+  push:
+    branches: [main]
+    paths: ["weknora复刻/**", ".github/workflows/ci-weknora.yml"]
+  pull_request:
+    paths: ["weknora复刻/**", ".github/workflows/ci-weknora.yml"]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: weknora复刻
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: weknora复刻/requirements.txt
+      - run: python3 tools/check_specs.py
+      - run: python3 tools/check_boundaries.py
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - run: python -m pytest

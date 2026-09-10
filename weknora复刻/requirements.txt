@@ -1,0 +1,6 @@
+# 技术栈（MISSION.md 决策拍板；点名框架必须真引入，不许手写同构替代）
+streamlit      # 可观察界面（阶段 1 起每阶段页面）
+pymupdf        # PDF 解析（txt/md 用内置解析器）
+numpy          # 手写向量存储（余弦相似度）
+pytest         # 测试
+ruff           # lint

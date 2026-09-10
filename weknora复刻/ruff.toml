@@ -1,0 +1,3 @@
+# weknora复刻 ruff 配置
+# tools/ 下是 sdd-flow 原版门禁脚本（check_specs.py 为 references 原样复制），不参与业务 lint
+exclude = ["tools", ".venv"]

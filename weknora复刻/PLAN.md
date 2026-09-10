@@ -23,7 +23,7 @@ sdd-flow（骨架，L0/L1）          learn-by-rebuild（执行，L2 互动档�
 - 逼问从简：PRD 以 HANDOFF §2 范围界定为底，逐条用户确认即定稿。
 - spec 按**幕**分批定稿（第一幕 RAG 基础层先行），避免大 upfront；每幕开工前该幕 spec 必须定稿。
 - 架构图可用 mermaid 简版过审；CI 最小门禁 = lint + pytest + spec gate + 边界闸占位。
-- 票 tracker = 本地 markdown（`tickets/`），不建 GitHub issue。
+- 票 tracker = 本地 markdown（`.scratch/tickets/`，与 `tools/check_specs.py` 消费的目录一致），不建 GitHub issue。
 
 ## 进度路线（7 步）
 
@@ -63,4 +63,5 @@ sdd-flow（骨架，L0/L1）          learn-by-rebuild（执行，L2 互动档�
 - [x] HANDOFF 交接（调研窗口）
 - [x] 决策拍板（4 项，MISSION.md）
 - [x] 状态文件落盘（MISSION/RESOURCES/NOTES/PLAN）
-- [ ] **步 0：骨架 + CI** ← 下一步，等用户说"开始"
+- [x] **步 0：骨架 + CI**（2026-09-10：四道门本地全绿——spec gate / boundary gate / ruff / pytest；CI 工作流 `.github/workflows/ci-weknora.yml` 与 soc-demo 同款按子目录 paths 过滤）
+- [ ] **步 1：PRD 定稿 + 术语表（sdd-flow 阶段 1）** ← 下一步，等用户说"下一步"
