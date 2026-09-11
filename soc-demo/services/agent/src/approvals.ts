@@ -19,6 +19,8 @@ export interface ApprovalRow {
   params: unknown;
   paramsHash: string;
   caseId: string | null;
+  /** 狗粮票 58：卡在椒图 g4 的申报 id（外部模式申报成功落卡；内部模式恒 null）。 */
+  externalId: string | null;
   reason: string | null;
   status: ApprovalStatus;
   approver: string | null;
@@ -32,6 +34,84 @@ export interface ApprovalRow {
 
 const nowMs = () => Date.now();
 
+// ---------- 审批外接端口（狗粮票 58，设计 §3-G5/G6/G9 批准中继形态） ----------
+//
+// 外部模式（JIAOTU_GATEWAY_URL 设定，index.ts 装配 JiaoTuApprovalGateway）下 soc-demo
+// 永不自铸审批票（INV-2 单口在椒图 g4）：挂起时申报（declare）→ 值班长批准由本进程
+// 中继（approve，口令 X-Approver-Token 证明身份）→ 票随批准响应中继回来落卡 → 执行
+// → 焚毁。裁决真相全在椒图；本地卡只是镜像。内部模式不装配此端口，下面五个函数不
+// 被触达，行为逐字节不变。接口立在本文件（领域模块）、adapter 在 jiaotu/（57 idiom）。
+
+/** 申报入参（领域命名；wire 映射是 adapter 的事：reason→risk、caseId→case_id）。 */
+export interface ApprovalDeclareInput {
+  tool: string;
+  params: unknown;
+  paramsHash: string;
+  reason: string | null;
+  caseId: string | null;
+}
+
+export interface ApprovalGateway {
+  /** 挂起申报：把本地 pending 卡申报到椒图 g4 → {externalId}（椒图 approval_id）。 */
+  declare(card: ApprovalDeclareInput): Promise<{ externalId: string }>;
+  /** 公开面对账（G9）：GET /api/v1/approvals/:id → {status}（pending/approved/rejected/expired）。 */
+  fetchStatus(externalId: string): Promise<{ status: string }>;
+  /** 批准中继：椒图铸一次性 ApprovalToken 并只在响应里交付 → {token, jti, exp}。 */
+  approve(externalId: string, approverToken: string): Promise<{ token: string; jti: string; exp: number }>;
+  /** 驳回中继（椒图要求 reason 必填）。 */
+  reject(externalId: string, approverToken: string, reason: string): Promise<void>;
+}
+
+/** 椒图按原码拒绝（401/404/409 透传，不自吞不自造；正文一个字节不进 message——
+ *  上游错误文本不许流入我们的审计/事件面，57 同款卫生）。 */
+export class ApprovalGatewayError extends Error {
+  constructor(
+    readonly status: number,
+  ) {
+    super(`approval gateway: HTTP ${status}`);
+    this.name = "ApprovalGatewayError";
+  }
+}
+
+/** 申报成功：external_id 落卡 + 审计 declare（INV-8：卡上的外部锚也要可回放）。 */
+export function setApprovalExternalId(db: DB, id: string, externalId: string, ctx: RunCtx): void {
+  db.prepare("UPDATE approvals SET external_approval_id = ? WHERE id = ?").run(externalId, id);
+  ctx.audit.record({
+    action: "declare",
+    actor: ctx.actor ?? { type: "system", id: "m3:supervisor" },
+    objectId: id,
+    objectType: "approval",
+    details: { external_id: externalId },
+    requestId: ctx.requestId,
+    result: "SUCCESS",
+    createdAt: nowMs(),
+  });
+}
+
+/** 挂起申报的候选集：本 run 尚未申报（无 external_id）的 pending 卡。
+ *  常态 0 或 1 张——图一次只在一个 interrupt 处挂起；多张时逐张申报也幂等。 */
+export function listPendingApprovalsByRun(db: DB, runId: string): ApprovalRow[] {
+  return (
+    db
+      .prepare(
+        "SELECT * FROM approvals WHERE run_id = ? AND status = 'pending' AND external_approval_id IS NULL ORDER BY created_at",
+      )
+      .all(runId) as Record<string, unknown>[]
+  ).map((r) => mapApproval(r) as ApprovalRow);
+}
+
+/** G9 对账的候选集：已申报（external_id 非空）且仍 pending 的卡——run 挂着等裁决，
+ *  而椒图侧可能已先过期（900s vs 本地 86400s），保质期扫描要拿公开面核对。 */
+export function listDeclaredPendingApprovals(db: DB): ApprovalRow[] {
+  return (
+    db
+      .prepare(
+        "SELECT * FROM approvals WHERE status = 'pending' AND external_approval_id IS NOT NULL ORDER BY created_at",
+      )
+      .all() as Record<string, unknown>[]
+  ).map((r) => mapApproval(r) as ApprovalRow);
+}
+
 function mapApproval(row: Record<string, unknown> | undefined): ApprovalRow | null {
   if (!row) return null;
   return {
@@ -42,6 +122,7 @@ function mapApproval(row: Record<string, unknown> | undefined): ApprovalRow | nu
     params: JSON.parse(row.params as string) as unknown,
     paramsHash: row.params_hash as string,
     caseId: (row.case_id as string | null) ?? null,
+    externalId: (row.external_approval_id as string | null) ?? null,
     reason: (row.reason as string | null) ?? null,
     status: row.status as ApprovalStatus,
     approver: (row.approver as string | null) ?? null,
@@ -277,6 +358,7 @@ export function toWire(row: ApprovalRow): Record<string, unknown> {
     params: row.params,
     params_hash: row.paramsHash,
     case_id: row.caseId,
+    external_id: row.externalId,
     reason: row.reason,
     status: row.status,
     approver: row.approver,

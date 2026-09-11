@@ -72,6 +72,9 @@ CREATE TABLE IF NOT EXISTS approvals (
   params TEXT NOT NULL,
   params_hash TEXT NOT NULL,
   case_id TEXT,
+  -- 狗粮票 58：卡在椒图 g4 的申报 id（POST /internal/approvals 回的 approval_id）。
+  -- 内部模式恒 NULL 零影响；外部模式申报成功落卡，批准/驳回/对账（G9）都拿它寻址椒图卡。
+  external_approval_id TEXT,
   reason TEXT,
   status TEXT NOT NULL DEFAULT 'pending',
   approver TEXT,
@@ -112,13 +115,20 @@ CREATE INDEX IF NOT EXISTS idx_run_jobs_state ON run_jobs(state, id);
 `;
 
 // 票 17：runs 增 case_id（knowledge_flow 的目标案件）。老库靠查缺补列——
-// SQLite 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列（case-backend 同款做法）
+// SQLite 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列（case-backend 同款做法）。
+// 狗粮票 58：approvals 增 external_approval_id（外部审批卡的椒图侧锚），同一套幂等迁移。
 function migrate(db: DB): void {
   const cols = new Set(
     (db.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name),
   );
   if (cols.size === 0) return; // runs 表不存在（DDL 已建，不该发生）
   if (!cols.has("case_id")) db.exec("ALTER TABLE runs ADD COLUMN case_id TEXT");
+  const approvalCols = new Set(
+    (db.prepare("PRAGMA table_info(approvals)").all() as { name: string }[]).map((c) => c.name),
+  );
+  if (approvalCols.size > 0 && !approvalCols.has("external_approval_id")) {
+    db.exec("ALTER TABLE approvals ADD COLUMN external_approval_id TEXT");
+  }
 }
 
 export function openDb(path = ":memory:"): DB {

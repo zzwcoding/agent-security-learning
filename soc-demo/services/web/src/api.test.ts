@@ -141,6 +141,29 @@ describe("api client · 审批卡/案件/Eval（票 21）", () => {
     expect(JSON.parse(init.body)).toEqual({ approver: "duty_lead@soc.local", reason: "证据不足" });
   });
 
+  it("decideApproval 带 approverToken：x-approver-token 头随行；留空则头不发（狗粮票 58）", async () => {
+    // 外部模式：口令进头不进体（椒图 g4 只认 X-Approver-Token 头）；api 层原样透传
+    //（trim 是 ApprovalsPage 的职责）
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, { approval_id: "apr_1", approval_token: "tok", run_id: "run_1", run_status: "awaiting_approval" }),
+    );
+    await decideApproval("apr_1", { approve: true, approver: "duty_lead@soc.local", approverToken: "demo-pass" });
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init.headers).toMatchObject({
+      "content-type": "application/json",
+      "x-approver-token": "demo-pass",
+    });
+    expect(JSON.parse(init.body)).toEqual({ approver: "duty_lead@soc.local" }); // 口令不进 body
+
+    // 内部模式：留空 → 头不发（后端原路径不变）
+    fetchMock.mockResolvedValueOnce(
+      jsonRes(200, { approval_id: "apr_1", decision: "rejected", run_id: "run_1", run_status: "completed" }),
+    );
+    await decideApproval("apr_1", { approve: false, approver: "duty_lead@soc.local" });
+    const [, plain] = fetchMock.mock.calls[1];
+    expect(plain.headers).toEqual({ "content-type": "application/json" });
+  });
+
   it("findCaseIdByAlert：在 linkedAlerts 里反查案件 id；找不到返回 null", () => {
     const cases = [
       { id: "case_000001", number: 1, title: "t", severity: 2, status: "Open", linkedAlerts: ["al_1"], startDate: 1 },

@@ -193,6 +193,37 @@ describe("unwrapJsonText（真模型输出剥壳：think 推理段 + markdown �
   });
 });
 
+// ---------- 狗粮形态条件鉴权头（票 57·G1：椒图对 LLM 面验 Bearer api_key） ----------
+
+describe("狗粮形态条件鉴权头（票 57：JIAOTU_API_KEY 设了附 Bearer，未设逐字节现状）", () => {
+  test("未设 JIAOTU_API_KEY：头集合与现状逐字节相同——一个 authorization 键都不多（内部网关形态）", async () => {
+    setEnv("JIAOTU_API_KEY", undefined);
+    const { impl, seen } = mockFetch(() => openAiReply("ok"));
+    await makeClient(impl, { requestId: "req-57a", actor: "agent:triage" }).chat("hi", { node: "verdict_llm" });
+    expect(seen).toHaveLength(1);
+    // 深等整个头集合：authorization 键不存在 = 请求与票 57 之前逐字节相同
+    expect(seen[0].headers).toEqual({
+      "content-type": "application/json",
+      "x-actor-id": "agent:triage",
+      "x-request-id": "req-57a",
+    });
+    expect(seen[0].url).toBe(`${PROXY_BASE}/v1/chat/completions`); // 路径也不受开关影响
+  });
+
+  test("设定 JIAOTU_API_KEY（env 或构造注入）：authorization: Bearer 附上，其余头不动", async () => {
+    setEnv("JIAOTU_API_KEY", "jt-env-key-57");
+    const { impl, seen } = mockFetch(() => openAiReply("ok"));
+    await makeClient(impl, { actor: "agent:triage" }).chat("hi", { node: "verdict_llm" });
+    expect(seen[0].headers["authorization"]).toBe("Bearer jt-env-key-57");
+    expect(seen[0].headers["content-type"]).toBe("application/json");
+    expect(seen[0].headers["x-actor-id"]).toBe("agent:triage");
+
+    const injected = mockFetch(() => openAiReply("ok"));
+    await makeClient(injected.impl, { apiKey: "jt-opt-key-57" }).chat("hi", { node: "verdict_llm" });
+    expect(injected.seen[0].headers["authorization"]).toBe("Bearer jt-opt-key-57");
+  });
+});
+
 // ---------- 真网冒烟（验收⑤：能力探测——SECRETS_LLM_API_KEY 有真值且 gateway 可达才跑） ----------
 
 const SMOKE_BASE = process.env.SOC_LLM_SMOKE_URL ?? "http://127.0.0.1:8002/proxy/llm";

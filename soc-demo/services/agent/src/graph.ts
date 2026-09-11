@@ -26,7 +26,7 @@ import { resumeRun as restoreCheckpoint } from "./checkpointer.js";
 import { EnvelopeCheckpointSaver } from "./checkpointer.js";
 import { BudgetExceededError, budgetFromEnv, type RunBudget } from "./budget.js";
 import type { AuditSink } from "./audit.js";
-import { findDecidableCard, markApprovalExecuted, openApprovalCard } from "./approvals.js";
+import { findDecidableCard, markApprovalExecuted, openApprovalCard, setApprovalExternalId, listPendingApprovalsByRun, type ApprovalGateway } from "./approvals.js";
 import {
   paramsHash,
   type ApprovalClaims,
@@ -147,6 +147,10 @@ export interface ExecuteOpts {
   usedReader?: UsedTokenReader;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY，与闸同口径）。 */
   hmacKey?: string;
+  /** 狗粮票 58：审批外接端口（生产 = JiaoTuApprovalGateway，JIAOTU_GATEWAY_URL 设定时
+   *  index.ts 装配）。挂起分支用它把新开的本地卡申报到椒图 g4（external_id 落卡，
+   *  之后批准/驳回/对账都拿它寻址）；未传 = 内部模式，挂起语义逐字节不变。 */
+  approvalGateway?: ApprovalGateway;
   /** 票 18：交接态覆写。chat_flow 的消息/角色不在 run 行里（它是用户触发不是内部触发），
    *  由调用方（POST /api/v1/chat）随启动注入；缺省仍按 run 行拼 kind/alert_id/case_id。 */
   initialState?: Record<string, unknown>;
@@ -160,6 +164,7 @@ interface DriveDeps {
   used?: BurnRegistry;
   usedReader?: UsedTokenReader;
   hmacKey?: string;
+  approvalGateway?: ApprovalGateway;
 }
 
 function makeDeps(opts: ExecuteOpts): DriveDeps {
@@ -175,6 +180,7 @@ function makeDeps(opts: ExecuteOpts): DriveDeps {
     used: opts.used,
     usedReader: opts.usedReader,
     hmacKey: opts.hmacKey,
+    approvalGateway: opts.approvalGateway,
   };
 }
 
@@ -466,6 +472,46 @@ async function runFlow(db: DB, runId: string, deps: DriveDeps, plan: FlowPlan): 
     // （首次挂起由 openApprovalCard 在开卡事务里完成这一步）。
     if ((getRun(db, runId) as RunRow).status === "running") {
       transitionAndMirror("awaiting_approval");
+    }
+    // 狗粮票 58（批准中继·申报步）：外部模式（approvalGateway 在位）把本 run 尚未
+    // 申报的 pending 卡申报到椒图 g4，external_id 落卡（申报幂等：已申报的跳过）。
+    // 申报失败不杀死挂起——审计 FAILURE + error 事件，卡留 pending 可重试（下次
+    // 挂起分支重入再试）；awaitApproval/interrupt 的同步契约不碰，申报只在挂起
+    // 落定之后异步补做。内部模式无端口，这段整体跳过（零回归）。
+    if (deps.approvalGateway) {
+      for (const card of listPendingApprovalsByRun(db, runId)) {
+        try {
+          const { externalId } = await deps.approvalGateway.declare({
+            tool: card.tool,
+            params: card.params,
+            paramsHash: card.paramsHash,
+            reason: card.reason,
+            caseId: card.caseId,
+          });
+          setApprovalExternalId(db, card.id, externalId, ctx);
+        } catch (err) {
+          ctx.audit.record({
+            action: "declare",
+            actor,
+            objectId: card.id,
+            objectType: "approval",
+            details: {
+              run_id: runId,
+              tool: card.tool,
+              params_hash: card.paramsHash,
+              error: err instanceof Error ? err.message : String(err),
+            },
+            requestId: ctx.requestId,
+            result: "FAILURE",
+            createdAt: Date.now(),
+          });
+          emitEvent(db, runId, "error", {
+            code: "approval_declare_failed",
+            approval_id: card.id,
+            message: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
     }
     return getRun(db, runId) as RunRow;
   }

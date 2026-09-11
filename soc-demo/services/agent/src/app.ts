@@ -11,7 +11,7 @@ import {
   isTerminalRun,
   type ApprovalStatus,
 } from "./statemachine.js";
-import { decideApproval, listApprovals, requireApproval, toWire, type DecideInput } from "./approvals.js";
+import { ApprovalGatewayError, decideApproval, listApprovals, requireApproval, toWire, type ApprovalGateway, type DecideInput } from "./approvals.js";
 import { TamperedCheckpointError } from "./envelope.js";
 import { NotFoundError, UnauthorizedError } from "./errors.js";
 import { MemoryAuditSink, type AuditSink } from "./audit.js";
@@ -75,6 +75,12 @@ export function buildApp(opts: {
   usedReader?: UsedTokenReader;
   /** 验票 HMAC 密钥（缺省读 env SOC_HMAC_KEY）。 */
   hmacKey?: string;
+  /** 狗粮票 58：审批外接端口（生产 = JiaoTuApprovalGateway，JIAOTU_GATEWAY_URL 设定时
+   *  index.ts 装配；测试注入假件）。在位 = 外部模式：挂起申报（graph.ts）、批准/驳回
+   *  中继（本文件 approve/reject 分支，裁决真相在椒图 g4）、G9 对账（run-dispatcher）
+   *  三路启用，soc-demo 永不自铸审批票（INV-2 单口在椒图）。未传 = 内部模式，
+   *  以下端点行为逐字节不变。 */
+  approvalGateway?: ApprovalGateway;
   /** 票 47（ADR 0004-1）：run 分发循环。缺省开（POST /internal/runs 落 queued 秒回，
    *  执行走后台消费循环）；false 关掉（测试要看「队列里等着」的确定性时刻）。
    *  intervalMs/concurrency/approvalTtlSeconds 缺省读 env（RUN_DISPATCH/APPROVAL_TTL_SECONDS）。 */
@@ -103,6 +109,7 @@ export function buildApp(opts: {
     used: opts.used,
     usedReader: opts.usedReader,
     hmacKey: opts.hmacKey,
+    approvalGateway: opts.approvalGateway,
   });
 
   app.get("/healthz", () => ({ ok: true, service: "agent" }));
@@ -318,6 +325,30 @@ export function buildApp(opts: {
   // m9 卡公开接口：审批卡 REST（FR-S2.4）。批准 → 铸 ApprovalToken → 决定落卡 →
   // resume 入队秒回（票 47：续跑由分发循环异步接手）；驳回 → 不铸票不执行，
   // 决定落卡 → resume 入队（动作跳过）。并发后到者在审批状态机处 409（approvals.ts 仲裁）。
+  // 狗粮票 58（外部模式）：铸票真相整体交棒椒图 g4——soc-demo 只做「批准中继」：
+  // 口令（x-approver-token 头）透传、裁决镜像落卡、票随批准响应中继落卡；409 仲裁权
+  // 在椒图（INV-10 跨仓），本地镜像只在椒图 200 之后发生。
+
+  /** 口令读取：头在不在都按空串走——空口令到椒图必 401（fail-closed，不本地造 403/400）。 */
+  const approverTokenOf = (headers: Record<string, unknown>): string => {
+    const h = headers["x-approver-token"];
+    return ((Array.isArray(h) ? h[0] : h) as string | undefined) ?? "";
+  };
+
+  /** 中继失败 → HTTP 映射（票 58 验收行）：409=椒图裁决「非 pending」（并发后到/
+   *  已过期/已裁决）→ 与本地状态机同款 409 InvalidTransition；401=口令错 → 401；
+   *  400=驳回缺原因（g4 reject 的 reason 必填闸，approve 不可达）→ 400 原样语义；
+   *  其余（404/5xx/网络病）→ 502 gateway_failed：卡仍 pending 可重试（与内部模式
+   *  铸票失败 502 mint_failed 同一哲学，不留「已批无票」悬置态）。 */
+  const relayDecisionError = (err: unknown): { status: number; body: Record<string, string> } => {
+    if (err instanceof ApprovalGatewayError) {
+      if (err.status === 409) return { status: 409, body: { error: "InvalidTransition" } };
+      if (err.status === 401) return { status: 401, body: { error: "unauthorized" } };
+      if (err.status === 400) return { status: 400, body: { error: "reason_required" } };
+    }
+    return { status: 502, body: { error: "gateway_failed" } };
+  };
+
   app.get("/api/v1/approvals", (req, reply) => {
     const q = req.query as { status?: string };
     let status: ApprovalStatus | undefined;
@@ -364,6 +395,7 @@ export function buildApp(opts: {
       used: opts.used,
       usedReader: opts.usedReader,
       hmacKey: opts.hmacKey,
+      approvalGateway: opts.approvalGateway,
     };
   }
 
@@ -436,6 +468,29 @@ export function buildApp(opts: {
     if (card.status !== "pending") {
       throw new InvalidApprovalTransitionError(card.status, "approved");
     }
+    // ---- 狗粮票 58 外部分支（approvalGateway 在位 = 外部模式）：----
+    // 无 external_id = 挂起申报还没成功（graph.ts 申报失败卡留 pending），502 declare_pending
+    // 可重试，绝不本地补铸（INV-2 单口在椒图）。中继失败在 mapped 处早退；本地镜像与
+    // resume 只走椒图 200 之后的路径（本地 409 仲裁仍由 decideApproval 兜底走 error handler）。
+    if (opts.approvalGateway) {
+      if (!card.externalId) return reply.status(502).send({ error: "declare_pending" });
+      let minted: { token: string; jti: string; exp: number };
+      try {
+        minted = await opts.approvalGateway.approve(card.externalId, approverTokenOf(req.headers as Record<string, unknown>));
+      } catch (err) {
+        const mapped = relayDecisionError(err);
+        return reply.status(mapped.status).send(mapped.body);
+      }
+      await decideAndResume(id, { approve: true, approver: body.approver, token: minted.token, tokenJti: minted.jti }, req.headers);
+      return {
+        approval_id: id,
+        approval_token: minted.token,
+        run_id: card.runId,
+        // 票 47 时序契约：批准秒回时续跑还在队里，run 仍 awaiting_approval——
+        // 终态由 SSE（/events/stream 实时推送）或轮询获知，不再同步等执行完
+        run_status: getRun(db, card.runId)?.status ?? null,
+      };
+    }
     // 先铸票后裁决：铸票失败 → 卡仍 pending 可重试，不留「已批准无票」的悬置态。
     // 并发双批会各铸一枚，但裁决事务只放行先到者，后到的票随 409 一起作废（300s 自焚）。
     // resume 的任务票重组（票 17）挪进了分发循环的执行步——决定已落卡，图必须能被
@@ -469,6 +524,24 @@ export function buildApp(opts: {
     const body = (req.body ?? {}) as { approver?: string; reason?: string };
     if (!body.approver) return reply.status(400).send({ error: "approver_required" });
     const card = requireApproval(db, id); // 404
+    // ---- 狗粮票 58 外部分支：驳回中继——椒图 200 才镜像 rejected + resume（节点拿
+    // rejected 决定跳过执行）；缺原因椒图 400 → reason_required 原样语义。----
+    if (opts.approvalGateway) {
+      if (!card.externalId) return reply.status(502).send({ error: "declare_pending" });
+      try {
+        await opts.approvalGateway.reject(card.externalId, approverTokenOf(req.headers as Record<string, unknown>), body.reason ?? "");
+      } catch (err) {
+        const mapped = relayDecisionError(err);
+        return reply.status(mapped.status).send(mapped.body);
+      }
+      await decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers);
+      return {
+        approval_id: id,
+        decision: "rejected",
+        run_id: card.runId,
+        run_status: getRun(db, card.runId)?.status ?? null, // 同批准：秒回时续跑在队里
+      };
+    }
     await decideAndResume(id, { approve: false, approver: body.approver, reason: body.reason }, req.headers);
     return {
       approval_id: id,
@@ -603,6 +676,7 @@ export function buildApp(opts: {
           },
           concurrency: opts.dispatcher?.concurrency ?? runDispatchConcurrency(),
           approvalTtlSeconds: opts.dispatcher?.approvalTtlSeconds ?? approvalTtlSecondsFromEnv(),
+          approvalGateway: opts.approvalGateway, // 狗粮票 58：G9 对账（外部模式才有）
         },
         { intervalMs: opts.dispatcher?.intervalMs ?? DISPATCH_INTERVAL_MS },
       );

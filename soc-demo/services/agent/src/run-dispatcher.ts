@@ -25,7 +25,7 @@ import type { AuditSink } from "./audit.js";
 import type { RunCtx } from "./runs.js";
 import { transitionRun } from "./runs.js";
 import { emitEvent } from "./events.js";
-import { expireApprovalCard, listExpiredPendingApprovals } from "./approvals.js";
+import { expireApprovalCard, listDeclaredPendingApprovals, listExpiredPendingApprovals, type ApprovalGateway } from "./approvals.js";
 
 /** 任务动作：start = 从 queued 开跑；resume = 从审批挂起处续跑。 */
 export type RunJobAction = "start" | "resume";
@@ -177,6 +177,10 @@ export interface RunDispatcherDeps {
   concurrency?: number;
   /** 审批卡保质期秒数（缺省读 APPROVAL_TTL_SECONDS，默认 86400）。 */
   approvalTtlSeconds?: number;
+  /** 狗粮票 58（G9 对账）：审批外接端口（生产 = JiaoTuApprovalGateway）。在位时对
+   *  已申报椒图且仍 pending 的卡用公开面对账——椒图 900s 先过期而本地 TTL（86400s）
+   *  未到时本地镜像结算，run 不永远挂在 awaiting_approval。未传 = 内部模式跳过。 */
+  approvalGateway?: ApprovalGateway;
   /** 结构化日志（缺省静默；生产打 console）。 */
   log?(entry: Record<string, unknown>): void;
 }
@@ -212,6 +216,29 @@ export async function dispatchOnce(deps: RunDispatcherDeps): Promise<DispatchTic
     } catch (err) {
       // 竞态兜底（卡刚被裁决等）：状态机会抛 409——下轮再看，不崩循环
       deps.log?.({ warn: "approval_expire_failed", approval_id: card.id, error: String(err) });
+    }
+  }
+
+  // ①b 狗粮票 58（G9 对账）：外部模式的已申报 pending 卡拿椒图公开面核对裁决状态。
+  // 只有 expired 镜像结算（approved/rejected 的决定走批准/驳回中继响应落卡，不对账
+  // 代写——仲裁真相在椒图，这里只收「时间出的裁决」）；对账口病了（404/5xx/网络）
+  // 只记日志本轮跳过，绝不因此动卡（查不到真相 ≠ 真相是过期，INV-1 邻域口径）。
+  if (deps.approvalGateway) {
+    for (const card of listDeclaredPendingApprovals(deps.db)) {
+      try {
+        const { status } = await deps.approvalGateway.fetchStatus(card.externalId as string);
+        if (status !== "expired") continue;
+        expireApprovalCard(deps.db, card.id, ctx, ttl);
+        res.expired.push(card.id);
+        deps.log?.({
+          info: "approval_expired_reconciled",
+          approval_id: card.id,
+          run_id: card.runId,
+          external_id: card.externalId,
+        });
+      } catch (err) {
+        deps.log?.({ warn: "approval_reconcile_failed", approval_id: card.id, error: String(err) });
+      }
     }
   }
 
