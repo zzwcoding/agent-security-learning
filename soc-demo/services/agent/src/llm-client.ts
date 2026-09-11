@@ -6,6 +6,9 @@
 // LLM_MODEL=minimax-m2）；上游 API 形态按 OpenAI 兼容 chat/completions（m3/m4 卡口径，
 // minimax 兼容该形态——票 27 执行记录有留痕）。
 //
+// 狗粮形态（票 57·CONTEXT.md「狗粮接入」）：JIAOTU_API_KEY 设了 = 出站经椒图网关
+// （soc-demo 是它的第一个外部客户），chat() 请求头附 `authorization: Bearer <api_key>`；
+// 未设 = 内部网关形态，请求与现状逐字节相同（不落 authorization 键）。
 // fail-closed 纪律（INV-1·验收④）：超时/限流/上游不可达/回包坏形一律映射成带 reason code
 // 的 LlmUpstreamError，绝不裸抛原始 fetch 错误；上游/代理的错误正文（provider 可控文本）
 // 一个字都不进 error 消息——它不许流入我们的审计与 SSE 事件面（INV-4 邻域卫生）。
@@ -56,6 +59,9 @@ export interface GatewayLlmClientOpts {
   actor?: string;
   /** 固定超时 ms（缺省每调用读 budget 同款 env 链，见文件头） */
   timeoutMs?: number;
+  /** 狗粮形态（票 57·G1）出站鉴权：默认 env JIAOTU_API_KEY；未设 = 不带鉴权头（内部
+   *  网关形态，请求逐字节现状）。值是椒图发给本 agent 的 api_key，不进任何出站体。 */
+  apiKey?: string;
   /** 出站 seam：测试注入 mock 捕获请求；生产用全局 fetch */
   fetchImpl?: typeof fetch;
 }
@@ -66,6 +72,7 @@ export class GatewayLlmClient {
   private readonly requestId?: string;
   private readonly actor?: string;
   private readonly fixedTimeoutMs?: number;
+  private readonly apiKey?: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(opts: GatewayLlmClientOpts = {}) {
@@ -74,6 +81,7 @@ export class GatewayLlmClient {
     this.requestId = opts.requestId;
     this.actor = opts.actor;
     this.fixedTimeoutMs = opts.timeoutMs;
+    this.apiKey = opts.apiKey ?? process.env.JIAOTU_API_KEY;
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 
@@ -94,6 +102,9 @@ export class GatewayLlmClient {
           "content-type": "application/json",
           ...(this.actor ? { "x-actor-id": this.actor } : {}),
           ...(this.requestId ? { "x-request-id": this.requestId } : {}),
+          // 狗粮形态（票 57·G1）：椒图对 LLM 面验 Bearer api_key；key 未设 = 内部网关
+          // 形态，头集合与现状逐字节相同（一个 authorization 键都不多）
+          ...(this.apiKey ? { authorization: `Bearer ${this.apiKey}` } : {}),
         },
         body: JSON.stringify({
           model: this.model,
@@ -145,7 +156,9 @@ export function unwrapJsonText(s: string): string {
  *  绝不静默。key 指真值仓的 provider key——它只该出现在网关进程，测试进程里只是
  *  「本机是否有真凭证」的探针，本身不进任何出站体。
  *  票 43（F3）：探测骨架（fetch+超时+ProbeResult）走共享 smokeHttpProbe——本探针不判
- *  HTTP 状态码（代理有回话即算可达），不传 onHttpStatus 即是这一口径。 */
+ *  HTTP 状态码（代理有回话即算可达），不传 onHttpStatus 即是这一口径。票 57：狗粮形态
+ *  下探的是椒图，而椒图没有 /v1/models 路由——404 也算「有回话即可达」，不判状态码的
+ *  口径恰好内外两形态通吃，探针逻辑零改，只更新此处的理由文案。 */
 export async function llmSmokeProbe(baseUrl?: string): Promise<ProbeResult> {
   if (!process.env.SECRETS_LLM_API_KEY) {
     return {
@@ -158,6 +171,7 @@ export async function llmSmokeProbe(baseUrl?: string): Promise<ProbeResult> {
   return smokeHttpProbe(`${base}/v1/models`, {
     timeoutMs: 5000,
     onUnreachable: () =>
-      `gateway /proxy/llm 不可达（${base}）——先 docker compose up -d gateway 再重跑`,
+      `gateway /proxy/llm 不可达（${base}）——先 docker compose up -d gateway（狗粮形态 ` +
+      `--profile jiaotu 起椒图，其 /v1/models 404 属正常，有回话即算可达）再重跑`,
   });
 }

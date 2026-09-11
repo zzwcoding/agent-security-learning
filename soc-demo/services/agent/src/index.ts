@@ -7,6 +7,11 @@ import { buildApp } from "./app.js";
 import { openDb } from "./db.js";
 import { HttpUsedTokenReader } from "./token-ports.js";
 import {
+  JiaoTuMintClient,
+  JiaoTuTokenBurner,
+  JiaoTuUsedTokenReader,
+} from "./jiaotu/token-ports-jiaotu.js";
+import {
   dbCursorStore,
   eventDrivenEnabled,
   HttpOutboxReader,
@@ -119,12 +124,26 @@ const makeNodes: RunGraphFactory | undefined = nodes
 // buildApp 缺省的 HttpTokenBurner（fire-and-forget POST 同一张 used_tokens 表）。
 // 票 40：同一份 db 也给消费循环的游标/防重查（event_cursors + runs 表，autorun.ts）。
 const db = openDb(dbPath);
+// 狗粮票 57（CONTEXT.md「狗粮接入」）：JIAOTU_GATEWAY_URL 设了 = 任务票 mint/焚毁读/
+// 焚毁写三个 seam 整体换椒图 adapter（src/jiaotu/token-ports-jiaotu.ts，wire 契约见该
+// 文件头）。LLM 出站鉴权头不在此切——GatewayLlmClient 构造时自读 JIAOTU_API_KEY（G1）。
+// approvalGateway（审批对接椒图 g4）属票 58，本票不动。未设 = 现有装配逐字节不变
+// （内部 gateway 形态）。
+const JIAOTU_GATEWAY_URL = process.env.JIAOTU_GATEWAY_URL;
 const app = buildApp({
   db,
   audit,
   nodes,
   makeNodes,
-  usedReader: new HttpUsedTokenReader(),
+  usedReader: JIAOTU_GATEWAY_URL
+    ? new JiaoTuUsedTokenReader({ baseUrl: JIAOTU_GATEWAY_URL })
+    : new HttpUsedTokenReader(),
+  ...(JIAOTU_GATEWAY_URL
+    ? {
+        mint: new JiaoTuMintClient({ baseUrl: JIAOTU_GATEWAY_URL }),
+        burn: new JiaoTuTokenBurner({ baseUrl: JIAOTU_GATEWAY_URL }),
+      }
+    : {}),
 });
 app
   .listen({ port: PORT, host: "0.0.0.0" })
