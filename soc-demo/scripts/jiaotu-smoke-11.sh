@@ -55,6 +55,11 @@ if [ "$REAL_LLM" = "1" ]; then
 else
   say "fake LLM 模式（默认）：upstream-stub 当椒图上游，不出网"
 fi
+# 等待预算（2026-09-12 真网首跑补丁）：fake 下 run 秒级完成；真网一次 LLM 调用 5-30s、
+# 幕 1 全链多次调用，90s SSE 等待必超时掐线（curl --max-time 断流→终态帧缺失→误报失败）。
+# 真网放大 SSE/chat 等待；幂等重跑不受影响。
+SSE_WAIT=90; CHAT_WAIT=60; EXEC_WAIT_LOOPS=40
+[ "$REAL_LLM" = "1" ] && { SSE_WAIT=600; CHAT_WAIT=300; EXEC_WAIT_LOOPS=600; }
 
 # ── 布景序 ②：清理旧栈/旧卷（幂等）+ 幕 6 基线（evals=进程内 rig，永远内部模式）──
 say "布景：清理旧栈与运行态数据（down -v + 清 data/）"
@@ -110,7 +115,7 @@ login() { # login <username> → 会话 token（无密码四预置身份）
 chat() { # chat <username> <message> <case_id> → SSE 全文
   local tok
   tok=$(login "$1")
-  curl -s --max-time 60 -X POST "$WEB/api/v1/chat" -H 'content-type: application/json' \
+  curl -s --max-time "$CHAT_WAIT" -X POST "$WEB/api/v1/chat" -H 'content-type: application/json' \
     -H "authorization: Bearer $tok" \
     -d '{"message":"'"$2"'","case_id":"'"$3"'"}'
 }
@@ -176,7 +181,7 @@ say "幕 1 正常分诊：回放 ssh-5712 → alert_flow（铸票/LLM/建案/调
 A1="$(replay fixtures/alerts/ssh-5712-real.json)"
 R1="$(launch "$A1")"
 echo "alert_id=$A1 run_id=$R1"
-SSE1="$(sse_done "$R1" 90)"
+SSE1="$(sse_done "$R1" "$SSE_WAIT")"
 need "$SSE1" "completed" "幕1：run 未到 completed（SSE 终态帧缺失）"
 V1="$(curl -s "$WEB/api/v1/alerts/$A1" | json_field 'd["verdictAi"]["verdict"]')"
 [ "$V1" = "tp" ] || fail "幕1：verdictAi.verdict=$V1 (应 tp——假上游与内部模式 fake 同源判定)"
@@ -211,7 +216,7 @@ echo "[J] 审批卡 $EXT1 / isolate_host 椒图 pending 可查，soc-demo 卡 $C
 say "幕 2 注入双开（第一段 [S]）：直球载荷 inject-srcuser → soc-demo guards 先拦"
 A2="$(replay fixtures/alerts/inject-srcuser.json)"
 R2="$(launch "$A2")"
-need "$(sse_done "$R2" 90)" "completed" "幕2：run 未到 completed"
+need "$(sse_done "$R2" "$SSE_WAIT")" "completed" "幕2：run 未到 completed"
 await_saudit "$R2" "guards_block" || fail "幕2：[S] M2 审计无 guards_block（第一道没拦/没落账）"
 GB="$(saudit "$R2" | json_field 'len([e for e in d if e.get("action")=="guards_block" and e.get("result")=="DENIED"])')"
 [ "${GB:-0}" -ge 1 ] || fail "幕2：[S] guardsDenied=$GB (应 ≥1)"
@@ -262,7 +267,7 @@ APPROVE1="$(curl -s -X POST "$WEB/api/v1/approvals/$CARD1/approve" \
   -d '{"approver":"duty_lead@soc.local"}')"
 need "$APPROVE1" "approval_token" "幕4：批准响应没有 ApprovalToken"
 APPROVAL_TOKEN="$(printf '%s' "$APPROVE1" | json_field 'd["approval_token"]')"
-for _ in $(seq 1 40); do
+for _ in $(seq 1 "$EXEC_WAIT_LOOPS"); do
   EXEC="$(curl -s "$WEB/api/v1/approvals" | python3 -c '
 import json,sys
 cid=sys.argv[1]
@@ -317,7 +322,7 @@ APPROVE5="$(curl -s -X POST "$WEB/api/v1/approvals/$CARD5/approve" \
   -H 'content-type: application/json' -H 'x-approver-token: demo-approver-token' \
   -d '{"approver":"duty_lead@soc.local"}')"
 need "$APPROVE5" "approval_token" "幕5：kb_write 批准失败"
-for _ in $(seq 1 40); do
+for _ in $(seq 1 "$EXEC_WAIT_LOOPS"); do
   EXEC5="$(curl -s "$WEB/api/v1/approvals" | python3 -c '
 import json,sys
 cid=sys.argv[1]
