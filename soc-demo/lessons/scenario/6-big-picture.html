@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 6 大图 · PII 脱敏与反查</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 6 大图 · PII 脱敏与反查 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 6「PII 脱敏与反查」的代码落点索引：出域边界的脱敏管道把 PII 换成 TYPE 型占位符再出门，换下来的原文旁路落进 guards 自持的 mapstore（6.1/6.2）；要看回原文，全系统只有一条受控反查链——web 按钮（检测驱动现身）→ vite 代理 → agent 的会话+角色白名单闸（duty_lead/admin 可过，SOC1 403 是结构保证）→ 每发必落三态审计 → guards 裸口 → mapstore（6.3/6.4）。<b>原文的户口全场景只有两处</b>：mapstore 的一行（永久落盘）和有权限反查的 HTTP 响应体（瞬时）——审计 details 只记 match_count、时间线与 SSE 只有占位符，原文一个字节不进任何可观测面（INV-4 类推口径，6.3 大搜查 0 命中实证）。两条主线的读法：<b>脱敏线</b>看「为什么挂在出域口（晚一步原文就出门了）→ 五实体扫描 → 内网豁免两层（识别器内 + 清单层票 56）→ 替换前同步记账（一票买卖 fail-closed）」；<b>反查线</b>看「裸口只认账、闸口才认人——验签→白名单→审计→出站件 fail-closed 不编原文」。
+本场景数字：<b>4 步 / 18 个节点 / 8 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+替换前</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 6-1..6-4（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「PII 怎么在出门前被换装、内网 IP 凭什么活下来」→ <code>OPERATOR → ANON_EP → ENGINE → EXEMPT → OVERLAP → RECORD → REPLACE</code>（6.1）。</li>
+  <li>想看「换下来的原文躺哪、重启为什么丢不了」→ <code>MSTORE</code> + 裸口 <code>REVEAL_G</code>（6.2）。</li>
+  <li>想看「反查凭什么 soc1 就是 403、每一发为什么必有账」→ <code>REVEAL_A → ROLE_GATE → OUT_REVEAL → AUDIT_GATE → T_AUDIT</code>（6.3）。</li>
+  <li>想看「浏览器里点一下按钮，请求怎么一层层走到原文」→ <code>BTN → ROWFN → PROXY → REVEAL_A</code>（6.4）。</li>
+  <li>想看「原文的户口（哪两处能出现、哪些面永远只有占位符）」→ <code>MSTORE</code> 对照 <code>T_AUDIT</code> + <code>ERRMSG</code>（6.3/6.4 口径三问）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（18 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧操作者（值班长/SOC1/教学脚本）：curl 打脱敏口与反查口、浏览器点「反查 PII」、宿主盘 mode=ro 对账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">脱敏与反查都是人发起的动作——SOC1 看得到按钮但打不开闸（6.3 角色闸兜底）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ANON_EP / REVEAL_G / REVEAL_A / BTN / MSTORE（对账）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ANON_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /pii/anonymize（脱敏口）：收 text+language（缺省 zh）→ 转手 pii.anonymize；兄弟口 /pii/reveal 同文件（app.py 只管契约形状）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">挂在出域边界而不是入库口：原文出门前最后一刻换装——晚一步原文就出门了（PRD S4「原始数据内网留存」）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENGINE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENGINE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">识别器注册表三改（_engines 单例，首请求付模型加载慢账）：撤内建 IpRecognizer → 换 RFC1918 豁免版 → 挂 CN 手机/CN 身份证正则；扫描范围 = ENTITY_TYPES 五实体清单（language=en 只是路由键）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">en_core_web_sm 钉 12MB 是 CI 装得下；语言码只是 Presidio 路由键，zh/en 文本走同一套识别器；清单无 PERSON=中文姓名不脱（诚实边界）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEMPT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEMPT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RFC1918 内网豁免（两层）：识别器内「先照常认再扔内网段」+ 清单层兜底（票 56：最终实体清单再过一遍，谁抢到内网 IP 的座都作废）；🛡️ 防 内网资产标识被误脱/被隔壁识别器抢座误标</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">内网 IP 是同主机归并/资产核对的关键证据（决策记录 8），脱了自废武功；豁免只做在单个识别器里会被隔壁 PhoneRecognizer 绕过（票 56 教训）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OVERLAP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OVERLAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">_drop_overlaps 重叠取舍：起点靠前/长度更长优先，同一段文本只换一次</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">重叠两段各换各的会踩掉占位符坐标——PRD S4 的 start/end 契约就废了</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECORD</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECORD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">mapstore 记账（record）：占位符→原文 对在替换前同步落账（同一请求内，非异步），INSERT OR IGNORE 幂等；落盘失败异常炸出去 · 🛡️ 防 脱了没账的空头支票（脱敏-记账一票买卖 · fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">记账在替换前 = 出域文本带占位符走的时候账一定在；异步记账会留「脱了没账」的半截状态，反查口开空头支票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MSTORE / REPLACE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPLACE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AnonymizerEngine replace 算子：五类实体统一换 TYPE 型占位符，响应 start/end 指向原文坐标（PRD S4 契约）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TYPE 型占位符对 LLM 是可读语义标记（「证人 A」）且全链路可 grep——6.4 按钮靠这个形状现身</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（响应 → ANON_EP → 调用方）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MSTORE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 pii_map（pii-mapstore.sqlite · guards 自持 · bind mount ./data/guards:/app/data）：四列 placeholder/original/entity_type/first_seen，PK(placeholder,original)；原文唯一持久存身处 · 🛡️ 防 原文扩散（敏感面：只活库里与授权响应体两处 · INV-4 类推）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">落盘是反查口的生命线（内存字典重启即忘 = 隔夜失忆，6.2 对照组实测）；卷挂载给「容器可弃、数据长存」的生命周期承诺</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REVEAL_G（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REVEAL_G</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /pii/reveal（guards 裸口）：reveal ORDER BY first_seen,original 首见序确定；查无此人 404 一视同仁 · strip 容错 · 大小写敏感 · 🛡️ 防 错误消息泄露库存（不暗示库里有什么）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">裸口只认账不认人——同一张扫雷图到 6.3 被 agent 角色闸再包一层（裸口只认账，闸口才认人）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（响应 → 调用方；6.3 链上是 OUT_REVEAL 的对端）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REVEAL_A</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/pii/reveal（受控反查口 · 唯一合法入口）：反查是人的动作不是工具调用（ADR 0004-3），不走 run/票/FGA、不产生 run</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人的平台动作塞不进 A.2 工具矩阵——硬塞要开特例口；把「矩阵里不存在的权限」变成 LLM 结构上无法申请的权限</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROLE_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROLE_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">会话验签 + 端点角色白名单 PII_REVEAL_ROLES（duty_lead/admin）：读验签后 claims.role（伪造无效）；soc1/redteam 403 = 结构保证（名单里没有）· 🛡️ 防 无钥匙反查（INV-1 身份先行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">反查不是职级问题是职责问题——分析师用占位符就够干活；会话票在 4.2 登录口已验明正身</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDIT_GATE / OUT_REVEAL</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDIT_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">auditReveal 三态审计闭包（定义在角色闸之前，三条岔路无路可绕）：SUCCESS 只记 match_count / FAILURE 只记 reason / DENIED 只记 role；fire-and-forget POST :3002/internal/audit · 🛡️ 防 反查不留账 + 审计自身记原文（INV-8 · INV-4 类推）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「谁试图调阅什么」本身就是情报——被拒的查也是账；审计不搭响应车（失败仅 warn 日志），record 必在 return 前调用</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUT_REVEAL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">revealPii 出站件（同步 await · 超时 2s）：404→placeholder_unknown / 非200→guards 病 / 形状不对→guards_bad_shape；任何失败收口 ok:false+reason 绝不编原文 · 🛡️ 防 畸形回包当原文递出去（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">这个端点负责把原文递给人——上游回包畸形宁可 502 也不能把不明不白的字节当原文</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REVEAL_G（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries · M2 总台账（留痕 · INV-8）：pii_reveal 三态每发一行，含被拒的查；原文一个字节不进 details</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">反复试探占位符的踩线行为在台账一眼可见——每查必审计含被拒的查</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（对账只读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BTN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CasePage「反查 PII」按钮（检测驱动现身）：canRevealPii(role) 且 正文正则扫出占位符；web 镜像名单只管可见性 · 🛡️ 防 无权入口现身（可见性即第一收窄 · FR-M8.2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">占位符形状 = 机器可读的「这里有被脱敏内容」标记——入口自动长在正确的行脚下，前端零硬编码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROWFN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROWFN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">revealRow：Promise.all 每占位符一发（同源相对路径）；回包就地渲染「占位符 → 原文」只写本页 state——不回写 / 不发 SSE / 刷新即逝（lazy reveal 最小暴露）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">原文跨网次数 = 主动求知次数，责任链在审计簿一一对应；广播面（时间线/SSE）永远只有占位符</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PROXY / ERRMSG</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PROXY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">vite dev 代理（前缀最长匹配转发表 = 前端的服务目录）：/api/v1/pii 行 → agent（票 55 补行）；配 vite-proxy.test.ts 静态对账防再犯</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">漏一行 = 一条断走的线且 jsdom 测不出（测试替身绕过代理层）——走线要配端到端对账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REVEAL_A（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ERRMSG</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">request 基座 + revealErrorText 人话：404 无 error 键 → ApiError(404,unknown)；拓扑 404（代理断线）与业务 404（查无此人）曾共用一个误导文案——票 55 教训</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">前端报「资源不存在」要先分清业务 404 还是拓扑 404——同一串字符，死因隔着一层代理</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（页面提示）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["操作者（值班长/SOC1/教学脚本）<br/>curl 打脱敏口/反查口 · 浏览器点「反查 PII」 · 宿主盘 mode=ro 对账"]
+    end
+
+    subgraph GUARDS["容器 guards（FastAPI · llm-guard+Presidio · :8001）"]
+        subgraph S61["6.1 Presidio 脱敏管道 · 进入:POST /pii/anonymize（出域边界独立能力口） · 节拍:HTTP 同步请求-响应（站柜台等） · 退出:占位符文本+实体坐标+mapstore 落账（一票买卖）"]
+            direction TB
+            ANON_EP["POST /pii/anonymize（脱敏口 · 出域边界独立能力口）<br/>收 text+language（缺省 zh）→ 转手 pii.anonymize<br/>兄弟口 /pii/reveal 同文件（契约装配层）"]
+            ENGINE["识别器注册表三改（_engines 单例 · 首请求付模型加载慢账）<br/>撤内建 IpRecognizer → 换 RFC1918 豁免版<br/>+ 挂 CN 手机/CN 身份证自定义正则<br/>扫描范围 = ENTITY_TYPES 五实体清单（language=en 只是路由键）"]
+            EXEMPT["RFC1918 内网豁免（两层）<br/>①识别器内：先照常认，再把内网段扔掉<br/>②清单层（票 56）：最终实体清单再过一遍——谁抢到内网 IP 的座都作废<br/>内网=资产标识不脱（决策记录 8）· 公网照脱<br/>🛡️ 防 内网资产标识被误脱/被隔壁识别器抢座误标"]
+            OVERLAP["_drop_overlaps 重叠取舍<br/>起点靠前/长度更长优先 · 同一段只换一次"]
+            RECORD["mapstore 记账（record · 替换前同步落账 · 同一请求内非异步）<br/>占位符→原文 对 INSERT OR IGNORE 幂等<br/>落盘失败异常炸出去（fail-closed）<br/>🛡️ 防 脱了没账的空头支票（脱敏-记账一票买卖）"]
+            REPLACE["AnonymizerEngine replace 算子<br/>五类实体统一换 TYPE 型占位符<br/>响应 start/end 指向原文坐标（PRD S4 契约）"]
+        end
+        subgraph S62["6.2 mapstore 落盘 · 进入:anonymize 替换前 record 旁路 · 节拍:每次脱敏同步写（毫秒级小事务 · WAL） · 退出:占位符→原文 对落宿主盘 重启不丢"]
+            direction TB
+            MSTORE[("表 pii_map（pii-mapstore.sqlite · guards 自持）<br/>四列 placeholder/original/entity_type/first_seen · PK(placeholder,original)<br/>bind mount ./data/guards:/app/data（容器可弃数据长存）<br/>原文唯一持久存身处<br/>🛡️ 防 原文扩散（敏感面：只活库里与授权响应体两处 · INV-4 类推）")]
+            REVEAL_G["POST /pii/reveal（guards 裸口）<br/>reveal ORDER BY first_seen,original（首见序确定）<br/>查无此人 404 一视同仁 · strip 容错 · 大小写敏感<br/>🛡️ 防 错误消息泄露库存（不暗示库里有什么）"]
+        end
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        subgraph S63["6.3 受控反查 · 进入:持会话票 POST /api/v1/pii/reveal · 节拍:HTTP 同步（人的动作——不走 run/票/FGA 不产生 run） · 退出:200 原文列表 / 403 / 404 / 502 + 三态审计必落账"]
+            direction TB
+            REVEAL_A["POST /api/v1/pii/reveal（受控反查口 · 唯一合法入口）<br/>反查是人的动作不是工具调用（ADR 0004-3）"]
+            ROLE_GATE["会话验签 + 端点角色白名单 PII_REVEAL_ROLES（duty_lead/admin）<br/>读验签后 claims.role——伪造无效<br/>soc1 403 = 结构保证（名单里没有）<br/>🛡️ 防 无钥匙反查（INV-1 身份先行）"]
+            AUDIT_GATE["auditReveal 三态审计闭包（定义在角色闸之前——无路可绕）<br/>SUCCESS 只记 match_count / FAILURE 只记 reason / DENIED 只记 role<br/>fire-and-forget POST :3002/internal/audit（失败仅 warn 日志）<br/>🛡️ 防 反查不留账 + 审计自身记原文（INV-8 · INV-4 类推）"]
+            OUT_REVEAL["revealPii 出站件（同步 await 站柜台等 · 超时 2s）<br/>404→placeholder_unknown / 非200→guards 病 / 形状不对→guards_bad_shape<br/>任何失败收口 ok:false+reason——绝不编原文<br/>🛡️ 防 畸形回包当原文递出去（INV-1 fail-closed）"]
+        end
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        T_AUDIT[("表 audit_entries · M2 总台账（留痕 · INV-8）<br/>pii_reveal 三态每发一行 · 含被拒的查<br/>details 只记 match_count/role/reason——原文一个字节不进")]
+    end
+
+    subgraph WEB["容器 web（Vite + React + antd · :5173）"]
+        subgraph S64["6.4 web 反查交互 · 进入:duty_lead/admin 登录 + 时间线正文扫出占位符 · 节拍:点一次按钮 = N 发并发 REST（每占位符一发） · 退出:原文就地渲染只存本页 state（不回写不发 SSE 刷新即逝）"]
+            direction TB
+            BTN["CasePage「反查 PII」按钮（检测驱动现身）<br/>canRevealPii(role) 且 正文正则扫出占位符（防误报）<br/>web 镜像名单只管可见性——权威闸在 agent<br/>🛡️ 防 无权入口现身（可见性即第一收窄 · FR-M8.2）"]
+            ROWFN["revealRow：Promise.all 每占位符一发（同源相对路径）<br/>回包就地渲染「占位符 → 原文」——只写本页 state<br/>不回写时间线 / 不发 SSE / 刷新即逝（lazy reveal 最小暴露）"]
+            PROXY["vite dev 代理（前缀最长匹配转发表 = 前端的服务目录）<br/>/api/v1/pii 行 → agent（票 55 补行）<br/>配 vite-proxy.test.ts 静态对账防再犯"]
+            ERRMSG["request 基座 + revealErrorText 人话<br/>404 无 error 键 → ApiError(404,unknown)<br/>拓扑 404（代理断线）与业务 404（查无此人）曾共用一个文案——票 55 教训"]
+        end
+    end
+
+    %% ===== 6.1 Presidio 脱敏 =====
+    OPERATOR -. "请求 POST :8001/pii/anonymize（curl · 同步站柜台等）<br/>T+0s: 占位符文本+实体坐标回包 · 跨容器→guards:8001" .-> ANON_EP
+    ANON_EP -- "T+0s: 收参数转手 pii.anonymize" --> ENGINE
+    ENGINE -- "analyzer.analyze 扫描五实体清单（识别器内豁免已生效）" --> EXEMPT
+    EXEMPT -- "清单层过滤后（票 56）→ 重叠取舍" --> OVERLAP
+    OVERLAP -- "排序收编：与已收编重叠就丢" --> RECORD
+    RECORD -. "T+替换前: INSERT OR IGNORE 占位符→原文（幂等 · 失败即 500 一个字节不出门）" .-> MSTORE
+    RECORD -- "记账完才替换（同一请求内同步）" --> REPLACE
+    REPLACE -. "响应 占位符文本 + entities 原文坐标（start/end 按 PRD S4 契约）" .-> ANON_EP
+
+    %% ===== 6.2 mapstore 落盘与裸口反查 =====
+    OPERATOR -. "读 宿主盘 mode=ro 盘上对账（bind mount 文件 · WAL 三件套）<br/>主实验：docker restart 前后同占位符逐字一致" .-> MSTORE
+    OPERATOR -. "请求 POST :8001/pii/reveal（6.2 裸口直查——只认账不认人）<br/>响应 originals 首见序一串 / 404 一视同仁 · 跨容器→guards:8001" .-> REVEAL_G
+    REVEAL_G -. "读 SELECT original WHERE placeholder=? ORDER BY first_seen,original<br/>查无此人=空表 → 404 一视同仁" .-> MSTORE
+
+    %% ===== 6.3 受控反查 =====
+    OPERATOR -. "请求 POST :3003/api/v1/pii/reveal（Bearer 会话 · duty_lead/admin）<br/>T+0s: 同步回包 · 异常：坏票 401 / 空参 400 / 越权 403 · 跨容器→agent:3003" .-> REVEAL_A
+    REVEAL_A -- "T+0s: 会话验签（HMAC）→ 参数关 → 角色白名单" --> ROLE_GATE
+    ROLE_GATE -. "拒绝：DENIED 审计（role_forbidden+角色）→ 403（soc1 结构保证）" .-> AUDIT_GATE
+    ROLE_GATE -- "过闸：转发 guards" --> OUT_REVEAL
+    OUT_REVEAL -. "请求 POST :8001/pii/reveal（同步 await · 超时 2s）· 跨容器→guards:8001" .-> REVEAL_G
+    REVEAL_G -. "响应 200 originals / 404 unknown / 病了非200 · 跨容器→guards:8001" .-> OUT_REVEAL
+    OUT_REVEAL -- "分岔：404→FAILURE(placeholder_unknown) / 病→FAILURE(guards_timeout 等)→502" --> AUDIT_GATE
+    AUDIT_GATE -. "审计 pii_reveal 三态落账（原文一个字节不进 details）<br/>fire-and-forget · 跨容器→case-backend:3002" .-> T_AUDIT
+    AUDIT_GATE -. "响应 200 originals（原文唯一合法出口=有权限响应体）· 跨容器→agent:3003" .-> OPERATOR
+
+    %% ===== 6.4 web 反查交互 =====
+    OPERATOR -. "T+0s: 点「反查 PII」（现身=角色对 + 正文有占位符）· 跨容器→web:5173" .-> BTN
+    BTN -- "revealRow：findPlaceholders 扫正文取 N 个占位符" --> ROWFN
+    ROWFN -. "请求 POST /api/v1/pii/reveal × N（Promise.all 并发 · 同源相对路径 · Bearer 会话）" .-> PROXY
+    PROXY -. "请求 前缀最长匹配转发 · 跨容器→agent:3003" .-> REVEAL_A
+    REVEAL_A -. "响应 200/403/404/502（每一发独立过 6.3 全链 + 独立一行审计）· 跨容器→agent:3003" .-> PROXY
+    PROXY -. "响应 透传回浏览器" .-> ROWFN
+    ROWFN -. "失败：revealErrorText 人话（拓扑 404 曾被误报成映射缺失——票 55 教训）" .-> ERRMSG
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 6.1：EXEMPT 防内网资产标识被误脱（决策记录 8 · 票 56 清单层兜底）
+    %%      RECORD 防脱了没账的空头支票（脱敏-记账一票买卖 · fail-closed）
+    %% 6.2：MSTORE 防原文扩散（敏感面口径 · INV-4 类推）/ REVEAL_G 防错误消息泄露库存
+    %% 6.3：ROLE_GATE 防无钥匙反查（INV-1 身份先行）/ AUDIT_GATE 防反查不留账+审计记原文（INV-8 · INV-4 类推）
+    %%      OUT_REVEAL 防畸形回包当原文递出去（INV-1 fail-closed）
+    %% 6.4：BTN 防无权入口现身（可见性即第一收窄 · FR-M8.2）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class EXEMPT,RECORD,MSTORE,REVEAL_G,ROLE_GATE,AUDIT_GATE,OUT_REVEAL,BTN guardSec
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
