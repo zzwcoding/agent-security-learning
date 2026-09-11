@@ -1,0 +1,97 @@
+# ── 票 59：jiaotu 形态 overlay（狗粮全外接，裁决 2026-09-11「全外接形态」）────────
+#
+# 机制：单文件 profile 只能"加"服务不能"减"——全外接要求 jiaotu 形态**排除内部
+# gateway**（四件安全职能 LLM 代理/铸票/审批自铸/焚毁账本在运行面整体交棒椒图），
+# 所以本文件以 compose overlay（`!reset null` 删服务 + `!override` 重写依赖图，
+# compose v2.24+ 语义，本机 v5.1.3 实测）与基础文件成对使用。默认形态一字不动：
+# `docker compose up -d` 不碰本文件，九服务拓扑原样。
+#
+# jiaotu 形态完整 up（一行可复制；JIAOTU_REPO_PATH 缺省 ../agentjiaotu，worktree 里
+# 没有该目录时在 .env 或环境里指向主工作区检出，见 .env.example）：
+#   docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiaotu up -d
+# 对称 down：
+#   docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiaotu down
+#
+# 与票面的两处偏离（裁决/设计为准，详见票 59 实现记录）：
+#   ① UPSTREAM_BASE_URL 缺省指 upstream-stub:9990（设计 §五/Q8「默认 fake LLM、CI 可跑」；
+#      票面写的 ${JIAOTU_LLM_UPSTREAM:-} 空缺省会让椒图代理面 fail-closed 500）。
+#   ② upstream-stub 挂的是本仓 deploy/jiaotu/fake-llm-upstream.mjs（椒图 stub 固定文案
+#      会让 verdict/classify 全部降级，六幕判定点全灭）；接口/端口/形态与椒图
+#      stub 同款（node:22-alpine:9990，OpenAI 兼容，零依赖）。
+#
+# Q7 硬要求（诚实边界）：jiaotu-gateway 只 publish 8080 公开面一个口；/internal/*
+# （铸票/审批/焚毁账本）与公开面同口同源（椒图产品单端口形态，其自家 compose 口径
+# 相同），**不额外 publish 任何内部口**；跨项目 compose 网内 /internal/* 无认证，
+# 加固记椒图 M2。upstream-stub 不 publish 宿主口（只有栈内 jiaotu-gateway 要用它）。
+services:
+  # 全外接：内部 gateway 不启动（教学资产仅存于默认形态）
+  gateway: !reset null
+
+  agent:
+    # 依赖图重写（!override 整体替换）：去掉 gateway（已被删，留着必 dependency
+    # failed），补 jiaotu-gateway（健康才放行 agent——LLM 出站/铸票/审批全在它身上）
+    # 与 upstream-stub。
+    depends_on: !override
+      case-backend: { condition: service_healthy }
+      guards: { condition: service_healthy }
+      chroma: { condition: service_started }
+      openfga: { condition: service_started }
+      jiaotu-gateway: { condition: service_healthy }
+      upstream-stub: { condition: service_started }
+
+  web:
+    # 同理去掉对内部 gateway 的依赖（web 只吃 agent/case-backend/ingest 的公开面）
+    depends_on: !override
+      ingest: { condition: service_healthy }
+      case-backend: { condition: service_healthy }
+      agent: { condition: service_healthy }
+
+  # ── 椒图治理网关（g1-g6 单体）：soc-demo 的铸票口/焚毁账本/审批台/LLM 代理 ──
+  jiaotu-gateway:
+    build:
+      # worktree 检出里没有 agentjiaotu（独立 git 仓）——.env 里设
+      # JIAOTU_REPO_PATH 指向主工作区检出（.env.example 有注）
+      context: ${JIAOTU_REPO_PATH:-../agentjiaotu}
+      dockerfile: services/gateway/Dockerfile
+    profiles: ["jiaotu"]
+    # Q7：只 publish 8080 公开面。GATEWAY_PORT 椒图缺省 8080（services/gateway/src/server.ts:78）
+    ports: ["8080:8080"]
+    environment:
+      # G13 同源分发：椒图铸票密钥 = soc-demo 进程内闸验签密钥（同一枚 SOC_HMAC_KEY，
+      # 两边不同值 → 所有票 signature_invalid，狗粮形态直接瘫痪）
+      HMAC_SIGNING_KEY: ${SOC_HMAC_KEY:-}
+      # 审批口令（值班长批准/驳回经 x-approver-token 透传到椒图 g4；缺省 = 椒图 compose
+      # 演示默认同串）
+      APPROVER_TOKEN: ${APPROVER_TOKEN:-demo-approver-token}
+      # LLM 上游：缺省指本 overlay 的 upstream-stub（默认 fake LLM，六幕不出网、CI 可跑，
+      # 设计 §五/Q8）；--real-llm 真网冒烟时 JIAOTU_LLM_UPSTREAM 覆盖（值含 /v1，椒图
+      # 上游拼法 ${UPSTREAM}/chat/completions）
+      UPSTREAM_BASE_URL: ${JIAOTU_LLM_UPSTREAM:-http://upstream-stub:9990}
+      # 真网时上游 provider 授权（票 13 UPSTREAM_AUTHORIZATION，支持 ${{ SECRETS.* }} 占位
+      # 符，出站瞬间注入 authorization；stub 不验 Authorization，fake 缺省留空）
+      UPSTREAM_AUTHORIZATION: ${JIAOTU_UPSTREAM_AUTHORIZATION:-}
+      # 凭证仓（真网占位符 ${{ SECRETS.* }} 的 env 真值侧；fake 形态留空）
+      SECRETS_LLM_API_KEY: ${SECRETS_LLM_API_KEY:-}
+      # 幕 2 双开纵深（裁决 Q3 改判）：GATEWAY_POLICY_DIR 不设 = 沿椒图镜像内置默认策略
+      # （g6 regex-injection + secret-canary 照跑）——soc-demo guards 第一道放行的漏网
+      # 变体由椒图第二道拦，不挂空策略卷
+      SEED_DEMO_AGENT: "0" # 不种椒图自带演示 agent（soc-demo 用 jiaotu:register 正门注册）
+    depends_on:
+      upstream-stub: { condition: service_started }
+    healthcheck:
+      # 椒图自家 compose 同款：公开统计面就绪 = 布景与冒烟可以开跑
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/api/v1/stats/summary').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  # ── 确定性伪 LLM 上游（OpenAI 兼容假身）：默认 fake LLM 的"上游 provider"替身 ──
+  upstream-stub:
+    # 官方镜像按 digest 钉（票 26/37/38 口径）= node:22-alpine（2026-09-11 arm64 本地实测）
+    image: node@sha256:c610fcdfb1d5b4740dd70c284ed3cb16bb857e0f7166196e36a5501df7a3aa32
+    profiles: ["jiaotu"]
+    volumes:
+      - ./deploy/jiaotu/fake-llm-upstream.mjs:/stub.mjs:ro
+    command: ["node", "/stub.mjs"]
+    # 不 publish 宿主口：只有栈内 jiaotu-gateway 出站要用它（少占口口径，Q7 同精神）

@@ -30,7 +30,7 @@
 - `services/agent/src/run-dispatcher.ts`：deps 加 `approvalGateway?`；dispatchOnce 保质期扫描后加 G9 对账——已申报 pending 卡 `fetchStatus`，expired→`expireApprovalCard`（run failed approval_expired 既有函数复用）；pending 不动（决定不对账代写）；对账口病了只记日志本轮跳过
 - `services/agent/src/index.ts`：JIAOTU_GATEWAY_URL 设定时 buildApp 加传 `approvalGateway: new JiaoTuApprovalGateway({baseUrl})`（57 三件之外补第四件）；未设逐字节不变
 - `services/web/src/api.ts`：decideApproval 加选填 approverToken→`x-approver-token` 头（留空头不发）；`services/web/src/pages/ApprovalsPage.tsx`：工具栏加"审批口令"Input.Password（页面级 state，一处组件改动不引状态库），approve/reject 共用，留空 trim 后不发头
-- 测试：`src/jiaotu/approval-gateway.test.ts`（新增 17 例：四方法 wire 逐字段+401/404/409/400 透传+正文不外泄+不可达+env 兜底+响应缺票炸响）；`src/approval-relay.test.ts`（新增 13 例，见下）；`services/web/src/api.test.ts` 补 1 例（口令头随行/留空不发）
+- 测试：`src/jiaotu/approval-gateway.test.ts`（新增 15 例：四方法 wire 逐字段+401/404/409/400 透传+正文不外泄+不可达+env 兜底+响应缺票炸响——2026-09-11 票 59 验收时核准计数，施工报告误记 17）；`src/approval-relay.test.ts`（新增 13 例，见下）；`services/web/src/api.test.ts` 补 1 例（口令头随行/留空不发）
 
 **验收行逐条落地**：
 1. 外部批准全链：relay 测试「批准全链」——申报（fake g4 收到领域卡逐字段投影）→批准中继（口令原样透传）→椒图铸票随响应中继→token/tokenJti 落本地卡→resume 闸验签执行原 tool_call→焚毁登记→审计 create→declare→approve→execute；响应 wire 形断言与内部模式逐字段相同

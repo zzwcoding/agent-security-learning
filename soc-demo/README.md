@@ -44,6 +44,38 @@ docker compose --profile real-wazuh stop wazuh-manager    # 用完即停（logte
 MITRE T1110.001），判定为真告警的回包原样走 ingest webhook 正门——默认九服务
 一个不碰，不 OPEN profile 时引擎与脚本都不存在。
 
+### 可选：椒图狗粮形态（票 59，jiaotu profile 全外接；默认链路零改动）
+
+把 soc-demo 的四件安全职能（LLM 代理/任务票铸发/审批铸票/焚毁账本）在**运行面**
+整体交棒给治理网关椒图（agentjiaotu 仓）——`docker compose up -d` 的九服务拓扑
+**一字不动**；jiaotu 形态用 overlay 双件套表达（单文件 profile 只能加服务不能减，
+`docker-compose.jiaotu.yml` 以 `!reset null` 删内部 gateway 并重写依赖图）：
+
+```bash
+# up（jiaotu-gateway 构建上下文来自 agentjiaotu 检出；worktree 里先在 .env 设
+# JIAOTU_REPO_PATH 指向主工作区检出，见 .env.example）
+docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiaotu up -d --build
+pnpm jiaotu:register --url http://localhost:8080          # 注册 soc-demo，api_key 落 .env
+JIAOTU_GATEWAY_URL=http://jiaotu-gateway:8080 AGENT_LLM=real SOC_LLM_PROXY_URL=http://jiaotu-gateway:8080 \
+  docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiaotu up -d agent
+bash scripts/setup-openfga.sh && pnpm replay              # FGA 世界 + 回放（同默认形态）
+# down（-f 对要成对给，否则残留 jiaotu 侧容器）
+docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiaotu down
+```
+
+六幕验收冒烟：`bash scripts/jiaotu-smoke-11.sh`（幂等：自动 down -v + 清运行态数据；
+默认 fake LLM=upstream-stub 假上游不出网；`--real-llm` 真网可选，需
+`JIAOTU_LLM_UPSTREAM`/`JIAOTU_UPSTREAM_AUTHORIZATION`/`SECRETS_LLM_API_KEY` 三把钥匙）。
+
+**诚实边界（票 59，裁决 Q7）**：①椒图的 `/internal/*` 口（任务票 mint/burn、审批申报）
+在跨项目 compose 网内**无认证**——jiaotu-gateway 只 publish 8080 公开面一个口，internal
+口与公开面同口同源（椒图单端口产品形态，未额外 publish），但同一 Docker 网络里的任何
+容器都能直呼它们；网络层隔离加固记椒图 M2（其 README 诚实边界 6 同口径）。②jiaotu
+形态的 LLM 上游默认是 upstream-stub（确定性伪 LLM，`deploy/jiaotu/fake-llm-upstream.mjs`），
+真网是**可选**环节（`--real-llm`），钥匙经环境注入、绝不进仓库。③切回默认形态 =
+上面的 down + unset `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 再 `docker compose up -d`，
+零残留。
+
 ## 文档地图
 
 - PRD v1.1（冻结+变更记录）：`../deliverables/route5/product-handbook.md`
