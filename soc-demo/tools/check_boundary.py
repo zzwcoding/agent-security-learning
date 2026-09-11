@@ -50,6 +50,7 @@ H2 = re.compile(r"^##\s+(.+?)\s*$")
 ROW = re.compile(r"^\|(.+)\|\s*$")
 SEP = re.compile(r":?-{2,}:?")
 NO_EXC = {"—", "-", "（无）", "无", "none", "n/a"}
+TICK = re.compile(r"`([^`]+)`")
 
 # TS import 三种形态：from 导入（含 export...from 再导出）、副作用导入、动态导入
 FROM_RE = re.compile(r"[ \t]*(?:import|export)\s+(type\s+)?[^;\"']*?from\s*[\"']([^\"']+)[\"']")
@@ -223,13 +224,18 @@ def check_r3(edges, root, v):
                 v.append(("R3", rel, line, f"中立层 py import 工程内部（{m.group(1)}）"))
 
 
-def check_r4(edges, v):
+def check_r4(edges, v, exc_cell=""):
     """services/、evals/ 反引仓库级 scripts/ → replay 类走子进程（scripts 不在模块图内）。
 
     票 46：R2 只圈 services 向，evals 反引 scripts 曾落在 R2/R4 之间的盲区——检查器
-    与规则表 R4 措辞同步扩到 evals（测试与 rig 同口径，replay 类走子进程）。"""
+    与规则表 R4 措辞同步扩到 evals（测试与 rig 同口径，replay 类走子进程）。
+    豁免：例外列里的反引号精确文件路径（票 62 先例——跨仓契约锁需函数级注入），
+    只豁免逐路径匹配的源文件，不许写成目录/通配。"""
+    exempt = set(TICK.findall(exc_cell))
     for src, dst_rel, dst, f, line, spec in edges:
         if src and (src.startswith("services/") or src == "evals") and dst == "scripts":
+            if f in exempt:
+                continue
             v.append(("R4", f, line, f"反引 scripts/（{spec}）；replay 类改子进程执行"))
 
 
@@ -316,7 +322,7 @@ def run_gate(root):
     check_r1(edges, violations)
     check_r2(edges, root, violations)
     check_r3(edges, root, violations)
-    check_r4(edges, violations)
+    check_r4(edges, violations, next((exc for 禁, exc in rows if "反引仓库级" in 禁), ""))
     check_r5(edges, violations)
     check_r6(edges, violations)
     check_r7(root, violations)

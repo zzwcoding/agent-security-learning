@@ -9,6 +9,8 @@
 
 12 个 PRD 模块 → 7 个可部署单元（compose 服务）+ 2 个非运行时件：
 
+> 2026-09-12 增补第 13 卡 **m13 压测工具面**——非运行时件（宿主侧 scripts/bench），不在下图 compose 拓扑内，只走各服务公开 HTTP/SSE 面（PRD 变更记录 #7）。
+
 ```
                         ┌─────────────┐
   fixtures/alerts ─────►│ M1 告警接入  │  services/ingest
@@ -379,6 +381,32 @@
 - Adapter: 本地规则内嵌
 - 测试计划: ≥3 公开 server + 1 内置恶意 fixture server 投毒 100% 检出
 
+## m13
+
+**M13 压测工具面（非运行时件）** → scripts/bench（宿主侧独立小包，不进 compose 拓扑）
+
+职责: 对公开 HTTP/SSE 面施压，实测四个理论天花板（分发循环 ~10 run/s / autorun 2s 消费 / SQLite 单写者水位线 / SSE 每订阅者 100ms 扇出预算），输出同机可比的延迟分布与压测拐点（每张结果表带机器规格，不当生产 SLO）
+目录: scripts/bench
+
+### 公开接口
+
+- `node scripts/bench/b1-endpoints.mjs <case>` → 单端点微基准（ingest webhook / M2 upsert / gateway mint / M2 读口，四张卡）
+- `node scripts/bench/b3-dispatcher.mjs <并发档>` → run 并发爬坡：run_jobs 队列深度时间序列 + 实测分发吞吐 vs 理论 ~10 run/s
+- `node scripts/bench/b2-chain.mjs <burst|sustained 档位>` → 链路突发与持续流：e2e 延迟分布（alert→run）+ cursor 滞后 + ingest 拐点
+- `node scripts/bench/b4-sse.mjs <订阅者数>` → SSE 扇出：订阅者滞后 + 1s 轮询对照
+- 报告汇总 → `docs/research/2026-09-12-压力测试报告.md`（每层一表：数字+机器规格+复现命令）
+
+### 依赖
+
+- 模块: `m1`、`m2`、`m3`、`m9`（只走公开 HTTP/SSE 面；观察口=现有 REST 读口与表的既有读路径，缺读口停下回报 L0，不顺手加端点）
+- 外部: autocannon（scripts/bench 自有 package.json 的 devDependency；框架红线：必须真引入且被脚本调用）
+
+### Seam 与测试
+
+- Seam: HTTP 客户端注入（fetch 包装，可指向 stub 服务做离线单测）；多步链路用 autocannon 的 requests/context API
+- Adapter: autocannon 编程 API；无服务端改动（B1-B4 零生产代码，under-pressure 归票 68 单独走）
+- 测试计划: harness 单测（stub 服务 200/422/超时三态断言 + sourceRef 唯一化生成器）；中立层边界由 check_boundary.py 既有"scripts/ 禁 import services 内部"规则覆盖
+
 ## 2. 新增 compose 服务（相对阶段 0.2 骨架）
 
 - `openfga`（官方镜像，M9-S6/M8 FGA 裁决）——setup 脚本按 ADR 0001 思路幂等重建授权模型
@@ -401,7 +429,7 @@
 | `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；原违例已由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
 | `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——ADR 0003 允许清单扩展已追认，票 45）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
 | `scripts/`、`tools/` 中立层 import services/evals/packages 内部 | （无） | 中立层保持可独立执行（票 09 replay 三铁律同源） |
-| `services/`、`evals/` 测试与 rig 反引仓库级 `scripts/` 禁止（replay 类走子进程） | （无；原违例已由票 28 清偿，票 46 收口 evals 向） | scripts 不在模块图内 |
+| `services/`、`evals/` 测试与 rig 反引仓库级 `scripts/` 禁止（replay 类走子进程） | 原违例已由票 28 清偿、票 46 收口 evals 向；**现行豁免**：`services/agent/src/jiaotu/jiaotu-register.test.ts`（票 62，2026-09-12 L0 补记） | scripts 不在模块图内；豁免理由：注册脚本是 soc-demo→椒图的跨仓契约正门、无任何运行时被依赖，契约锁需要函数级注入（mockFetch 测试缝），子进程化会丢失注入能力——豁免精确到该测试文件，体检复核 |
 | `packages/mcp-audit` import 任何 workspace 包（独立 CLI） | （无） | m12 卡独立交付（ADR 0002 票 25 沿革） |
 | `services/web` import 任何他包源码（数据全走同源代理 REST/SSE） | （无） | m10 卡：web 是纯展示壳 |
 | `services/guards` 与 `services/gateway` 互不 import（py 侧经 REST） | （无） | C4/C5 分工（PRD §4.1） |

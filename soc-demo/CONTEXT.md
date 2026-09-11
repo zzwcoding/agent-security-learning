@@ -28,6 +28,9 @@
 - **狗粮接入（dogfood）**：soc-demo 作为椒图（agentjiaotu，独立安全网关，本仓安全思想的 TS 产品版）的第一个外部客户——workers 的 LLM 出站/票据申领/审批/焚毁全量改走椒图的接入形态。挂 `JIAOTU_GATEWAY_URL` env 开关，未设=默认形态逐字节不变。设计源：椒图仓 `docs/research/2026-09-10-狗粮全量接入设计.md`
 - **防线换防**：狗粮形态的叙事口径——网关侧安全职能（LLM 凭证/铸票/审批/焚毁）交棒椒图，soc-demo 保留消费侧验票闸、KB 人审与业务审计；六幕剧本在此形态下重跑。定位是"原型向产品交棒"非"功能新增"：soc-demo 内部安全面=原型版教学资产，默认形态完整保留
 - **jiaotu profile**：compose 第四个 profile——全外接形态：起椒图网关、**不启 soc-demo 内部 gateway**（四件安全职能运行面整体交棒）；默认形态=现九服务拓扑不动。两形态同仓共存靠配置表达，不开 git 分支
+- **压力测试（压测）**：`scripts/bench/`（m13 工具面）用 autocannon 对公开 HTTP/SSE 面施压，实测四个理论天花板（分发循环 ~10 run/s / autorun 2s 消费 / SQLite 单写者水位线 / SSE 每订阅者 100ms 扇出预算）的本机真实值。设计源：`docs/research/2026-09-12-压力测试方案.md`。铁律：只走公开 HTTP/SSE 面、不 import services 内部（中立层边界规则既有口径）、fake LLM 零出网
+- **压测拐点**：错误率起跳或延迟分布陡升的负载档位——压测要找的数字就是它；只同机比（每张结果表必须带机器规格），不当生产 SLO
+- **过载卸载（shedding）**：`@fastify/under-pressure` 的过载保护——eventLoopDelay/heap/RSS 超阈值时自动 503，服务活着拒绝而不是压死；挂 `UNDER_PRESSURE=on` env 才装配，默认形态逐字节不变（jiaotu profile 同款开关纪律）
 
 ## 语义核心
 
