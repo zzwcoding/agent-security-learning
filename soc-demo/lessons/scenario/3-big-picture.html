@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 3 大图 · 知识沉淀与再利用</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 3 大图 · 知识沉淀与再利用 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 3「知识沉淀与再利用」全链的代码落点索引：案件带着人工 verdict 关案（<code>case.closed</code> 同事务落 outbox）→
+autorun 每 2s tick 消费、从正门拉起 <code>knowledge_flow</code> → ASP 门控 + LLM 提炼出 <code>proposed</code> 草稿
+（只进 M2 账面，chroma 检索面为空）→ 值班长经审批卡 + 一次性 ApprovalToken 批准后，已验签执行体才把条目写进 chroma
+（驳回则检索面永不写入）→ 分诊 <code>kb_check</code> 向量检索命中 <code>env_fact</code> → 同类新告警秒得「建议关单」、
+SOC1 一键确认闭环。本场景数字：<b>5 步 / 45 个节点 / 15 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）； cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+100ms / T+2s</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 3-1..3-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「案子一关，谁去拉知识沉淀」→ <code>AUTORUN → EV_ROUTE → LAUNCH → T_RUNJOBS</code>（3.1）。</li>
+  <li>想看「AI 为什么不能自己写知识库」→ <code>KD_ASP</code>（ASP 门控）与 <code>KB_WRITE_OPEN</code>（D8 人审闸）（3.1）。</li>
+  <li>想看「批准按钮按下到 chroma count+1 之间发生了什么」→ <code>APR_EP → APR_MINT → DECIDE → T_RUNJOBS → RESUME → AWAIT → AGATE → EXEC_KB</code>（3.3）。</li>
+  <li>想看「直连批准为什么只造出幽灵（账面 approved、检索面查无）」→ <code>KB_DECIDE</code> 与 <code>CH_COLL</code> 的写入路径对比（3.2 / 3.3）。</li>
+  <li>想看「沉淀的知识怎么回来上班」→ <code>IN_HOOK → AUTORUN → KB_CHECK → R1_RULE → OUTCOME → CLOSE_FLOW</code>（3.4/3.5）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（45 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧操作者（值班长/SOC1/教学脚本）：curl 关案与批准、replay 推告警、web 页按钮</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人的每个动作都走公开 REST 正门，与自动化同轨道</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_CLOSE / APR_EP / IN_HOOK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_CLOSE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">关案口 POST /api/v1/cases/:id/close：verdict 必填 409 → 状态机仲裁 → UPDATE Closed · Closed 不可重开；🛡️ 防 无判定关案（ASP·FR-M2.2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">关案是知识沉淀唯一入口，先替下游把关：无人工结论就不放行，猜测进不了决策路径</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EV_OUT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EV_OUT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">同事务 emitEvent(case.closed)：事件与账本同生死</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">不存在「案关了票没塞」中间态（叫号屏 INV-6 家族）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OUTBOX</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OUTBOX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 outbox_events（叫号屏）：case.closed id=16 / alert.created id=17 小票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">业务事务内写屏——档案和叫号永远对得上（INV-6 家族）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTORUN（读）/ IN_HOOK（写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTORUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">autorun 事件桥（看板的）：2s tick 读 outbox，event_cursors 游标记水位</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">纯轮询两边只认表；失败不动游标下轮重看，跳过才推=至多一次</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EV_ROUTE / T_OUTBOX（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EV_ROUTE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">单事件裁决三道防重 dup_batch/run_exists/kb_exists；跳过推游标、失败不动游标；🛡️ 防 重复沉淀（INV-6）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">游标丢失整批重放也不重复拉起（at-least-once 投递+幂等消费=效果 exactly-once）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LAUNCH</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LAUNCH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">launch=app.inject POST /internal/runs：打自家正门，202 秒回</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">自动触发与手动 curl 同一条轨道，不给自动化开旁路（拉起正门）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_jobs：start/resume 任务 pending→claimed 事务内翻</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">202/批准的秒回都只落表；分发循环（派活的，100ms tick）全系统唯一领单人防双吃</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_START / RESUME（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG_KNOW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run-kinds 注册表 knowledge_flow 描述符：intake=case、票面 get_case+kb_propose；🛡️ 防 worker 自作主张（INV-3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票面真相源在注册表：kb_write 物理进不了票面，人审闸结构上拆不掉</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_START（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_START</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">executeStartJob：读注册表票面 → gateway 铸 L1 任务票 900s → 组图开跑</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">铸票失败 failed(mint_failed) 不留无票奔跑（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / KD_READ</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_READ</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">knowledge_distill 第一步：get_case 亮票读案（L1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">读案也过闸——闸是每次工具调用的唯一入口；404 case_not_found 强杀不吞错</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP / KD_ASP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_ASP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ASP 门控：无 verdict → knowledge_skip 审计、空手而归；🛡️ 防 AI 结论当事实沉淀（FR-M7.1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">关案口拦「人不给结论」，这里拦「绕过关案口直拉」——两道门两个入口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_LLM（有 verdict 时）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LLM 提炼+parseDraft 把关：不可信段 wrapUntrusted 包装、verdict 走可信区；坏形重试 1 次仍败 skip</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LLM 只当记录员翻译人工结论；宁可不错提、不可编造——错误知识会进决策路径</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_PROPOSE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_PROPOSE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">kb_propose 过闸（L1）在 M2 建 proposed 草稿</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">提案≠入库：草稿此刻对检索面不可见（INV-5 账面半边）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CREATE / KB_WRITE_OPEN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CREATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/kb/proposals 建档三小闸：kind 枚举 / title·body 非空 / 出处案必存在 404；🛡️ 防 无出处知识（ASP）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">知识必须有出处可复核；GET ?status= 供人对账与 autorun kb_exists 防重查</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_DECIDE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">approve/reject 裁决端点：reviewer 三级缺省链（留痕镜像）+ kbentry 状态机，终态再裁 409；🛡️ 防 终态重裁（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">只翻 M2 账面状态位——M2 没有一行代码写 chroma（幽灵条目的病根）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_SEARCH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GET /kb/search 只吐 approved：LIKE 模糊、k 缺省 5 上限 50</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">账面对外窗：proposed/rejected 从 SQL 层就不可见（INV-5 账面半边）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（人/Web 只读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 kb_entries（KB 账面）：proposed→approved/rejected 终态 409；reviewed_by/reject_reason/decided_at 留痕</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人审流程的事实源；expires_at 预留字段全仓无人写（如实记）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_SEARCH（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries：M2 总台账（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审计真相源——事件流只是广播视图，缺一帧≠缺一条</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（对账只读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_USED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 used_tokens：焚毁坟场（INV-2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">跨进程焚毁真相读口：重放票闸前先查，读口病了 fail-closed 照拒</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AGATE（读）/ BURN（写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">案件/告警读口 GET /api/v1/cases/:id、GET /api/v1/alerts/:id</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">读口不做业务加工——加工归消费者（agent/web）自己</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KD_READ / CLOSE_FLOW</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_ALERT_W</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">告警写口 PATCH /api/v1/alerts/:id：verdict_ai 落档（status 不动）/ close 落 Closed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AI 只写结论与建议；关单动作等确认后执行（建议≠执行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_WRITE_OPEN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">kb_write 开审批卡：params=草稿全文+params_hash，interrupt() 冻结 run → awaiting_approval；🛡️ 防 LLM 直写入库（D8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">值班长批的是眼见为实的那一版草稿；卡是唯一真相，run 冻在原地等裁决</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/approvals/:id/approve·reject：approver 必填无缺省、廉价预检非 pending 409；🛡️ 防 后到者重裁（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审批正门人必须署名（INV-9）；预检省掉后到者白铸随即作废的票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先铸票后裁决：mintApprovalToken，失败 502 mint_failed、卡仍 pending 可重试</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">顺序反了会留「已批准无票」死锁态；先铸票失败可重试不留悬置</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / DECIDE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DECIDE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">decideApproval 落卡 + enqueueRunJob(resume)，200 秒回 run_status=awaiting_approval</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">批准与执行解耦：产出就是两张表各多一行（approvals+run_jobs），执行归分发循环</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_RUNJOBS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RESUME</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">executeResumeJob：按注册表重铸 L1 任务票（票面无 L2 不变）+ 重组 worker 图</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">图按 run 组装、异步续跑时已不在；缺位=薄径静默丢 L2（票 17 教训）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / AWAIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">kb_write 节点重跑 awaitApproval：无限循环查卡，卡是唯一真相</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">不信框架回吞的 resume 值、DB 说了算；pending 幂等再 interrupt 不重复开卡</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AGATE / REJ_EXEC / T_APPROVALS（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">闸审批变体验票：验签 / TTL 300s / params_hash 对指纹 / 跨进程焚毁真相；拒=DENIED 审计+抛错强杀；🛡️ 防 换稿/过期票/重放（INV-1/2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">批什么执行什么：卡上 A 草稿换 B 草稿当场拒绝；fail-closed 脾气与 L1 闸一致</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_KB / T_USED（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">执行体两步：① M2 approve 翻账面（409=resume 重入幂等放行）② chroma upsert 进检索面；🛡️ 防 绕过人审写入检索面（INV-5 唯一写入口）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">全仓只有这条已验签路径能写检索面——INV-5 的结构保证；先账面后检索面，重放安全</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_DECIDE / CH_COLL / BURN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BURN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">焚毁+盖章：burn(jti)→used_tokens 落账、markApprovalExecuted、tool_result 帧；🛡️ 防 token 重放（INV-2 用后即焚）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先执行后焚毁最后标记是铁律顺序；坟场落账让重放物理不可能</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_USED / T_APPROVALS / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REJ_EXEC</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">驳回分支：M2 reject 账面留 reject_reason=审批卡驳回；检索面零写入；run 照常 completed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">驳回不是失败——node_exit 没有工具帧=「执行没发生」看得见</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_DECIDE / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 approvals（审批卡）：params 带草稿全文+params_hash；pending→approved/rejected/expired 终态 409</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">卡是唯一真相：批准/驳回/过期都裁在卡上，节点重跑只认它</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT（读）/ DECIDE（写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_events：node_enter/exit、tool_call/result、approval_required/decided 帧</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">动作当场落账；SSE 每 100ms 读增量（取餐铃）——表是事实、直播是视图</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（SSE 直播/回放）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CHECK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分诊 kb_check 节点（alert_flow 第 2 站）：拼 host+path+user 查询、亮票 kb_lookup（L1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分诊第一步先查自家知识（KB 优先）；查询本身也过闸</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MEM_KB / CK_Q</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MEM_KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TriageKb 双实现：MemoryKb（4 条种子 stub）/ ChromaKb（真件） interchangeable</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">seam 切在窄处（一个 lookup）：票 13→17 换真件时分诊一行不改</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CHECK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CK_Q</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ChromaKb lookup → store.query top-k=5、无分数门槛；库病了 console.warn+返回空；🛡️ 防 毒条目淹 prompt（决策#6 top-k 收缩）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">top-k 是 RAG 注入攻击面第一道收缩；fail-open 有痕降级=提速件不是安全闸</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VS_MATH / R1_RULE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VS_MATH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VectorStore seam+向量数学：hashEmbedding 词面指纹（tokenize→FNV-1a→256 维）、点积排序同分按 id</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写入/查询同一 embedding 函数结构性锁死维度坑；确定性排序保单测不抖</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CH_COLL</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CH_COLL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">chroma 集合 kb_entries（宿主 18000）：REST v2 upsert/query、L2 距离空间 score=1−distance 可为负、top-k=5</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV-5 现场对账：count 只认正门条目（三终局里 approved+在面唯一）；投影可重建、事实源在账面</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VS_MATH（读写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">R1_RULE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">verdict_llm R1 规则（FR-M4.2 KB 优先）：命中 env_fact/known_change → btp+建议关单、rationale 逐字引 KB 标题；🛡️ 防 自家资产被当攻击目标</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">顺序本身是防线：先认自家登记、再看攻击证据，反了演练每回都当入侵查</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUTCOME</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUTCOME</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">outcome 落账：verdict_ai+建议 PATCH 告警、status 不动</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AI 只建议不执行——建议与执行之间隔着按按钮的人</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_ALERT_W / WEB_BTN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CLOSE_FLOW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">close_flow 两节点（票 39）：load_close_target 预检三连 → execute_close 闸内 close_alert（L1 可撤销）、最小票 get_alert+close_alert；🛡️ 防 越权关单</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">确认按钮执行的是「建议」不是自由关单权；close_confirm 审计记 soc1 人头（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP / CB_ALERT_W / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST :8002/internal/mint：L1 任务票 HMAC 三段 TTL 900s / 审批变体 ApprovalToken TTL 300s 烧 params_hash；🛡️ 防 fail-open 铸票（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">唯一签票方：缺密钥 500 拒签；agent 不持签名密钥只验不签（INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT / RESUME / EXEC_START</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">IN_HOOK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST :3001/api/v1/webhooks/alerts：新 sourceRef → 新告警 201 dedup:false、同事务 alert.created 落 outbox</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">入口真实：replay 扮演 Wazuh 推模式，绝不直塞数据库</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OUTBOX</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_BTN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">web 审批页批准/驳回按钮 · 告警页确认关单按钮</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">按钮背后就是 agent 的 approvals REST / internal/runs——web 不另立数据源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_EP / CLOSE_FLOW</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["操作者（值班长/SOC1/教学脚本）<br/>curl REST · web 页按钮 · replay 推告警"]
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        subgraph S31M["3.1 关案口 · 进入:POST /api/v1/cases/:id/close · 节拍:请求一次性 · 退出:Closed + case.closed 同事务落 outbox"]
+            direction TB
+            CB_CLOSE["关案口 POST /api/v1/cases/:id/close<br/>两道闸：verdict 必填 409 verdict_required → 状态机仲裁<br/>New→InProgress→Closed · Closed 不可重开<br/>🛡️ 防 无判定关案（ASP·FR-M2.2）"]
+            EV_OUT["同事务 emitEvent<br/>事件与账本同生死（无中间态）"]
+        end
+        subgraph S32M["3.2 KB 账面 REST · 进入:kb_propose 过闸或手动 POST /kb/proposals · 节拍:REST 一次性 · 退出:proposed 落账面 / 终态再裁 409"]
+            direction TB
+            KB_CREATE["POST /api/v1/kb/proposals 建档<br/>三小闸：kind 枚举 / title·body 非空 / 出处案必存在 404<br/>GET ?status= 查账（autorun 防重也查）<br/>🛡️ 防 无出处知识（ASP）"]
+            KB_DECIDE["POST /kb/proposals/:id/approve · /reject<br/>reviewer 三级缺省链（留痕镜像）<br/>kbentry 状态机：只有 proposed 能裁 · 终态再裁 409<br/>只翻账面——chroma 无此路径（幽灵条目）<br/>🛡️ 防 终态重裁（INV-10）"]
+            KB_SEARCH["GET /kb/search 只吐 approved<br/>LIKE 模糊 · k 缺省 5 上限 50<br/>账面查询面（人/Web 用，分诊不走这里）"]
+            T_KB[("表 kb_entries（KB 账面）<br/>proposed→approved/rejected 终态 409<br/>reviewed_by / reject_reason / decided_at 留痕<br/>expires_at 预留字段全仓无人写")]
+        end
+        T_OUTBOX[("表 outbox_events（叫号屏）<br/>case.closed id=16 / alert.created id=17<br/>与业务同事务写——档案和叫号对得上（INV-6 家族）")]
+        T_AUDIT[("表 audit_entries · M2 总台账（INV-8）<br/>close/approve/reject/execute/deny 全落这")]
+        T_USED[("表 used_tokens（焚毁坟场 · INV-2）<br/>用后即焚登记 · 重放票闸前先查这里")]
+        CB_READ_EP["案件/告警读口<br/>GET /api/v1/cases/:id（含 verdict/observables）<br/>GET /api/v1/alerts/:id<br/>读口不做业务加工"]
+        CB_ALERT_W["告警写口 PATCH /api/v1/alerts/:id<br/>verdict_ai 落档（status 不动）/ close 落 Closed"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        subgraph S31["3.1 关案触发与提炼 · 进入:outbox 出现 case.closed · 节拍:autorun 2s tick + 分发循环 100ms tick · 退出:kb_write 开卡 run 挂 awaiting_approval"]
+            direction TB
+            AUTORUN["autorun 事件桥（看板的）<br/>2s tick GET :3002/api/v1/events?after=游标<br/>游标 event_cursors 记水位<br/>失败不动游标下轮重看 · 跳过才推=至多一次"]
+            EV_ROUTE["单事件裁决三道防重<br/>dup_batch（批次内）/ run_exists（runs 表）/ kb_exists（M2 账面）<br/>跳过推游标 / 失败不动游标<br/>🛡️ 防 重复沉淀（INV-6）"]
+            LAUNCH["launch = app.inject POST /internal/runs<br/>走自家正门（与手动 curl 同轨道）<br/>202 秒回 · 不跑流水线"]
+            T_RUNJOBS[("表 run_jobs<br/>start / resume 任务 pending→claimed<br/>事务内翻状态防双吃")]
+            REG_KNOW["run-kinds 注册表 knowledge_flow 描述符<br/>intake=case · 票面 get_case+kb_propose<br/>永无 kb_write（INV-3）<br/>🛡️ 防 worker 自作主张（INV-3）"]
+            EXEC_START["executeStartJob：读票面 → 组图开跑<br/>gateway 铸 L1 任务票 900s<br/>铸票失败 failed(mint_failed)"]
+            KD_READ["knowledge_distill 第一步 读案<br/>get_case 亮票过闸（L1）<br/>查无 404 → case_not_found 强杀"]
+            KD_ASP["ASP 门控（FR-M7.1）<br/>无 verdict → knowledge_skip 审计空手而归<br/>关案口 409 已防 · worker 防御再拦<br/>（拉起口不查关案状态）<br/>🛡️ 防 AI 结论当事实沉淀"]
+            KD_LLM["LLM 提炼 + parseDraft 把关<br/>不可信段 wrapUntrusted 包装 · verdict 走可信区<br/>不合 schema 重试 1 次 → 仍败 skip<br/>（宁可不错提，不可编造）"]
+            KD_PROPOSE["kb_propose 过闸（L1）建 proposed 草稿<br/>proposed_by=agent:knowledge<br/>草稿只进账面 · 检索面不可见（INV-5）"]
+            KB_WRITE_OPEN["kb_write 开审批卡（D8 人审闸）<br/>params=草稿全文+params_hash<br/>interrupt() 冻结 run → awaiting_approval<br/>approval_required 帧落账<br/>🛡️ 防 LLM 直写入库（D8）"]
+        end
+        subgraph S33["3.3 人审闸 · 进入:值班长 POST /api/v1/approvals/:id/approve 或 reject · 节拍:REST 一次性 + 分发循环 100ms 领 resume · 退出:批准→执行体写 chroma / 驳回→账面留痕检索面零写入"]
+            direction TB
+            APR_EP["POST /api/v1/approvals/:id/approve · /reject<br/>approver 必填无缺省（INV-9 署名）<br/>廉价预检：非 pending 直接 409<br/>🛡️ 防 后到者重裁（INV-10）"]
+            APR_MINT["先铸票后裁决：mintApprovalToken<br/>失败 502 mint_failed<br/>卡仍 pending 可重试（不留悬置态）"]
+            DECIDE["decideApproval 落卡 + enqueueRunJob(resume)<br/>200 秒回 run_status=awaiting_approval<br/>（批准≠执行 · 产出=两张表各多一行）"]
+            RESUME["executeResumeJob：重铸 L1 任务票<br/>（票面无 L2 不变 · INV-3）<br/>+ 重组 worker 图<br/>缺位=薄径静默丢 L2（票 17 教训）"]
+            AWAIT["kb_write 节点重跑 awaitApproval<br/>无限循环查卡：卡是唯一真相 DB 说了算<br/>不信框架回吞的 resume 值<br/>pending → 幂等再 interrupt"]
+            AGATE["闸审批变体验票<br/>验签 / TTL 300s / params_hash 对指纹<br/>跨进程焚毁真相（used_tokens 读口）<br/>拒=DENIED 审计+抛错强杀 fail-closed<br/>🛡️ 防 换稿/过期票/重放（INV-1/2）"]
+            EXEC_KB["执行体两步（先账面后检索面）<br/>① M2 approve 翻账面（409 幂等放行）<br/>② chroma upsert 进检索面<br/>全仓唯一写入口<br/>🛡️ 防 绕过人审写入检索面（INV-5）"]
+            BURN["焚毁+盖章：burn(jti)→used_tokens<br/>markApprovalExecuted 盖已执行章<br/>tool_result 帧落账<br/>🛡️ 防 token 重放（INV-2 用后即焚）"]
+            REJ_EXEC["驳回分支：不进闸不碰 chroma<br/>M2 reject 账面留 reject_reason=审批卡驳回<br/>node_exit 无工具帧=执行没发生看得见<br/>run 照常 completed"]
+            T_APPROVALS[("表 approvals（审批卡）<br/>params 带草稿全文+params_hash<br/>pending→approved/rejected/expired 终态 409")]
+        end
+        subgraph S34["3.4 检索面 · 进入:分诊 kb_check 亮票 · 节拍:每次分诊一次 · 退出:top-5 KbHit 喂回（库病了 fail-open 0 命中）"]
+            direction TB
+            KB_CHECK["分诊 kb_check 节点（alert_flow 第 2 站）<br/>拼查询 host+path+user<br/>亮票 kb_lookup（L1）"]
+            MEM_KB["TriageKb 双实现<br/>MemoryKb（4 条种子 stub）/ ChromaKb（真件）<br/>seam 窄（一个 lookup）<br/>票 13→17 换件分诊零改动"]
+            CK_Q["ChromaKb lookup：查询文本 join → store.query<br/>k=KB_TOP_K=5 · 无分数门槛（命中≠相关）<br/>病了 console.warn+返回空（fail-open 有痕降级）<br/>🛡️ 防 毒条目淹 prompt（决策#6 top-k 收缩）"]
+            VS_MATH["VectorStore seam + 向量数学<br/>upsert/query 两动词<br/>hashEmbedding 词面指纹<br/>（tokenize→FNV-1a→256 维 TF）<br/>写入/查询同一函数（维度坑锁死）<br/>内存件点积排序同分按 id（确定性）"]
+        end
+        subgraph S35["3.5 反哺闭环 · 进入:replay 同类新告警 alert.created · 节拍:autorun 2s tick · 退出:告警 Closed close_confirm 记 soc1"]
+            direction TB
+            R1_RULE["verdict_llm R1 规则（FR-M4.2 KB 优先）<br/>命中 env_fact/known_change → btp+建议关单<br/>rationale 逐字引用 KB 标题<br/>无命中 → R2 攻击证据接管<br/>🛡️ 防 自家资产被当攻击目标"]
+            OUTCOME["outcome 落账：verdict_ai+建议 PATCH 告警<br/>status 不动（AI 只建议不执行）"]
+            CLOSE_FLOW["close_flow 两节点（票 39）<br/>load_close_target 预检三连：<br/>verdict 定了 / 建议=close / 未关<br/>→ execute_close 闸内 close_alert（L1 可撤销）<br/>最小票 get_alert+close_alert<br/>close_confirm 记 soc1 人头<br/>🛡️ 防 越权关单（没建议硬关）"]
+        end
+        subgraph A_DB["agent 存储（better-sqlite3 · agent.sqlite）"]
+            T_RUNEVENTS[("表 run_events<br/>node_enter/exit · tool_call/result 帧<br/>approval_required/decided 帧<br/>动作当场写 · SSE 每 100ms 读增量（取餐铃）")]
+        end
+    end
+
+    subgraph GW["容器 gateway（FastAPI · :8002）"]
+        GW_MINT["POST /internal/mint<br/>L1 任务票 HMAC 三段 TTL 900s<br/>审批变体 ApprovalToken TTL 300s 烧 params_hash<br/>缺密钥 500 拒签 · agent 只验不签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+    end
+
+    subgraph CHROMA["容器 chroma（官方镜像 · 宿主 18000）"]
+        CH_COLL[("集合 kb_entries（检索面 · L2 距离空间）<br/>REST v2 upsert/query · score=1-distance 可为负<br/>top-k=5 · count 只认正门条目（三终局对账）<br/>INV-5：写入口只有 kb_write 已验签执行体")]
+    end
+
+    subgraph ING["容器 ingest（Fastify · :3001）"]
+        IN_HOOK["POST /api/v1/webhooks/alerts<br/>新 sourceRef → 新告警 201 dedup:false<br/>同事务 alert.created 落 outbox"]
+    end
+
+    subgraph WEB["容器 web（Vite + React + antd · :5173）"]
+        WEB_BTN["审批页批准/驳回按钮 · 告警页确认关单按钮<br/>背后就是 agent 的 approvals REST / internal/runs"]
+    end
+
+    %% ===== 3.1 关案触发 =====
+    OPERATOR -. "请求 PATCH /api/v1/cases/:id status=InProgress<br/>T+0s: 200（New 只能去 InProgress）<br/>跨容器→case-backend:3002" .-> CB_CLOSE
+    OPERATOR -. "请求 POST /api/v1/cases/:id/close verdict+verdictNote<br/>T+0s: 200 Closed<br/>异常：无 verdict 409 verdict_required · New 硬关 409 InvalidTransition<br/>跨容器→case-backend:3002" .-> CB_CLOSE
+    CB_CLOSE -- "双闸过 → UPDATE cases" --> EV_OUT
+    EV_OUT -- "同一事务塞事件小票" --> T_OUTBOX
+    AUTORUN -. "读 GET :3002/api/v1/events?after=游标<br/>T+≤2s: tick 取走新事件<br/>跨容器→case-backend:3002" .-> T_OUTBOX
+    AUTORUN -- "逐条裁决（case.closed 分支）" --> EV_ROUTE
+    EV_ROUTE -. "防重命中 → skip 但推游标<br/>（想清楚了不动作 · 审计留痕）" .-> EV_ROUTE
+    EV_ROUTE -- "三防重全过 → launch knowledge_flow" --> LAUNCH
+    LAUNCH -. "app.inject POST /internal/runs（进程内不出红）<br/>T+0s: 202 秒回 · run_jobs 落 start pending" .-> T_RUNJOBS
+    T_RUNJOBS -. "T+≤100ms: 分发循环 tick 领走<br/>pending→claimed 事务内翻" .-> EXEC_START
+    EXEC_START -- "读 knowledge_flow 票面" --> REG_KNOW
+    REG_KNOW -. "不在册 400 unknown_kind<br/>票面 get_case+kb_propose 永无 kb_write（INV-3）" .-> EXEC_START
+    EXEC_START -. "请求 POST :8002/internal/mint（L1 任务票 900s）<br/>跨容器→gateway:8002" .-> GW_MINT
+    GW_MINT -. "响应 HMAC 三段任务票<br/>异常：超时/5xx → failed(mint_failed)" .-> EXEC_START
+    EXEC_START -- "组图开跑 → 提炼子图第一站" --> KD_READ
+    KD_READ -. "请求 GET :3002/api/v1/cases/:id<br/>跨容器→case-backend:3002" .-> CB_READ_EP
+    CB_READ_EP -. "响应 案件详情（含 verdict）<br/>异常：404 case_not_found → run failed" .-> KD_READ
+    KD_READ -- "读到了 → 先问要不要提炼" --> KD_ASP
+    KD_ASP -. "无 verdict：knowledge_skip 审计<br/>run completed 空手而归（捣乱 C 实测）" .-> KD_ASP
+    KD_ASP -- "有 verdict → 拼 prompt 提炼" --> KD_LLM
+    KD_LLM -. "不合 schema 重试 1 次<br/>仍失败 skip（宁可不错提，不可编造）" .-> KD_LLM
+    KD_LLM -- "草稿过 parseDraft 三分支" --> KD_PROPOSE
+    KD_PROPOSE -. "请求 POST :3002/api/v1/kb/proposals（L1 kb_propose 过闸）<br/>跨容器→case-backend:3002" .-> KB_CREATE
+    KB_CREATE -- "三小闸过 → INSERT status=proposed" --> T_KB
+    KB_CREATE -. "同事务审计 kb_entry create<br/>（actor=system · 身份在 body proposed_by）" .-> T_AUDIT
+    KD_PROPOSE -- "提案有户口 → 进 kb_write" --> KB_WRITE_OPEN
+    KB_WRITE_OPEN -- "开卡：params=草稿全文+params_hash" --> T_APPROVALS
+    KB_WRITE_OPEN -. "interrupt() 冻结 run → awaiting_approval<br/>approval_required 帧落账" .-> T_RUNEVENTS
+
+    %% ===== 3.2 KB 账面 =====
+    OPERATOR -. "读 GET /kb/proposals?status=（人对账 · autorun kb_exists 防重查）<br/>跨容器→case-backend:3002" .-> KB_CREATE
+    OPERATOR -. "读 GET /kb/search 只吐 approved（账面窗）<br/>跨容器→case-backend:3002" .-> KB_SEARCH
+    KB_DECIDE -- "assertTransition 过 → UPDATE 状态<br/>异常：终态再裁 409 InvalidTransition（INV-10）" --> T_KB
+    KB_DECIDE -. "同事务审计 approve/reject（reviewer 留痕镜像）" .-> T_AUDIT
+
+    %% ===== 3.3 人审闸 =====
+    WEB_BTN -. "读 GET :3003/api/v1/approvals?status=pending<br/>跨容器→agent:3003" .-> APR_EP
+    OPERATOR -. "请求 POST :3003/api/v1/approvals/:id/approve<br/>T+0s: 200 秒回 run_status=awaiting_approval（批准≠执行）<br/>异常：非 pending 409 · 缺 approver 400 · 铸票失败 502<br/>跨容器→agent:3003" .-> APR_EP
+    APR_EP -- "廉价预检过 → 先铸票后裁决" --> APR_MINT
+    APR_MINT -. "请求 POST :8002/internal/mint（ApprovalToken）<br/>跨容器→gateway:8002" .-> GW_MINT
+    GW_MINT -. "响应 ap_… HMAC 三段 TTL 300s 烧 params_hash<br/>异常：502 mint_failed（卡仍 pending 可重试）" .-> APR_MINT
+    APR_MINT -- "票在手 → 落决定" --> DECIDE
+    DECIDE -- "审批状态机仲裁 · 写 approved+token<br/>异常：后到者 409（并发双批先到者赢）" --> T_APPROVALS
+    DECIDE -- "enqueueRunJob(resume)" --> T_RUNJOBS
+    T_RUNJOBS -. "T+≤100ms: 分发循环领 resume" .-> RESUME
+    RESUME -. "请求 POST :8002/internal/mint（重铸 L1 任务票）<br/>跨容器→gateway:8002" .-> GW_MINT
+    RESUME -- "重组 worker 图 → kb_write 从头重跑" --> AWAIT
+    AWAIT -. "读 卡状态（DB 唯一真相）<br/>pending → 幂等再 interrupt" .-> T_APPROVALS
+    AWAIT -- "approved+token → 进闸" --> AGATE
+    AWAIT -. "rejected → 不进闸不碰 chroma" .-> REJ_EXEC
+    AGATE -. "读 跨进程焚毁真相 GET :3002/internal/used-tokens<br/>读口病了 fail-closed 照拒 · 跨容器→case-backend:3002" .-> T_USED
+    AGATE -- "六查全过 → 放行执行体" --> EXEC_KB
+    EXEC_KB -. "① 请求 POST /kb/proposals/:id/approve（账面翻 approved）<br/>409=resume 重入幂等放行 · 跨容器→case-backend:3002" .-> KB_DECIDE
+    EXEC_KB -. "② 请求 POST /collections/:id/upsert<br/>INV-5 全仓唯一写入口 · 跨容器→chroma:18000" .-> CH_COLL
+    EXEC_KB -- "执行完 → 焚毁+盖章" --> BURN
+    BURN -. "写 POST :3002/internal/used-tokens 登记坟场<br/>跨容器→case-backend:3002" .-> T_USED
+    BURN -. "markApprovalExecuted 盖已执行章" .-> T_APPROVALS
+    BURN -. "tool_result 帧落账" .-> T_RUNEVENTS
+    REJ_EXEC -. "请求 POST /kb/proposals/:id/reject<br/>reject_reason=审批卡驳回 · 跨容器→case-backend:3002" .-> KB_DECIDE
+    REJ_EXEC -. "node_exit 无 tool_call/tool_result 帧<br/>——执行没发生看得见 · run completed" .-> T_RUNEVENTS
+
+    %% ===== 3.4 / 3.5 检索与反哺 =====
+    OPERATOR -. "请求 POST :3001/api/v1/webhooks/alerts（replay 同类新告警）<br/>201 dedup:false · 跨容器→ingest:3001" .-> IN_HOOK
+    IN_HOOK -- "T+0s: 告警落库 + 同事务 alert.created id=17" --> T_OUTBOX
+    AUTORUN -- "T+≤2s: 消费 alert.created → launch alert_flow<br/>分诊跑到第 2 站进 kb_check（3.4/3.5 共用入口）" --> KB_CHECK
+    KB_CHECK -. "未设 KB_CHROMA_URL → 内存替身分支<br/>（stub 与真件同接口可替换）" .-> MEM_KB
+    KB_CHECK -- "真检索面分支：lookup host+path+user" --> CK_Q
+    CK_Q -- "store.query(text, k=KB_TOP_K=5)" --> VS_MATH
+    VS_MATH -. "请求 POST /collections/:id/query（自算向量同函数）<br/>跨容器→chroma:18000" .-> CH_COLL
+    CH_COLL -. "响应 top-5 ids/documents/distances<br/>score=1-distance（可为负 · 只用于排序）" .-> VS_MATH
+    CK_Q -. "库病了 → console.warn + 返回空<br/>fail-open 有痕降级（提速件不是安全闸）" .-> CK_Q
+    CK_Q -- "KbHit[] 喂回分诊裁决" --> R1_RULE
+    R1_RULE -- "R1 命中 env_fact → btp+建议关单" --> OUTCOME
+    OUTCOME -. "请求 PATCH :3002/api/v1/alerts/:id（verdict_ai 落档）<br/>status 不动（AI 不动手）· 跨容器→case-backend:3002" .-> CB_ALERT_W
+    OUTCOME -. "verdict/建议经 SSE+轮询呈现给人（取餐铃）" .-> WEB_BTN
+    WEB_BTN -. "请求 POST :3003/internal/runs kind=close_flow<br/>x-actor-id soc1 · 跨容器→agent:3003" .-> CLOSE_FLOW
+    CLOSE_FLOW -. "读 GET :3002/api/v1/alerts/:id（预检三连的数据）<br/>跨容器→case-backend:3002" .-> CB_READ_EP
+    CLOSE_FLOW -. "预检三连过 → 闸内 close_alert 落 Closed<br/>异常：verdict 未定/无 close 建议/已关 → 具名错误 failed<br/>跨容器→case-backend:3002" .-> CB_ALERT_W
+    CB_ALERT_W -. "同事务审计（verdict / close_confirm 记 soc1 · INV-8）" .-> T_AUDIT
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 3.1：CB_CLOSE 防无判定关案（ASP）/ KB_CREATE 防无出处知识 / EV_ROUTE 防重复沉淀（INV-6）
+    %%      REG_KNOW 防 worker 自作主张（INV-3）/ KD_ASP 防 AI 结论当事实沉淀（FR-M7.1）
+    %%      KB_WRITE_OPEN 防 LLM 直写入库（D8）
+    %% 3.2：KB_DECIDE 防终态重裁（INV-10）
+    %% 3.3：APR_EP 防后到者重裁（INV-10）/ AGATE 防换稿/过期票/重放（INV-1/2）
+    %%      EXEC_KB 防绕过人审写入检索面（INV-5）/ BURN 防 token 重放（INV-2）
+    %% 3.4：CK_Q 防毒条目淹 prompt（决策#6 top-k 收缩）
+    %% 3.5：R1_RULE 防自家资产被当攻击目标 / CLOSE_FLOW 防越权关单
+    %% gateway：GW_MINT 防 fail-open 铸票（INV-1）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class CB_CLOSE,KB_CREATE,KB_DECIDE,EV_ROUTE,REG_KNOW,KD_ASP,KB_WRITE_OPEN,APR_EP,AGATE,EXEC_KB,BURN,CK_Q,R1_RULE,CLOSE_FLOW,GW_MINT guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
