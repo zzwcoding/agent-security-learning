@@ -305,6 +305,7 @@
 - 决策：焚毁表（used_tokens）放 M2——审计同库同事务
 - 这是差异化主体，六张卡（S1-S6）共用这一张模块卡，但每个 S 的验收标准独立可测
 - 内部架构图见 `docs/architecture-gateway-internal.html`、`docs/architecture-guards-internal.html`
+- 狗粮外接形态（2026-09-11 票 57/58/59 落地，soc-demo 合流 7b4cd9c；CONTEXT「防线换防」）：env `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 设定时，四件安全职能（LLM 代理/任务票铸发/审批铸票/焚毁账本）在运行面整体交棒椒图（adapter 见 `services/agent/src/jiaotu/`：token-ports-jiaotu + approval-gateway），soc-demo 永不自铸审批票（INV-2 单口在椒图 g4），保留消费侧验票闸/KB 人审/业务审计；未设 = 内部 gateway 形态逐字节不变（默认形态即教学资产本貌）。六幕经椒图活体冒烟全绿（`scripts/jiaotu-smoke-11.sh`，默认 fake LLM）；compose jiaotu 形态见 `docker-compose.jiaotu.yml` overlay
 
 ## m10
 
