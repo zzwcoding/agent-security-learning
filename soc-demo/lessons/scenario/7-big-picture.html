@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 7 大图 · 新增一个工具</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 7 大图 · 新增一个工具 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 7「新增一个工具」的代码落点索引：给系统加一个只读工具 <code>list_approvals</code>（审批台账查询），四步走完「登记先于代码、三层能力面」的最小闭环——<b>7.1 脚手架</b>：<code>pnpm gen:tool</code> 一条命令三件产出（入参四闸 → 登记行先落表 → 空壳+骨架 → 落盘整表重写）；<b>7.2 登记</b>：真表单行追加 + PRD A.1 同步 + 两处对账快照窗（manifest ≡ A.1 ≡ worker 工具面/票面 ≡ FGA 矩阵，谁单方面漂移谁红）+ 空壳换 readonly 台账读口；<b>7.3 闸的生效与拒绝</b>：真网关铸任务票 → 验票闸三岔口与五连检查 → 持票过闸查真台账 → 摘行对照揭底「闸认票不认表」（登记的执法在对账与铸票上游，不在闸的持票通道）；<b>7.4 体检</b>：CI 四 job 本地等价全跑、基线只增不减（+6）、git diff 零删除逐行亮账。<b>三层能力面</b>是本场景的地图：①登记面（7.2 齐活）②票面（7.3 教具实测）③执行体（缺——没有任何 worker 持票，run 里永远不会调用它，生产化再接）。<b>生效时刻三级</b>也是本场景主线：登记落表即时、进程内要重启（模块级缓存）、容器内要重建（fixtures 构建时 COPY——容器 24 行 vs 宿主 25 行实测）。
+本场景数字：<b>4 步 / 26 个节点 / 11 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；cylinders（柱形）= 登记表/规则表/数据库表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；宿主进程与 bind mount 文件之间的读写不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+S5 / T+下次重建</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 7-1..7-4（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「一条命令怎么把新工具办齐三件产出、登记为什么先于代码」→ <code>SCRIPTS → CHK → REG1 → GEN2 → WRITED</code>（7.1）。</li>
+  <li>想看「四方对账网谁执法、文档摘一行哪里红」→ <code>SNAP_TS / SNAP_PY</code> 对照 <code>MANIFEST / PRD_A1</code>（7.2）。</li>
+  <li>想看「闸的三岔口、任务票五连与三态辨析」→ <code>GATE3WAY → FIVECHK → GATEDCALL</code>（7.3）。</li>
+  <li>想看「为什么摘掉登记行票还好使、登记行何时才进线上容器」→ <code>STRIP</code> 与 <code>BAKED</code>（7.3）。</li>
+  <li>想看「CI 四 job 怎么给「新增」办体检、基线只增不减怎么记账」→ <code>SPEC → BOUNDARY → TESTALL → ZERO_DEL</code>（7.4）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（26 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">开发者/值班长/教学脚本（宿主终端）：跑 gen:tool、vitest/pytest、教具六幕连播、git diff 过堂</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">场景 7 的动作全是「新增与验收」，发起人始终是人；共享布景九服务全程零停启零重建</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">S71-S74 各入口 / MINT（铸票）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SCRIPTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">package.json scripts 字条：gen:tool → node tools/gen-tool.mjs（零依赖中立层）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">生成器必须可独立执行（R3 不 import 工程内部模块）——它自己是边界规则的模范，才配给全仓生成代码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">入参四闸：工具名正则（小写下划线）/ tier 枚举 L0-L2 / family A.2 四族 / owner 模块卡号；越界 die exit 1 · 🛡️ 防 越界脏字段流进对账网</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">登记行每个字段都被下游对账咬（tier 对照闸行为、family 对照矩阵、owner 对照模块卡）——门口拒能点名参数，流进去就是一串运行时迷糊账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG1</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG1</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">登记行先落表：表不存在 exit 1、重名拒绝 exit 2 不静默覆盖、push 五字段在生成代码之前 · 🛡️ 防 覆盖=静默改分级（登记面是安全面）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">身份是门卫不是档案柜——先有身份再有肉身；顺序反了的窗口期里工具按默认级吃 403，诱惑人去放宽闸（静默降级的口子）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GEN2 / MANIFEST（读重名 · 捣乱 D）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GEN2</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">生成物两件：空壳 handler（输出一句话）+ 测试骨架（冒烟 + 指路注释）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">脚手架不但给毛坯还把装修顺序写在墙上——挪包收编（7.2）与闸正负例仿写（7.3）都在注释里</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRITED</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRITED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">落盘：--out 目录写两文件 + manifest 整表 JSON.stringify 重写</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">整表重排会卷进 23 行无关历史（175+/24− 实测）——登记的礼仪是真表手工单行追加，生成器只管代码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MANIFEST</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MANIFEST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 tools.manifest.json · 登记单一来源：tools 第 32 行 list_approvals（L1/readonly_query/m3）+ policy.unregistered_tier=L1；读口带模块级缓存 · TOOLS_MANIFEST_FILE 是测试换粮草缝 · 🛡️ 防 未登记工具免验上岗（fail-closed 默认级）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分级/族/owner 全长在登记行上——登记错一档闸行为错一档；L0 免验与 L2 审批都是登记后才享有的待遇，没登记只剩持票一条路</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SNAP_TS / SNAP_PY / GATE3WAY（tierOf）/ STRIP / BAKED</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PRD_A1</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">docs/prd.md 附录 A.1 工具分级表（1164 行 = list_approvals 行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">文档即契约：parsePrdA1 现场解析 md 表格当断言输入——文档漂移与代码漂移同罪同罚</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SNAP_TS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SNAP_TS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">快照窗 A（tools-manifest.test.ts）：A.1 计数快照（场景 7 当日 23→24、票 63 起 25）+ KNOWN_NOT_IN_A1 点名 + worker 工具面/票面 ⊆ manifest + INV-3 无 L2 · 🛡️ 防 文档面/代码面单方面漂移</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先红逼人走「先 manifest 后文档」；登记的执法时机在测试不在运行时——漏签一方的惩罚是合不进主干而非线上故障</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（红=流程的一部分 · 绿=四方签到的回执）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SNAP_PY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">快照窗 B（gateway test_fga_matrix.py）：manifest ≡ FGA 矩阵族/分级逐字一致 + 矩阵外登记点名 get_case、list_approvals · 🛡️ 防 矩阵外登记悄悄多（例外必须写名字）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">点名清单是安全债台账——匿名的例外等于给漂移开门；台账读口不在 chat 可见面，先登记持证暂不进矩阵</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（extra 点名断言）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HANDLER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">list_approvals.ts 台账读口真身：readonly 打开 agent 库（钥匙没给写不进）、只吐六个台账字段、fail-closed db_not_found · 🛡️ 防 台账写穿/卡面细节外泄/空台账谎报</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">台账是「有哪些卡」不是「卡上写了什么」（params 装过 L2 草稿全文）；查不了就报错——值班长以为没有待批事项比系统报错危险</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HANDLER_T / T_APPR（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HANDLER_T</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">list_approvals.test.ts 六用例：handler 3 + 闸正例/负例三连（无票/绑案/大小写）/摘行对照；临时种子库，data/ 不进测试</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">契约测试=新工具的上岗体检；生产布景不进 CI（那个目录在 CI 里根本不存在）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（基线 +6 的来源）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATE3WAY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">verifyTicket 三岔口（验票闸 · 热路径零网络依赖）：先看手里票（审批票/任务票分岔），两手空空才 tierOf——L0 allow / L2 require_approval / 其余 403 no_ticket；try 兜底 signature_invalid · 🛡️ 防 无票奔跑+带病放行（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票是签名事实、表是配置事实——配置凌驾签名之上等于给闸开「配置病传染业务」的后门；分级只在兜底分支出场</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FIVECHK / MANIFEST（tierOf 读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FIVECHK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">任务票五连检查：unseal 验签 → exp 时效 → used 焚毁 → allowed_tools 字符串精确匹配（大小写敏感）→ case/run 绑定 · 🛡️ 防 改签名/过期/重放/票里没这工具/绑案不符（INV-2 · INV-3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">全程没有一行读登记表——持票裁决只认票面字节；票面的内容来源是上游注册表（INV-3：员工自作主张物理上不可能）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATEDCALL</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATEDCALL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">makeGatedCall 闸体（六处验票闸共享本体）：hash → 验票 → 闸拒=DENIED 审计+抛错强杀 → 广播 tool_call → 执行 → 广播 tool_result · 🛡️ 防 闸拒不吞留账（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">安全语义只许一份拷贝（票 43 教训）；闸拒四件套留账+强杀让「执行没发生」在事件流里看得见</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUNHANDLER</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUNHANDLER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">list_approvals 执行（run 形态 · 真 handler 查真台账）：total=4 approved、apr_baf3f3a8/apr_73d3c6bd 等真卡现身</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">教具与 run 内完全同源（同闸体/票/密钥/handler/数据），唯一省掉 LangGraph 壳——诚实划界：缺的是第三层执行体</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPR（读）/ OPERATOR（响应台账）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">STRIP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">摘行对照（S5 幕）：TOOLS_MANIFEST_FILE → 摘行临时副本 + resetToolsManifestCache，同一张票两问</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">揭底「闸认票不认表」：持票通道纹丝不动——登记的执法在对账测试与铸票上游，已铸的票是签名事实摘行不溯及既往</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATE3WAY / MANIFEST（读副本）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SPEC</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">check_specs.py（job1 spec gate · 格式闸）：不变量表/状态机表缺节、例外无理由 → FAIL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">格式闸管「表在不在」、执行闸管「拦不拦得住」——治理第一层是让文档可被机器消费</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BOUNDARY</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SPECS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">specs/modules.md「边界规则」表（R1-R9 单一事实来源）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人和机器读同一张表——文档即契约的边界版；表与闸互为对账对象</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BOUNDARY（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BOUNDARY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">check_boundary.py 边界闸（job2 第一棒）：9 条禁令逐条真跑 import 检查、表与闸互查（缺行红/删闸红）、self-test 18/18 · 🛡️ 防 越界 import 静默烂掉（治理面 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">import 越界编译照样过、测试照样绿，不查就烂——凡 CI 能红的问题别靠人眼；治理系统自己坏了也要炸响</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TESTALL / SPECS（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TESTALL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">pnpm lint/typecheck/test（job2 后三棒）：全量基线 agent 486+3 → 492+3（+6=list_approvals 六用例 · skip 名单未动）+ 四对账复跑 19 passed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">基线当账本：数量是库存、删除是出库、出库必须有单据——删闸测试的时候 CI 是绿的，只有数字对账抓得住</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PYTEST / MANIFEST（对账读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PYTEST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">pytest guards 26 + gateway 43（job3 python）：含 test_fga_matrix 9 passed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对账边 4（manifest ≡ FGA 矩阵）在 py 侧复跑——两套语言两把尺子对同一张登记表</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SNAP_PY（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ZERO_DEL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">git diff 6d8fbc4..HEAD 零删除审计：12 文件 +1679/−10，−5 行全是签到窗维护（快照计数 + 点名名单），0 断言删除</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">零删除约束的是断言覆盖面——快照计数跟着事实走，但每一次改动都要逐行亮账说出单据理由</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（收官盘库）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST :8002/internal/mint（真网关 HMAC 铸票口）：票面照单全收（allowed_tools 签什么是什么 · 不查登记表）、TTL 900s、缺密钥拒签 · 🛡️ 防 fail-open 铸票（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">铸票=冷路径签字、验票=热路径查票，两端只共享密钥与票型契约——离线授权两端的深模块分工</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR（响应任务票）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 approvals（agent 库 · 卷挂 ./data/agent）：审批卡 7 张（approved 4 / expired 1 / rejected 2），tool=list_approvals 恒 0 行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">场景 4 的主角面是新工具的数据源；INV-3 对号——L1 只读工具物理上不产生审批卡</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HANDLER / RUNHANDLER（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BAKED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">容器内登记表（fixtures 构建时 COPY 烤制）：24 行 vs 宿主 25 行，差的那行=list_approvals</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">部署边界教具：登记 ≠ 线上生效，生效要过镜像重建这一关；刻意不重建=无 worker 持票行为零影响、布景零污染</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（重建时机归 8.4 compose 步）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（开发与教学进程 · 不在容器里）"]
+        OPERATOR["操作者（开发者/值班长/教学脚本）<br/>终端跑 pnpm gen:tool / vitest / pytest / 教具 tsx · git diff 过堂"]
+    subgraph S71["7.1 脚手架 gen:tool · 进入:pnpm gen:tool 工具名（一次性命令） · 节拍:node 进程跑完即退 · 退出:空壳+测试骨架+登记行三件产出"]
+        direction TB
+        SCRIPTS["package.json scripts 字条（中立层入口）<br/>gen:tool → node tools/gen-tool.mjs<br/>零依赖 · 不 import 工程内部模块（边界规则 R3）"]
+        CHK["入参四闸<br/>工具名小写下划线正则（大小写戏法 exit 1）<br/>tier 枚举 L0/L1/L2 · family A.2 四族 · owner 模块卡号<br/>越界 die exit 1 死在门口<br/>🛡️ 防 越界脏字段流进对账网"]
+        REG1["登记行先落表（登记先于代码）<br/>表不存在 exit 1 · 重名拒绝 exit 2 不静默覆盖<br/>push 五字段：name/tier/family/owner_card/description<br/>🛡️ 防 覆盖=静默改分级（登记面是安全面）"]
+        GEN2["生成物两件<br/>空壳 handler（输出一句话）<br/>测试骨架（冒烟 + 指路注释：挪包收编/闸正负例仿写）"]
+        WRITED["落盘<br/>--out 目录写两文件<br/>manifest 整表 JSON.stringify 重写<br/>（重排 175+/24− 教训 → 真表改手工单行追加）"]
+    end
+    subgraph S72["7.2 登记 · 进入:真表手工单行追加（先 manifest 后文档） · 节拍:一次性改动 + 两套对账测试验收 · 退出:四方对账网全绿、空壳换真身"]
+        direction TB
+        MANIFEST[("表 tools.manifest.json · 登记单一来源<br/>tools 第 32 行 = list_approvals：L1 / readonly_query / m3<br/>policy.unregistered_tier=L1（未登记默认级）<br/>读口模块级缓存 · TOOLS_MANIFEST_FILE=测试换粮草缝<br/>🛡️ 防 未登记工具免验上岗（fail-closed 更严口径）")]
+        PRD_A1["docs/prd.md 附录 A.1 工具分级表（文档即契约）<br/>1164 行 = list_approvals 行<br/>测试现场解析 md 表格当断言输入"]
+        SNAP_TS["快照窗 A · tools-manifest.test.ts<br/>A.1 计数快照（场景 7 当日 23→24 · 票 63 起 25）<br/>+ KNOWN_NOT_IN_A1 点名 + worker 面/票面 ⊆ manifest + INV-3 无 L2<br/>🛡️ 防 文档面/代码面单方面漂移（谁漂移谁红）"]
+        SNAP_PY["快照窗 B · gateway test_fga_matrix.py<br/>manifest ≡ FGA 矩阵：族/分级逐字一致<br/>矩阵外登记点名 = get_case + list_approvals<br/>🛡️ 防 矩阵外登记悄悄多（例外必须写名字）"]
+        HANDLER["list_approvals.ts 台账读口真身<br/>readonly 打开 agent 库（钥匙没给写不进）<br/>六台账字段数据最小化 · fail-closed db_not_found<br/>🛡️ 防 台账写穿/卡面细节外泄/空台账谎报"]
+        HANDLER_T["list_approvals.test.ts 六用例收编<br/>handler 3 + 闸正例/负例三连/摘行对照<br/>临时种子库 · 生产布景 data/ 不进测试"]
+    end
+    subgraph S73["7.3 闸的生效与拒绝 · 进入:教具 7-3-gate-demo.mts 六幕连播 · 节拍:宿主 tsx 进程内直调（不经 HTTP 编排） · 退出:三态 no_ticket / scope_insufficient / allow 辨析完毕"]
+        direction TB
+        GATE3WAY["verifyTicket 三岔口（验票闸 · 热路径零网络依赖）<br/>先看手里票：审批票→审批路径 / 任务票→五连<br/>两手空空才 tierOf：L0 allow / L2 require_approval / 其余 403 no_ticket<br/>try 兜底：粮草病了收进 signature_invalid<br/>🛡️ 防 无票奔跑+带病放行（INV-1 fail-closed）"]
+        FIVECHK["任务票五连检查<br/>unseal 验签 → exp 时效 → used 焚毁<br/>→ allowed_tools 精确匹配（大小写敏感）→ case/run 绑定<br/>全程不读登记表（票是签名事实）<br/>🛡️ 防 重放/过期/越权/大小写戏法（INV-2 · INV-3）"]
+        GATEDCALL["makeGatedCall 闸体（六处验票闸共享本体）<br/>hash → 验票 → 闸拒=DENIED 审计+抛错强杀<br/>→ 广播 tool_call → 执行 → 广播 tool_result<br/>🛡️ 防 闸拒不吞留账（INV-8）"]
+        RUNHANDLER["list_approvals 执行（run 形态 · 真 handler 查真台账）<br/>total=4 approved · 真卡现身<br/>apr_baf3f3a8 / apr_73d3c6bd / apr_16166901<br/>缺第三层执行体：无 worker 持票 · run 里永远不会调它"]
+        STRIP["摘行对照（S5 幕）<br/>TOOLS_MANIFEST_FILE → 摘行临时副本 + 缓存重置<br/>同一张票再问：无票 no_ticket 不变 · 持票 allow 纹丝不动<br/>闸认票不认表——执法在对账与铸票上游"]
+    end
+    subgraph S74["7.4 边界闸与体检 · 进入:CI 四 job 本地等价命令 · 节拍:一次性全量体检（可重复） · 退出:全绿+基线只增不减+零删除亮账"]
+        direction TB
+        SPEC["check_specs.py（job1 spec gate · 格式闸）<br/>不变量表/状态机表缺节 · 例外无理由 → FAIL"]
+        SPECS[("specs/modules.md「边界规则」表 R1-R9<br/>单一事实来源：表与闸互为对账对象")]
+        BOUNDARY["check_boundary.py 边界闸（job2 第一棒 · 执行闸）<br/>9 条禁令逐条真跑 import 检查<br/>缺行红/删闸红 + self-test 18/18<br/>🛡️ 防 越界 import 静默烂掉（治理面 fail-closed）"]
+        TESTALL["pnpm lint / typecheck / test（job2 后三棒）<br/>全量基线：agent 486+3 → 492+3 只增不减<br/>+6 = list_approvals 六用例 · skip 名单未动<br/>四对账复跑 19 passed"]
+        PYTEST["pytest guards 26 + gateway 43（job3 python）<br/>含 test_fga_matrix 9 passed（对账边 4 复跑）"]
+        ZERO_DEL["git diff 6d8fbc4..HEAD 零删除审计<br/>12 文件 +1679/−10<br/>−5 行全是签到窗维护 · 0 断言删除（出库必有单据）"]
+    end
+    end
+
+    subgraph GW["容器 gateway（FastAPI · ContextForge 插件 · :8002）"]
+        MINT["POST /internal/mint（HMAC 任务票铸票口）<br/>票面照单全收（allowed_tools 签什么是什么 · 不查登记表）<br/>TTL 900s · 缺密钥拒签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        T_APPR[("表 approvals · agent 库（卷挂 ./data/agent）<br/>审批卡 7 张：approved 4 / expired 1 / rejected 2<br/>tool=list_approvals 恒 0 行（INV-3 对号）")]
+        BAKED["容器内登记表（fixtures 构建时 COPY 烤制）<br/>24 行 vs 宿主 25 行——差的那行=list_approvals<br/>本场景刻意不重建：无 worker 持票 · 行为零影响 · 布景零污染"]
+    end
+
+    %% ===== 7.1 脚手架 =====
+    OPERATOR -. "请求 pnpm gen:tool list_approvals --tier L1 --family readonly_query --owner m3（临时清单先行 · 真表不碰）" .-> SCRIPTS
+    SCRIPTS -- "T+0s: node tools/gen-tool.mjs 拉起（零依赖中立层）" --> CHK
+    CHK -- "四闸全过放行（越界值当场 die exit 1 · 三连实测）" --> REG1
+    REG1 -. "读 登记表校验重名（7.1 指向临时副本 · 捣乱 D 对真表 → 对账网当场红）" .-> MANIFEST
+    REG1 -- "登记行 push 完才生成（先有身份再有肉身）" --> GEN2
+    GEN2 -- "写 list_approvals.ts + .test.ts（空壳一句话 + 指路注释）" --> WRITED
+    WRITED -. "T+落盘: manifest 整表重写（生成器只管代码 · 真表登记归 7.2 手工）" .-> MANIFEST
+
+    %% ===== 7.2 登记 =====
+    OPERATOR -. "T+7.2: 真表末尾手工单行追加（先 manifest 后文档铁律）" .-> MANIFEST
+    OPERATOR -. "T+7.2: A.1 表末同步加行（文档即契约）" .-> PRD_A1
+    MANIFEST -. "读 tools[] 现场装配（模块级缓存）<br/>+ worker TOOLS 常量与 run kind 票面 ⊆ manifest（INV-3 无 L2）" .-> SNAP_TS
+    PRD_A1 -. "读 parsePrdA1 现场解析表格当断言输入（表格结束遇正文收工）" .-> SNAP_TS
+    OPERATOR -. "T+验收: pnpm test / pytest 现场解析（登记的执法时机在测试 · 不在运行时）" .-> SNAP_TS
+    SNAP_PY -. "读 manifest 与 FGA 矩阵逐字对账（族/分级）" .-> MANIFEST
+    HANDLER -- "T+收编: 骨架长成契约测试（挪进 workspace 包才被 pnpm test 收编）" --> HANDLER_T
+    HANDLER -. "读 readonly SELECT approvals 六字段（prepared statement · 参数不拼串）" .-> T_APPR
+
+    %% ===== 7.3 闸 =====
+    OPERATOR -. "请求 POST :8002/internal/mint（教具点菜 task_ticket · allowed_tools 带 list_approvals）· 跨容器→gateway:8002" .-> MINT
+    MINT -. "响应 HMAC 任务票 TTL 900s（签名事实 · 摘行不溯及既往）· 跨容器→gateway:8002" .-> OPERATOR
+    OPERATOR -- "T+S1: 无票闯闸 → 兜底分支 tierOf（L0 allow / L1 no_ticket / L2 require_approval）" --> GATE3WAY
+    GATE3WAY -. "读 tierOf：登记行 tier / 未登记默认 policy L1（表病了收进 signature_invalid）" .-> MANIFEST
+    OPERATOR -- "T+S2 拿到票: 持真票同进程直调（与 run 内同源 · 唯一省掉 LangGraph 壳）" --> FIVECHK
+    FIVECHK -- "五连全过：allow + 票面 payload → 进闸体" --> GATEDCALL
+    GATEDCALL -. "闸拒：审计 DENIED 四件套 + 抛错强杀（S4 大小写幕 scope_insufficient）" .-> OPERATOR
+    GATEDCALL -- "T+放行: 广播 tool_call 后执行 handler（run 形态六步）" --> RUNHANDLER
+    RUNHANDLER -. "读 SELECT approvals WHERE status（readonly 打开 · bind mount 同一份文件）" .-> T_APPR
+    RUNHANDLER -. "响应 台账 total + 真卡 3 行（apr_baf3f3a8 / apr_73d3c6bd / apr_16166901）" .-> OPERATOR
+    OPERATOR -. "T+S5: 换粮草 TOOLS_MANIFEST_FILE → 摘行临时副本（测试接缝 · 非生产热加载）" .-> STRIP
+    STRIP -. "读 摘行副本：list_approvals 退回未登记默认级 L1" .-> MANIFEST
+    STRIP -- "同一张票再问 → allow 纹丝不动（闸认票不认表）" --> GATE3WAY
+    MANIFEST -. "T+下次重建: fixtures 构建时 COPY 进镜像（登记 ≠ 线上生效）· 跨容器→agent:3003" .-> BAKED
+
+    %% ===== 7.4 体检 =====
+    OPERATOR -. "请求 CI 四 job 本地等价命令一次跑齐（job1 起）" .-> SPEC
+    SPEC -- "PASS 0 警告 → job2 第一棒边界闸" --> BOUNDARY
+    BOUNDARY -. "读 R1-R9 禁令表（表与闸互查：缺行红/删闸红）" .-> SPECS
+    BOUNDARY -- "0 越界 9/9 有人查 + self-test 18/18 → lint/typecheck/全量测试" --> TESTALL
+    TESTALL -. "读 四对账复跑（manifest ≡ A.1 ≡ worker 面票面 ≡ FGA 矩阵）" .-> MANIFEST
+    TESTALL -- "agent 492+3 只增不减 → py 半边" --> PYTEST
+    PYTEST -. "读 test_fga_matrix 9 passed（点名例外原样）" .-> SNAP_PY
+    OPERATOR -. "T+收官: git diff 过堂——零删除审计逐行亮账" .-> ZERO_DEL
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 7.1：CHK 防越界脏字段流进对账网 / REG1 防覆盖=静默改分级（登记面是安全面）
+    %% 7.2：MANIFEST 防未登记工具免验上岗（fail-closed 默认级）/ SNAP_TS 防文档面代码面单方面漂移
+    %%      SNAP_PY 防矩阵外登记悄悄多（点名例外）/ HANDLER 防台账写穿+卡面细节外泄+空台账谎报
+    %% 7.3：GATE3WAY 防无票奔跑+带病放行（INV-1 fail-closed）/ FIVECHK 防重放过期越权大小写戏法（INV-2 · INV-3）
+    %%      GATEDCALL 防闸拒不吞留账（INV-8）/ MINT 防 fail-open 铸票（INV-1）
+    %% 7.4：BOUNDARY 防越界 import 静默烂掉（治理面 fail-closed）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class CHK,REG1,MANIFEST,SNAP_TS,SNAP_PY,HANDLER,GATE3WAY,FIVECHK,GATEDCALL,MINT,BOUNDARY guardSec
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
