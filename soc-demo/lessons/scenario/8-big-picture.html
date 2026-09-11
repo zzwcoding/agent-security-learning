@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 8 大图 · 系统自证</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 8 大图 · 系统自证 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 8「系统自证」的代码落点索引：前七个场景每一步都是人在当裁判，收官场景回答的是<b>谁来给系统作保</b>——五步走完「评估 → 呈现 → 体检 → 图纸 → 门禁」的自证闭环。<b>8.1 evals</b>：33 条用例的消防演练（不拉 compose、单测级注入约 13 秒跑完），铁面断言器发奖牌、外请裁判只写点评——judge 分数永远不进门禁（决策 #7）；<b>8.2 审计流与 Eval 页</b>：成绩单三种走线送到人眼前（SSE 直播 / 2 秒轮询 / 静态文件），成绩单的形状被两端共读的契约 fixture 锁死，谁单方面改形状谁翻红；<b>8.3 MCP 体检</b>：给陌生 server 做入职体检（投毒扫描 / 分级建议 / 凭证暴露面 / rug-pull 基线），退出码 0/1/2 三态；<b>8.4 compose 图纸</b>：九服务总装图纸与六枚 digest 封条，唯一真装配=重建 agent 让 25 行登记表上线、bind mount 数据零损失；<b>8.5 CI 门禁</b>：四 job 本地等价命令全跑 + 三闸喂脏——「没有执法者的纪律只是愿望」的收官一课。
+本场景数字：<b>5 步 / 40 个节点 / 13 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；cylinders（柱形）= 用例库 / 契约样例 / 基线档案 / 数据盘 / 产物文件。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；宿主进程与宿主盘文件之间的读写不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站调用；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+每用例 / T+下次构建 / T+每日</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 8-1..8-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「33 场演练怎么跑、奖牌为什么不由 judge 发」→ <code>EVALCLI → SUITE → RUNNER → ASSERT</code>（8.1）。</li>
+  <li>想看「成绩单怎么上屏、形状谁锁」→ <code>VITE → EVALPAGE</code> 与 <code>CONTRACT</code>（8.2）。</li>
+  <li>想看「陌生 server 的入职体检与退出码三态」→ <code>AUDITCLI → TRANSPORTS → AUDITCORE → RULES</code>（8.3）。</li>
+  <li>想看「图纸怎么被看住、重建为什么伤不到布景」→ <code>COMPOSE → SEALS / TOPOTEST</code> 与 <code>REBUILD → T_MST / T_DATA</code>（8.4）。</li>
+  <li>想看「四道 job 的排序逻辑与『谁执法』三问」→ <code>CIYML → SPECGATE → BOUNDGATE → TESTALL → PYGATE → COMPCFG</code>（8.5）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（40 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">开发者/值班长/教学脚本（宿主终端）：跑 test:eval、体检 CLI、compose 命令、CI 等价命令与捣乱实验</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">场景 8 的动作全是「验证与执法」，发起人可以是人（教学）也可以是机器（CI/每日慢道）——两条车道同一套命令</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">S81-S85 各入口 / PROXYLLM（judge 出站的中转人）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALCLI</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">evals/src/cli.ts 售票窗口：tags 参数翻译成 EVAL_TAGS 环境变量、startVitest 编程接口拉起套件、失败翻成进程退出码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">vitest 不认识业务参数——先翻译再拉起；CI 只认退出码，0 才放行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SUITE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALFIX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">fixtures/eval/ 用例库：33 个目录一用例一 yaml，expected_verdict = 人工标注的标准答案</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">标注是准确率的锚——锚歪一分成绩塌一寸（8.1 捣乱 B 实测）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LOADER（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LOADER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">loader.ts 目录制扫描：坏用例攒齐病灶一次点名、全场拒演；never_mock 用例显式归慢道</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">坏用例混进评估集比缺一条危险——虚高虚低都是假成绩（fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SUITE / EVALFIX（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SUITE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">suite.test.ts 演练总指挥：目录制→测试制翻译只此一处（33 用例+1 清单自检=34 场）、runCase 逐条跑、afterAll 收尾写盘</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">评估长成测试的样子——白嫖并发调度/超时/退出码，不自研评估引擎</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUNNER / ASSERT / JUDGE / REPORT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUNNER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">runner.ts 快道演习室（决策 #10）：真 case-backend 代码+内存库+随机端口、生产 makeTriageFlow+进程内 FakeTriageLlm、跑完即拆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">被测的是编排的判断力不是 LLM 灵感——同输入同结论才有 13 秒可复现的门禁</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ASSERT（收证 CaseEvidence）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ASSERT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">assertions.ts 七道确定性检查：run_completed / 对人工标注 / forbidden_tools / expected_approvals / 资源两兜底 / audit_existence（INV-8 机器化）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">这层一个 LLM 都不许有——奖牌只认确定性；前七场人肉对过的审计账这里每 13 秒机器对一遍</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SUITE（判定回执）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">judge.ts 外请裁判：selectJudge 开演前资格探测、strict 要点打分、缺席=not_evaluable 显式留痕</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分数随机+每条烧真金——进门禁=CI 闪红信用破产；裁判管好坏，对错归断言器</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PROXYLLM（真网出站）/ SUITE（分数回执）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">report.ts buildReport 三维装配（准确率/拦截率/成本）+ 收官签名一行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">三维就是前七个场景的出勤表：分诊对多少、防线拦多少、花销多少</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALRES（写盘）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALRES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">磁盘 eval-results/latest.json + cost_all.csv：快道产物（宿主盘）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">成绩单落盘才有人能读——8.2 整步都在讲怎么把它送到人眼前</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VITE（读）/ BAKED（烤制源）/ CONTRACT（形状锚）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VITE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">vite dev server :5173 总接线板：proxy 一前缀一服务 + evalResultsStatic 插件（/eval-results 直读磁盘零后端）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">浏览器只发同源请求；公开产物不值得开后端端点——鉴权/缓存/版本三个问题全免</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALPAGE / AUDITPAGE（转发）/ EVALRES（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALPAGE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EvalPage.tsx 评测报告页：挂载时 fetchEvalReport 一跳、evalView 纯函数装配、没数不编数（pct 空值/skipped 不进分母）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">页面上每个「没有」都说自己是「没有」——编一个数字比没有数字危险百倍</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VITE（请求）/ BAKED（容器态粮食）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITPAGE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AuditPage.tsx 审计台账页（INV-8 公开查询面）：GET /api/v1/audit 每 2 秒轮询 + mergeAudit 按 id 去重</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">真相只有一份时轮询永不与真相分家——广播一百份就要保真一百份</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VITE（请求转发）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CONTRACT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">契约 fixtures/eval-report/latest.json（样例即契约 · 票 29）：生产端深比对 buildReport 产出 + 消费端真渲染 + 幽灵键禁复活断言</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">文档会过期手抄会抄错，机器读的样例不撒谎——一端单方面改形状，两端测试齐红</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT（深比对）/ EVALPAGE（渲染路径）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BAKED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">容器内烤制成绩单（Dockerfile COPY eval-results/）：run_at 停在镜像构建时刻</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">代码/产物进容器靠构建——宿主重跑 eval 不会自动上线（8.4 重建收口的预演教材）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALPAGE（容器态响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCLI</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">soc-mcp-audit CLI 薄壳（bin→cli.ts）：退出码 0 干净 / 1 检出投毒 / 2 server 不可达</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">退出码只看投毒——机器认定的硬红线管 CI；分级建议与凭证面是给人看的报告</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TRANSPORTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">transports.ts 双通道适配（票 25 换官方 SDK）：stdio 的 spawn/分帧/握手、streamable HTTP 的 POST/SSE 双兼容+session-id、do-while 翻页收全、30s 超时兜底</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">帧与握手交给协议作者；「翻到底」的纪律归自己——工具清单收不全=体检漏项</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE（清单/unreachable 回执）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">audit.ts auditTarget 体检核心：先拿清单再下结论；连不上=unreachable 报告+退出码 2；收尾组装 json+md 双报告并定退出码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「查无此人」≠「查了没事」——把两者分开报告是体检机自己的 fail-closed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RULES / TIER / BASELINE（读）/ AUDITCLI（退出码）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RULES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">rules.ts 投毒扫描（决策 #11 内嵌规则）：七族词典与 guards 同源（票 04）、命中累计判注入 + 凭证暴露面（命令行原文+schema 两来源）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AI 读得到的就是攻击者写得进的——把运行时防线左移到接入之前（D2 上游布岗）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE（逐工具判定）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TIER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">tier.ts suggestTier 分级建议：L2 不可逆/外发、L1 可撤销写、L0 只读（PRD §5.7 同口径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">与 7.2 登记表同口径——陌生工具的建议户口接进来就映射同一套票/审批语义（L2 必审批）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE（建议入报告）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BASELINE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">mcp-audit-baseline.json rug-pull 入职照：toolHash=sha256(名字+描述+schema) 前 16 位、cwd 粒度</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">版本号可以不变、哈希骗不了人——描述漂移逐个点名正是 rug-pull 前兆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDITCORE（比对三态：建档/match/drift）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CFAUTH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">contextforge 网关认证墙（ghcr 官方镜像）：匿名渠道关闭、initialize 握手被挡</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">体检机不猜不硬闯——把「进不去」如实上报；持合法 token 走专用通道是生产化预留</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TRANSPORTS（握手拒绝→unreachable）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPOSE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">docker-compose.yml 总装图纸（299 行含注释）：九服务名册、healthcheck 一律 127.0.0.1（避 alpine 的 ::1 坑）、depends_on service_healthy、端口规划</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">图纸入库+声明式装配——人读的注释与机器读的断言看同一份文件</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SEALS / ENVEX（渲染读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SEALS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">digest 封条六枚：chroma/openfga/contextforge/langfuse/langfuse-db/wazuh 全 @sha256 钉</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">tag 是门牌可改挂，digest 是封条——内容物一个字节不同封条号就对不上（供应链底线）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TOPOTEST（扫描对象）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TOPOTEST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">compose-topology.test.ts 图纸语义闸（静态读文本）：九服务名册/profile 不许暗依赖/票 53 封条总闸（凡 image: 必 @sha256 收尾+非空护栏）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">没有执法者的纪律只是愿望——8.4 捣乱 B 的「摘钉无人红」缺口由总闸闭合</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPOSE / SEALS（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENVEX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">.env.example 图例（.env 本尊永不入库）：AGENT_LLM 未设默认 real、SECRETS_LLM_API_KEY 空=deny_no_secret 执勤、SOC_HMAC_KEY 双方共享</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">缺省值方向倒向安全侧——想不安全必须显式说 fake（INV-1 藏在图纸里）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPOSE（变量渲染）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REBUILD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">build agent + up -d agent：唯一真装配——容器内登记表 24 行（旧烤制）→25 行上线、其余八容器 uptime 不动、八项布景计数逐项相等</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">构建与替换分成两个可独立回滚的检查点——生产蓝绿/灰度的雏形</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_MST / T_DATA（读写复点）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_MST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">容器内登记表 /app/fixtures/tools.manifest.json：25 行（8.4 重建后上线 · list_approvals=L1 在册）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">fixtures 构建时 COPY——登记 ≠ 自动生效，生效要过镜像重建这一关（7.3 的 24/25 行同族）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REBUILD（运行面 tierOf 探针回读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_DATA</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主盘 data/ 四仓（bind mount）：agent/case-backend/guards/chroma</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">布景的命根子——容器重建升级毫毛不少；禁 down -v 不进肌肉记忆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REBUILD（零损失复点）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CIYML</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ci.yml 四 job 编排：spec-gate→ts→python→compose-config（外加 eval-slow 每日慢道）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">便宜的先跑、贵的终审；交底：origin/main 从未推上 workflows——门禁真身=本地等价命令</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SPECGATE（首棒）/ EVALSLOW（慢道）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SPECGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">job1 · tools/check_specs.py 文档机器闸：不变量 ID 查重、状态机端点已声明、边界规则节在场（零依赖纯 python）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">门禁链第一环放最便宜的位置——文档必须可被机器消费（捣乱 B 喂重复 INV-5 当场 FAIL）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BOUNDGATE（接力）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BOUNDGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">job2 第一棒 · tools/check_boundary.py 边界闸：R1-R9 九条禁令逐条真跑 import 检查 + self-test 18/18</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">import 越界编译照过测试照绿——不查就烂；凡 CI 能红的别靠人眼</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TESTALL（接力）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TESTALL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">job2 后三棒：pnpm install --frozen-lockfile → lint → typecheck → test 全 workspace</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">evals 33 条评估用例长在测试门禁里——评估门禁不是独立体系；frozen-lockfile=依赖版 digest 钉</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PYGATE（接力）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PYGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">job3 python 半边：ruff check（guards 精确钉 ruff==0.16.6 冻结规则集 · 票 52）+ pytest guards 26 / gateway 43</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">浮动版本钉=上游改尺子直接打进门禁（票 52 修复前两代尺子各红各的）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPCFG（接力）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPCFG</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">job4 · docker compose config -q 图纸语法闸</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">只拦结构非法（坏 override 当场 exit 1）；值的安全语义分工在别处——语法闸不做语义审查</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR（收官回执）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALSLOW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">eval-slow.yml 每日慢道（schedule+手动）：compose fail-soft 拉起→test:eval 全维→归档 artifact</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">快慢两道同一套用例同一套纪律：无 KVM 沙箱 skip、无 key judge not_evaluable、确定性门槛照旧硬门禁</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVALFIX（读全维用例）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDAPI</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GET /api/v1/audit 审计公开查询口：requestId/objectId 服务端参数过滤</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">账可以很大——过滤在服务端做，网上的流量要省（不是前端拉全表自己筛）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries（卷挂 ./data/case-backend）：INV-8 五要素真相源（谁/何时/对什么/做什么/结果）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写操作必留台账——审计页 2 秒一轮查的就是它本人</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDAPI（被查）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVSS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GET /api/v1/events/stream SSE 直播（100ms 推送）：per-run 事件流</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">事件恰好一次（INV-7）——audit 镜像帧可对账：3 帧=3 次状态迁移</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR（curl 对账）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PROXYLLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /proxy/llm 凭证代理：judge 出站通道；SECRETS_LLM_API_KEY 空 → 503 deny_no_secret 执勤中（裁决顺序 no_secret 最先）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">钥匙只挂网关进程——出站瞬间注入，agent 一滴密钥都摸不到（INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE（响应）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（开发与教学进程 · 不在容器里）"]
+        OPERATOR["操作者（开发者/值班长/教学脚本）<br/>终端跑 pnpm test:eval / vitest / soc-mcp-audit / docker compose / CI 等价命令"]
+    subgraph S81["8.1 evals 快道 · 进入:pnpm test:eval（一次性 CLI 进程） · 节拍:33 用例全量约 13 秒重跑（同输入同结论） · 退出:33 判定 + 三维报告落盘 eval-results/"]
+        direction TB
+        EVALCLI["evals/src/cli.ts 售票窗口<br/>tags 参数翻译成 EVAL_TAGS 环境变量<br/>startVitest 编程接口拉起同一份套件<br/>进程退出码 = 有没有人考砸（CI 看它放行）"]
+        EVALFIX[("fixtures/eval 用例库 · 33 目录一用例一 yaml<br/>分诊 11 / 攻击 11 / 审批 4 / 对话 4 / 回放 2 / 调查 1<br/>expected_verdict = 人工标注的标准答案")]
+        LOADER["loader.ts · listCases/parseCase 目录制扫描<br/>坏用例不跳过：病灶攒齐一次点名、全场拒演<br/>🛡️ 防 脏用例混进评估集拉高拉低准确率（fail-closed）"]
+        SUITE["suite.test.ts 演练总指挥<br/>目录制→测试制翻译只此一处（34 场测试）<br/>runCase 逐条跑 · afterAll 收尾写报告<br/>红绿只认 checks 与 passed——judge 分数不出场"]
+        RUNNER["runner.ts 快道演习室（决策 #10 · 不拉 compose）<br/>真 case-backend 代码+内存库+随机端口，跑完即拆<br/>被测对象 = 生产 makeTriageFlow + 进程内 FakeTriageLlm<br/>never_mock 真车道用例显式 skip 归慢道"]
+        ASSERT["assertions.ts 铁面断言器 · 七道确定性检查<br/>run_completed / 对人工标注 / forbidden_tools<br/>expected_approvals / 工具与 token 两兜底 / audit_existence<br/>这层一个 LLM 都不许有——同输入同结论<br/>🛡️ 防 judge 随机分进门禁（决策 #7）· 防无审计过关（INV-8 机器化）"]
+        JUDGE["judge.ts 外请裁判（LLM-as-judge）<br/>selectJudge 开演前资格探测：fake 件 / 真网 / 缺席<br/>无真凭证 → not_evaluable 显式留痕不装死<br/>strict 要点打分只进报告——奖牌锁在断言器柜里"]
+        REPORT["report.ts · buildReport 三维装配<br/>①triage_accuracy 对照人工标注<br/>②defense_interception 拦截率（出勤表）<br/>③costs 成本口径 · 收官签名一行打给终端"]
+        EVALRES[("磁盘 eval-results/latest.json + cost_all.csv<br/>快道产物落宿主盘 · 8.2 Eval 页的粮食<br/>成本 CSV 每条告警用例一行（M507 口径）")]
+    end
+    subgraph S82["8.2 web 呈现 · 进入:浏览器打开 :5173（或契约测试跑动） · 节拍:Eval 页挂载一跳 / 审计页 2 秒轮询 / 静态面零后端 · 退出:三维成绩单与审计台账上屏"]
+        direction TB
+        VITE["vite dev server :5173 总接线板<br/>proxy 一前缀一服务（auth/chat/pii/events→agent<br/>alerts/cases/audit→case-backend）<br/>evalResultsStatic 插件：/eval-results 直读磁盘零后端<br/>读不到 404 not_found 不编数"]
+        EVALPAGE["EvalPage.tsx 评测报告页<br/>挂载时 fetchEvalReport 一跳 → evalView 纯函数装配<br/>有什么渲染什么：没数返回 null · skipped 不进分母<br/>judge 只挂一条灰色 note（决策 #7 的 UI 尾巴）"]
+        AUDITPAGE["AuditPage.tsx 审计台账页（INV-8 公开查询面）<br/>GET /api/v1/audit 每 2 秒轮询 + mergeAudit 按 id 去重<br/>requestId/objectId 是服务端参数不是前端假过滤<br/>为什么轮询不直播：真相一份，广播百份要保真百份"]
+        CONTRACT["契约 fixtures/eval-report/latest.json（样例即契约 · 票 29）<br/>生产端 report.contract.test.ts 深比对 buildReport 产出<br/>消费端 eval.test.ts 读同一样例走真实渲染<br/>+ 幽灵键 attack_block_rate 禁复活断言<br/>🛡️ 防 一端单方面改形状（A1 三方漂移教训）"]
+    end
+    subgraph S83["8.3 MCP 体检 · 进入:soc-mcp-audit 加 server 命令或 http(s) URL · 节拍:一次性 CLI（30s 超时兜底） · 退出:json+md 报告落盘 · 退出码 0 干净 / 1 投毒 / 2 不可达"]
+        direction TB
+        AUDITCLI["soc-mcp-audit CLI 薄壳（bin → cli.ts）<br/>退出码只看投毒：0 干净 / 1 检出投毒 / 2 不可达<br/>分级建议与凭证面是给人看的报告，不改变退出码"]
+        TRANSPORTS["transports.ts 双通道适配（票 25 换官方 SDK）<br/>stdio：StdioClientTransport 管 spawn/分帧/握手<br/>streamable HTTP：POST/SSE 双兼容 + mcp-session-id<br/>collectTools：initialize 握手 + do-while 翻页收全<br/>withTimeout 30s——体检机不能被陌生 server 拖死"]
+        AUDITCORE["audit.ts · auditTarget 体检核心<br/>先拿清单再下结论；连不上 = unreachable 报告 + 退出码 2<br/>「查无此人」与「查了没事」分开报告<br/>🛡️ 防 不可达装干净（INV-1 同款：可疑不发绿灯）"]
+        RULES["rules.ts 投毒扫描（决策 #11 内嵌规则 · 离线不依赖 guards）<br/>七族词典与 guards 同源（票 04）：指令覆盖/权威升级/<br/>外传/隐形字符/伪装 system 等，命中累计判注入<br/>凭证暴露面：命令行原文 + 工具 schema 两个来源<br/>🛡️ 防 描述投毒蒙混入职（D2 接入前左移）"]
+        TIER["tier.ts · suggestTier 分级建议（PRD §5.7 同口径）<br/>工具名+描述进 haystack：L2 不可逆/外发 · L1 可撤销写 · L0 只读<br/>接进自家系统时映射同一套票/审批语义（L2 必审批 · INV-3 照咬）"]
+        BASELINE[("mcp-audit-baseline.json · rug-pull 入职照<br/>toolHash = sha256(名字+描述+schema) 前 16 位 · cwd 粒度<br/>🛡️ 防 rug-pull：版本号没变行为变了（漂移逐个点名）")]
+    end
+    subgraph S84["8.4 compose 图纸 · 进入:docker compose 命令行 · 节拍:声明式 up -d（本步唯一真装配=重建 agent） · 退出:九服务 healthy + 25 行登记表上线 · data/ 零损失"]
+        direction TB
+        COMPOSE["docker-compose.yml 总装图纸（299 行含注释）<br/>九服务名册 · healthcheck 一律 127.0.0.1（alpine 的 localhost 先解析 ::1）<br/>depends_on service_healthy——依赖序由健康说话<br/>config -q 渲染校验：纸面装配对九服务零打扰"]
+        SEALS["digest 封条六枚（官方镜像全钉）<br/>chroma / openfga / contextforge / langfuse / langfuse-db / wazuh<br/>tag 是门牌可改挂，digest 是封条——一个字节不同就对不上<br/>🛡️ 防 latest 漂移（供应链底线：认封条不认门牌）"]
+        TOPOTEST["compose-topology.test.ts 图纸语义闸（静态读文本 · 不起 docker）<br/>九服务名册一个不能少 · profile 不许暗依赖<br/>票 53 封条总闸：凡 image: 行必 @sha256 收尾 + 非空护栏<br/>🛡️ 防 图纸私加私删服务 / 摘钉无人红"]
+        ENVEX[(".env.example 图例（.env 本尊永不入库）<br/>AGENT_LLM 未设默认 real——缺省值钉在安全侧<br/>SECRETS_LLM_API_KEY 空 = deny_no_secret 执勤（5.5 实测）<br/>SOC_HMAC_KEY 网关铸票/agent 验票共享（审批链信任根）<br/>🛡️ 防 生产默认不安全（INV-1 藏在图纸里）")]
+        REBUILD["build agent + up -d agent（唯一真装配 · 收场景 7 接口）<br/>Dockerfile 末三行 COPY：源码 + fixtures 烤进镜像<br/>容器内登记表 24 行（旧烤制）→ 25 行上线<br/>其余八容器 uptime 不动 · 八项布景计数逐项相等"]
+    end
+    subgraph S85["8.5 CI 门禁 · 进入:push/PR 触发四 job（本地等价命令逐条可复跑） · 节拍:每次变动全量 + eval-slow 每日 · 退出:四 job 全绿或当场红（红=闸在执勤）"]
+        direction TB
+        CIYML["ci.yml 四 job 编排<br/>spec-gate → ts → python → compose-config，便宜的先跑<br/>交底：origin/main 从未推上 workflows——门禁真身=本地等价命令<br/>推上去执勤是收官待办（票 52 后本地全绿就绪）"]
+        SPECGATE["job1 · tools/check_specs.py 文档机器闸<br/>不变量 ID 查重 / 状态机端点已声明 / 边界规则节在场<br/>零依赖纯 python——checkout 第一秒就能跑<br/>🛡️ 防 法典重复条文与缺节（文档可被机器消费）"]
+        BOUNDGATE["job2 第一棒 · tools/check_boundary.py 边界闸<br/>R1-R9 九条禁令逐条真跑 import 检查 + self-test 18/18<br/>零依赖不装包就能拦——最便宜的错最先死<br/>🛡️ 防 跨服务越界 import 静默烂掉（治理面 fail-closed）"]
+        TESTALL["job2 后三棒 · install --frozen-lockfile → lint → typecheck → test<br/>全 workspace 全绿；evals 33 条评估用例长在测试门禁里<br/>（评估即测试：8.1 的快道红绿就是这里的一部分）<br/>lockfile 与依赖树逐字节一致——digest 钉思想的依赖版"]
+        PYGATE["job3 python 半边<br/>ruff check（guards 精确钉 ruff==0.16.6 冻结规则集 · 票 52）<br/>+ pytest guards 26 / gateway 43（含 FGA 矩阵对账 9 条）"]
+        COMPCFG["job4 · docker compose config -q 图纸语法闸<br/>只拦结构非法（坏 override 当场 exit 1）<br/>值的安全语义分工在别处——语法闸不做语义审查"]
+        EVALSLOW["eval-slow.yml 每日慢道（schedule + 手动）<br/>compose 拉起（fail-soft）→ pnpm test:eval 全维 → 归档 artifact<br/>快道/慢道同一套用例同一套纪律：<br/>无 KVM 沙箱 skip · 无 key judge not_evaluable · 门槛照旧硬门禁"]
+    end
+end
+
+subgraph WEB["容器 web（Vite/React · :5173）"]
+    BAKED["容器内烤制成绩单（Dockerfile COPY eval-results/）<br/>run_at 停在镜像构建时刻——宿主重跑 eval 不会自动上线<br/>部署边界：产物进容器靠构建（7.3 的 24/25 行同族）"]
+end
+
+subgraph M2["容器 case-backend（Fastify · SQLite · :3002）"]
+    AUDAPI["GET /api/v1/audit 审计公开查询口<br/>requestId/objectId 服务端过滤 · 全表 471+ 条"]
+    T_AUDIT[("表 audit_entries（卷挂 ./data/case-backend）<br/>INV-8 五要素真相源：谁/何时/对什么/做什么/结果<br/>写操作必留台账——审计页轮询的就是它本人")]
+end
+
+subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+    EVSS["GET /api/v1/events/stream（SSE 取餐铃 · 100ms 推送）<br/>per-run 事件直播：流水线页吃它 · audit 镜像帧可对账"]
+    T_MST[("容器内登记表 /app/fixtures/tools.manifest.json<br/>25 行（8.4 重建后上线 · list_approvals=L1 在册）<br/>fixtures 构建时 COPY——登记 ≠ 自动生效")]
+    T_DATA[("宿主盘 data/ 四仓（bind mount）<br/>agent / case-backend / guards / chroma<br/>容器重建升级毫毛不少——布景的命根子（禁 down -v）")]
+end
+
+subgraph GW["容器 gateway（FastAPI · ContextForge 插件 · :8002）"]
+    PROXYLLM["POST /proxy/llm 凭证代理（judge 出站通道）<br/>SECRETS_LLM_API_KEY 空 → 503 deny_no_secret 执勤中<br/>裁决顺序 no_secret→missing→leak→才转发<br/>🛡️ 防 无凭证出站/凭证泄漏（INV-1 · INV-4）"]
+end
+
+subgraph CF["容器 contextforge（ghcr 官方镜像 · :4444）"]
+    CFAUTH["MCP 网关认证墙（ghcr 官方镜像 ContextForge）<br/>匿名渠道关闭：initialize 握手被挡<br/>体检机如实上报 unreachable exit 2——不猜不硬闯<br/>🛡️ 防 匿名直连 MCP 网关"]
+end
+
+    %% ===== 8.1 evals 快道 =====
+    OPERATOR -. "请求 pnpm test:eval（快道：单测级注入 · 不拉 compose 栈）" .-> EVALCLI
+    EVALCLI -- "T+0s: tags 参数翻译成 EVAL_TAGS 后编程拉起套件" --> SUITE
+    SUITE -- "T+开演: listCases 扫描全场（坏用例攒齐点名 · 拒演）" --> LOADER
+    LOADER -. "读 一用例一目录 parseCase 验格式（33 份剧本卡）" .-> EVALFIX
+    LOADER -- "T+清场: 33 条 EvalCase 全清 → 34 场测试就位" --> SUITE
+    SUITE -- "T+每用例: runCase 起一次性演习室（跑完即拆零串台）" --> RUNNER
+    RUNNER -- "T+run 完: 收证 CaseEvidence（run 行/工具帧/两路审计/M2 终值）" --> ASSERT
+    ASSERT -- "T+判定: 七道全绿才 passed（红绿只认确定性检查）" --> SUITE
+    SUITE -. "T+同用例: transcript 送 strict 要点打分（只写点评）" .-> JUDGE
+    JUDGE -. "响应 分数或 not_evaluable——passed 判定根本不读它" .-> SUITE
+    JUDGE -. "请求 judge 出站（真网才走 · 现状 not_evaluable 执勤）· 跨容器→gateway:8002" .-> PROXYLLM
+    PROXYLLM -. "响应 503 deny_no_secret（key 空 = 执勤中）· 跨容器→gateway:8002" .-> JUDGE
+    SUITE -- "T+afterAll: buildReport 三维装配 + 收官签名一行" --> REPORT
+    REPORT -- "写 latest.json + cost_all.csv（8.2 的粮食）" --> EVALRES
+
+    %% ===== 8.2 web 呈现 =====
+    EVALPAGE -. "同源 GET /eval-results/latest.json（挂载时一跳）" .-> VITE
+    VITE -. "读 evalResultsStatic 插件直读（零后端 · 无文件 404 不编数）" .-> EVALRES
+    AUDITPAGE -. "T+每 2s: 同源 GET /api/v1/audit（服务端参数过滤）" .-> VITE
+    VITE -. "请求 代理转发（一前缀一服务）· 跨容器→case-backend:3002" .-> AUDAPI
+    AUDAPI -. "响应 五要素台账（前端 mergeAudit 按 id 去重）· 跨容器→case-backend:3002" .-> AUDITPAGE
+    AUDAPI -. "读 INV-8 真相源 SELECT audit_entries" .-> T_AUDIT
+    OPERATOR -. "T+对账: curl SSE 镜像帧 3 帧=3 次状态迁移（恰好一次）· 跨容器→agent:3003" .-> EVSS
+    REPORT -. "T+契约测试: buildReport 产出 ≡ 样例深比对（形状一变必红）" .-> CONTRACT
+    OPERATOR -. "T+捣乱 A: 幽灵键植入样例 → 两端契约测试齐红" .-> CONTRACT
+    EVALRES -. "T+下次构建: COPY 烤进镜像 · 跨容器→web:5173" .-> BAKED
+    OPERATOR -. "T+对照: 容器 run_at（构建时刻）vs 宿主 run_at（新鲜）· 跨容器→web:5173" .-> BAKED
+    BAKED -. "响应 :5173 吐烤制份——宿主藏文件也纹丝不动（捣乱 B）" .-> EVALPAGE
+
+    %% ===== 8.3 MCP 体检 =====
+    OPERATOR -. "请求 soc-mcp-audit 加 server 命令或 URL（evil-server 样本先行）" .-> AUDITCLI
+    AUDITCLI -- "T+0s: 入口薄壳 → 体检核心（缺省 30s 超时兜底）" --> AUDITCORE
+    AUDITCORE -- "T+拿清单: 按目标长相分流 stdio / streamable HTTP" --> TRANSPORTS
+    TRANSPORTS -. "响应 McpManifest 工具清单（连不上就地抛 unreachable）" .-> AUDITCORE
+    AUDITCORE -. "读 逐工具投毒七族 + 凭证暴露面（命中累计判注入）" .-> RULES
+    AUDITCORE -. "读 suggestTier：名+描述进 haystack（L2/L1/L0）" .-> TIER
+    AUDITCORE -. "读 toolHash 比对基线（首採建档 / match / drift 点名）" .-> BASELINE
+    AUDITCORE -- "T+收尾: 报告 json+md 落盘 + 退出码 0/1/2" --> AUDITCLI
+    OPERATOR -. "请求 体检 http://127.0.0.1:4444/mcp（捣乱 B 真网关）· 跨容器→contextforge:4444" .-> CFAUTH
+    CFAUTH -. "响应 initialize 被认证挡下 → unreachable exit 2（不猜不硬闯）· 跨容器→contextforge:4444" .-> TRANSPORTS
+
+    %% ===== 8.4 compose 图纸 =====
+    OPERATOR -. "请求 docker compose config（纸面装配 · 对九服务零打扰）" .-> COMPOSE
+    TOPOTEST -. "读 静态扫图纸：九服务名册 / profile 隔离 / 封条总闸" .-> COMPOSE
+    OPERATOR -. "T+验收: vitest compose-topology（18/18 · 摘钉当场逐行点名红）" .-> TOPOTEST
+    TOPOTEST -. "读 凡 image: 行必 @sha256 收尾（缺钉逐行点名 · 票 53）" .-> SEALS
+    COMPOSE -. "读 缺省值语法渲染：AGENT_LLM 未设默认 real" .-> ENVEX
+    OPERATOR -. "请求 build agent + up -d agent（唯一真装配）" .-> REBUILD
+    REBUILD -. "T+15s: fixtures COPY 上线 → 25 行登记表 · 跨容器→agent:3003" .-> T_MST
+    REBUILD -. "读 运行面 tierOf 探针（与在线闸同函数 · list_approvals=L1）" .-> T_MST
+    REBUILD -. "读 bind mount 宿主盘（八项布景计数复点逐项相等）" .-> T_DATA
+
+    %% ===== 8.5 CI 门禁 =====
+    OPERATOR -. "请求 CI 四 job 本地等价命令（照 ci.yml 逐行抄 · 一条不多）" .-> CIYML
+    CIYML -- "T+job1: checkout 第一秒 → 文档机器闸（最便宜先跑）" --> SPECGATE
+    SPECGATE -- "PASS 0 警告 → job2 第一棒" --> BOUNDGATE
+    BOUNDGATE -- "0 越界 9/9 有人查 + self-test 18/18 → 装依赖跑全量" --> TESTALL
+    TESTALL -- "TS 全绿（evals 33 条长在里面）→ py 半边" --> PYGATE
+    PYGATE -- "ruff 零警告 + pytest 26/43 绿 → job4" --> COMPCFG
+    COMPCFG -- "exit 0 图纸语法过（语义闸在 compose-topology）→ 收官" --> OPERATOR
+    OPERATOR -. "T+每日: 慢道等价 pnpm test:eval（快道同款 33 用例）" .-> EVALSLOW
+    EVALSLOW -. "读 全维用例：never_mock 真 LLM 车道 · judge/沙箱缺席显式 skip" .-> EVALFIX
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 8.1：LOADER 防脏用例混进评估集（fail-closed）/ ASSERT 防 judge 随机分进门禁（决策 #7）+ 无审计过关（INV-8）
+    %% 8.2：CONTRACT 防一端单方面改形状（票 29 样例即契约）
+    %% 8.3：AUDITCORE 防不可达装干净（INV-1）/ RULES 防描述投毒蒙混入职（D2 左移）
+    %%      BASELINE 防 rug-pull（入职照被偷换）/ CFAUTH 防匿名直连 MCP 网关
+    %% 8.4：SEALS 防 latest 漂移（供应链）/ TOPOTEST 防图纸私改无人红（票 53 总闸）/ ENVEX 防生产默认不安全（INV-1）
+    %% 8.5：SPECGATE 防法典重复缺节 / BOUNDGATE 防跨服务越界 import（R1-R9）
+    %% 容器：PROXYLLM 防无凭证出站与凭证泄漏（INV-1 · INV-4）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class LOADER,ASSERT,CONTRACT,AUDITCORE,RULES,BASELINE,CFAUTH,SEALS,TOPOTEST,ENVEX,SPECGATE,BOUNDGATE,PROXYLLM guardSec
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
