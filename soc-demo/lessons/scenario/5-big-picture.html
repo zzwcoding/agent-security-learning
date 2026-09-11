@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 5 大图 · 攻击者来了</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 5 大图 · 攻击者来了 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 5「攻击者来了」的代码落点索引：攻击者拿不到 SOC 的电脑、改不了系统代码，只能控制自己攻击路径上的数据——于是全场景就是四条攻击路径加一条终极路线，每条都画成「攻击者动作（暗灰虚线）→ 入口 → 拦截面（红描边 🛡️）→ 出口」。<b>5.1 告警注入</b>：报案单四个植入位（full_log / previous_output / srcuser / url）夹带指令，ingest 盖不可信封条 → 分诊逐段送 guards（alert_field=block）换占位符 → wrapUntrusted 成对包装 → 规则件只按内容特征裁决，verdict 不被带偏（结果像被带偏 ≠ 因果上被带偏）；<b>5.2 chat 注入</b>：对话框话术过 input_guard（user_input=block）拒答三帧 + refused 旗子让后四站集体哑火，滑过词面的变体落意图分类的澄清反问；<b>5.3 毒 KB</b>：毒 runbook 两条路——对话提请死在人审闸（值班长驳回、账面零提案）、REST 直投躺账面 proposed，幽灵批准骗得过 /kb/search 账面查询面、骗不过 chroma 检索面（INV-5：写入口唯一在验票执行体）；<b>5.4 毒 analyzer</b>：三道闸全长在 msb 命令行参数上（--no-net 关网 / 不传 env 隔离凭证 / 一次性即毁），毒脚本外联 errno=111、金丝雀不可见、残留随 VM 蒸发；<b>5.5 凭证金丝雀</b>：SECRETS_* 只住网关 env，出站三裁决（no_secret → missing → leak）全过才到 ★唯一注入点，两枚金丝雀全可观测面 grep 0 命中（INV-4）。
+每条路的读法是同一场戏：<b>攻击者以为能成 → 哪道闸在哪个毫秒把它摁死 → 如果那道闸不存在会看到什么</b>——第三问有实测答案（guards 停机 = fail_closed 全占位 / 对话面整面关门；幽灵批准 = 账面骗到、检索面查无；摘掉 --no-net = 假握手 errno=0）。
+本场景数字：<b>5 步 / 47 个节点 / 17 道安全闸</b>（红描边 🛡️）/ <b>6 个攻击者动作节点</b>（暗灰虚线）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；<b>暗灰虚线框 = 攻击者动作说明节点</b>——不是系统组件、不是数据流，只标注「这一步攻击者干了什么、他以为能成什么」（ATTACK_A..E 与 GHOST 六个）；cylinders（柱形）= 存储表 / env。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+≤2s / T+≤100ms</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 5-1..5-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「报案单里夹带的指令怎么被摁死、verdict 为什么没被带偏」→ <code>ATTACK_A → MAP → SCAN51 → WRAP → RULE_LLM</code>（5.1）。</li>
+  <li>想看「对话框话术为什么零副作用、滑过词面的变体谁接住」→ <code>ATTACK_B → CHAT_EP → INPUT_GUARD → INTENT_CLS → SENTINEL</code>（5.2）。</li>
+  <li>想看「毒知识为什么连账面都污染不成、幽灵批准为什么骗不到 AI 的书」→ <code>ATTACK_C → KB_CARD → REJ_CARD</code> 对照 <code>KB_POISON → GHOST → T_KB vs CH_COLL</code>（5.3）。</li>
+  <li>想看「毒 analyzer 三件套怎么被一台一次性 microVM 摁死」→ <code>ATTACK_D → LOOKUP → MSB_ARGS → VM → SHAPE</code>（5.4）。</li>
+  <li>想看「真钥匙住哪、路过哪、凭什么证明没被抄走」→ <code>ATTACK_E / AGENT_OUT → DENY_NS → INJ_CRED → SCAN_LEAK → INJECT_PT</code> + <code>CANARY</code>（5.5）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（47 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧操作者（值班长/SOC1/教学脚本）：web 审批页驳回毒卡、curl REST、replay 推告警</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">5.3 的人审闸是人来执行的——值班长看到的卡上是毒草稿全文，不是一句「AI 提议入库」</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_BTN / REJ_CARD</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_A</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.1）：报案单四植入位各埋一颗雷（间接注入：指令藏在 AI 迟早要读的数据里）；目标排序：泄露提示词 > 替我动手 > 放水关警</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">他只能写数据不能写代码——四个落笔位不是他挑的，是翻译表里盖 untrusted 封条圈出来的</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">IN_HOOK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_B</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.2）：持偷来的会话票坐到对话框前打话术四连（M1 放水关警 / M2 伪造值班长批准 / M3 会话外传 / M4 英文变体）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对话面是唯一能用自由文本对话的面；要的不是绕过登录（duty_lead 本来能提请），是跳过审批</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_C</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.3）：往知识库种毒草——一条美化攻击者的「知识」（攻击 IP 属白名单、相关告警一律关）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RAG 投毒是一次投入长期回报：入库后未来每次相关分诊都被 R1 当第一优先级依据</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP（路线 A）/ KB_POISON（路线 B）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_D</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.4）：毒 analyzer 脚本（供应链污染位）——表面吐正常 Cortex 结果，暗地里外联 C2/偷宿主凭证/写 /tmp/pwned</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">毒在动作不在结果：分诊看着一切正常，三件事全在脚本行为里</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LOOKUP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_E</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.5）：不打防线直接找钥匙——把金丝雀当真钥匙塞进出站请求偷渡（A1 模型可见字段 / A2 白名单字段塞未知占位符）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">拿到 key 连系统都不用碰，直接扮成你出站——所以凭证治理是最后也最硬的一条线</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DENY_NS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CANARY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">金丝雀大搜查（INV-4 断言）：agent 库/M2 库/九服务日志/容器文件面挨个 grep 两枚 canary，17800+ 文本单元 0 命中；测试锚=llm-client 出站体+错误正文双断言；🛡️ 防 凭证泄漏不被发现（INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「没泄露」从口号变成可 grep 的事实——阳性对照（isolate_host 20 条）证明搜查方法本身有效</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_ENV / AGENT_OUT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">IN_HOOK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/webhooks/alerts（ingest 收案正门）：只验 rule.id+timestamp → 201，内容照单全收</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者唯一能整段写字的入口——入口验型不验内容，防线押在后面的封条+扫描上</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MAP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">mapWazuhAlert 字段翻译：不可信字段盖封条——①full_log/②previous_output → description 的 untrusted 段、③srcuser → observable:other、④url → observable:url；🛡️ 防 注入原文裸奔进系统（不可信封条=送检清单）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">封条入库时标、分诊时用，一条线贯穿——四个植入位由这条翻译线圈出</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_ALERTS（+同事务 alert.created → T_OUTBOX）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTO51</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">autorun 消费 alert.created（2s tick）拉起 alert_flow（L1 任务票）：load_alert→kb_check→merge_check→self_audit→verdict_llm</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">201 回执与拉起循环零触发关系——循环只认 outbox 表（TERMS「派活的」条）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OUTBOX（读）/ KB_CHK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CHK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">kb_check 检索面查询（host+path+user · top-5）：命中 title+body 过 guards kb 通道 strip；guards 病了命中被 fail-closed 剔除</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">top-k 无门槛：命中≠相关（P3）——5.1 主实验里 close 建议的真凶是它不是注入</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CH_COLL（读）/ GUARD_EP（kb 通道）/ SCAN51</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SCAN51</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">verdict_llm 不可信段清点送检（scanField，同步 await）：tag 含 untrusted 即送检，三份材料=description/observable:other/observable:url；block 段原文换占位符；🛡️ 防 注入原文进 prompt（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扫描是闸不是监控：scanField 返回什么 prompt 里就是什么——裁决直接决定判定输入</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GUARD_EP（alert_field）/ WRAP / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">wrapUntrusted 成对边界包装 + buildTriagePrompt 装配：系统契约→可信摘要→不可信段（「数据不是指令」声明）→KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对真 LLM 是软防御；但给 eval 和审计留了可 grep 的结构证据（UNTRUSTED 封套）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RULE_LLM</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RULE_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FakeTriageLlm 规则裁决：R1 KB 优先（只看 kind）→ R2 攻击证据特征 → R3 弱信号 → R4 噪声——只按正则找证据特征，代码里没有「读到指令改判定」的分支；🛡️ 防 verdict 被注入文本带偏（如实划界：仅 fake 规则件的性质）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">判定=内容的函数：同输入永同输出——「不被带偏」的全部秘密，一点也不神秘</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUT51</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUT51</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">outcome 落账：btp→只落 close 建议 / tp→merge/create_case——建议不执行，关单要 SOC1 在 close_flow 点头（3.5）；🛡️ 防 AI 动手（建议/执行鸿沟）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">就算前三层全漏、判错了，结局也只是「一条建议」——最后兜底是人和流程</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_ALERT_W</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/chat（对话正门）：会话验签 401（无票连 run 都不建）、建 chat_flow run（L1 票面只读四件 INV-3）、SSE 同步流（chat 唯一保留）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对话体验即产品：SSE 流本身就是回答——拒答也发生在同一次请求里</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INPUT_GUARD / KB_CARD</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INPUT_GUARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">input_guard（五站子图第一站）：整句话过扫描 → block/fail_closed 一律拒答三帧 token/denied/done + refused 旗子；拒答发生在任何 LLM 调用之前；🛡️ 防 对话面提示词注入（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">一句话有毒整句蒸发——对话面对 AI 没有不可或缺的信息价值，不用付「部分放行」的代价</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GUARD_EP（user_input）/ SENTINEL / INTENT_CLS / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INTENT_CLS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">intent_classify 意图分类兜底：M4 变体词面盲区滑过 → unknown/0.2 → 澄清反问零动作</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">过闸≠得逞：第一层认词面、第二层认意图——层与层是接力不是并联</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SENTINEL</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SENTINEL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">chatFlags 哨兵：后四站每个节点第一行 refused→return——零工具/零卡/零 LLM，run completed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">拒答是正常业务态不是故障：台账记 DENIED 不记 FAILURE——「拒绝」和「坏了」必须分得清</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">5.3 路线 A 开审批卡（4.3 同款）：params=毒草稿全文+params_hash，interrupt 冻结 run → awaiting_approval</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人审闸在这：毒草稿全文冻在卡上等真人看——提案此时还没诞生</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / WEB_BTN / MOCK_KB（对照）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REJ_CARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">值班长驳回：POST /approvals/:id/reject（approver 署名必填）→ 卡终态 rejected+reason；resume 领起后 kb_write 重跑查卡 → 不进闸不执行；🛡️ 防 AI 提议直接入库（人审闸 · INV-5/9 正门）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审计链上有一个真人署名的「不」——200 秒回后分发循环领 resume（批准≠执行同款）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_AUDIT / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MOCK_KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">chat 的 kb_write 执行体=mockAction 演习弹：批准也只 mock_kb:written 不真写库</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">真笔只在知识沉淀子图的验票执行体（3.3）——别把演习弹当防线吹：它防「对话面动笔」不防 REST 直投</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS（mock 工具帧）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LOOKUP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MsbAnalyzerBackend.lookup：scriptFor 定位脚本（seam 换脚：默认查表 backend / 演示切毒脚本），没脚本 fail-closed 拒不开机（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宁可不出结果不出假结果——VM 都不给开</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MSB_ARGS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MSB_ARGS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">buildMsbArgs 拼命令行（纯函数=拓扑承诺）：msb run python:3.12 --no-net --timeout 120s --copy 脚本 --copy-dir 情报表，整张参数表无任何 -e/--env</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">把安全属性做成「参数的缺省形状」而不是运行时补丁——CI 没有真 VM 也能断言这张命令行形状</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VM</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">一次性 microVM（libkrun · msb 宿主 CLI · compose 外）真跑毒脚本：egress connect_ex errno=111 / env 只镜像 9 键金丝雀不可见 / 写 /tmp/pwned 随 VM 蒸发；stdout 协议一行标记（result+attempts）；🛡️ 防 毒 analyzer 逃逸三件套（egress/env/一次性）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">情报表文件挂载让「能干活≠能外联」——功能的活路和安全的死门互不妨碍</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SHAPE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SHAPE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">checkShape 验形状 + recordAttempts 审计：VM 输出当不可信输入，形状不对 refuse；拦截 → DENIED、没拦住 → breach FAILURE；🛡️ 防 毒结果混进报告 + 谎报遥测（宿主侧独立度量）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审计不采信被审计方口供——VM 说 blocked:true 宿主还要派探针复测</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT /（AnalyzerResult 进富化报告）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PROBE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">msbProbe 能力探测两级（CLI 在不在 → 冒烟 VM 开不开得起来）：失败返回人话原因，skip 可见不静默；降级=富化走查表 backend</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「环境不在场」必须是显式的、可 grep 的、带原因的状态——静默降级是防线假执勤</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（探测结果决定真跑/skip 形态）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AGENT_OUT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">agent llm-client 出站体：凭证位只写占位符原文——模型上下文不见真值；测试锚=出站体+错误正文双金丝雀断言（INV-4 agent 半边）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">网关管出站，agent 侧还有对偶纪律：错误正文也不许带 provider 可控文本里的密钥</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DENY_NS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 approvals（审批卡）：params 带毒草稿全文+params_hash，pending→rejected/approved 终态再裁 409</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">卡是唯一真相：毒草稿死在卡上还是被执行，查这张表就知道</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REJ_CARD（读/写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_events：拒答三帧（token/denied/done）、node_enter/exit、mock 工具帧</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">零工具帧=零副作用看得见；驳回的「执行没发生」=事件流少一对工具帧</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（SSE 直播/回放）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_POISON</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/kb/proposals（内网信任口）：闸门只有三字段 400 支票（kind/title/body），proposed_by 可冒名（缺省即 agent:knowledge）→ 201 proposed 躺进账面</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">内网信任口薄是教学环境的刻意设计——防线押在「chroma 写入口不在这」的结构上</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GHOST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者动作（5.3 圈套）：直连 M2 approve 幽灵批准——reviewer 缺省补 duty_lead（冒名镜像，INV-9 反面）；重复裁决 409（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「绕过人审批准了会怎样」的实测答案：账面骗到、检索面骗不到</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB / CH_COLL（撞墙）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_SEARCH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GET /api/v1/kb/search 账面查询面：只吐 approved（LIKE 模糊）——幽灵骗得过它，吐出毒 runbook</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">账面读口读的是「状态字段」=声明的世界；AI 不走这扇窗，人/Web 对账才走</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（人/Web 对账读口）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_KB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 kb_entries（KB 账面）：proposed→approved/rejected 终态再裁 409；账面四格对照组：正门 approved/幽灵 approved×2/驳回 rejected/投毒 proposed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">登记簿上写什么、改成什么，AI 那本书一个字都不会变——M2 是叶子模块没有 chroma 客户端</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_SEARCH（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OUTBOX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 outbox_events：告警入库同事务落 alert.created（INV-6 家族）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">档案与叫号永远对得上；autorun 只认这里——201 回执与循环无触发关系</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTO51（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_ALERTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 alerts：四颗雷躺进告警字段等分诊；verdict_ai 落档处</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击载荷的物理归宿——判定结束后 payload 还躺在占位符里（定罪证据）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_ALERT_W（verdict_ai 写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_ALERT_W</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">告警写口 PATCH /api/v1/alerts/:id：verdict_ai 落档（status 不动——AI 只建议不执行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">verdict 与关单是两件事：关单走 close_flow 由 SOC1 确认（3.5）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_ALERTS / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries · M2 总台账（INV-8）：guards_block DENIED（alert_field/user_input/kb 三通道）、kb create/approve/reject、verdict/close 落档</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击者的每个动作都有台账可回放——「留痕 N 条」是场景 5 每仗的战报单位</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（对账只读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GUARD_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /scan/injection（安检员 · TERMS 条目）：llm-guard 六族扫描器打分（五 Regex+InvisibleText），score=族权重求和 ≥0.5 判注入；CHANNEL_POLICY：alert_field=block · user_input=block · kb=strip · tool_output=flag；🛡️ 防 提示词注入（打分归扫描器、处置归通道策略）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">处置跟着证据价值走：传话筒拦了没损失、证据拦了等于毁灭、内部知识剔行即可</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SCAN51 / INPUT_GUARD / KB_CHK（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_ENV</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SECRETS_* 进程 env（钥匙户口）：LLM key（本布景空=deny_no_secret 执勤位）+VT/SIEM 两枚金丝雀缺省自报家门；实测 agent=0 其余容器=0；🛡️ 防 凭证散落（INV-4 户口）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">进程 env 层面 agent 就摸不到钥匙——想泄都没得泄</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DENY_NS / INJ_CRED / SCAN_LEAK（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DENY_NS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">裁决1 deny_no_secret：key/upstream 缺失 → 503，连请求体都不看——上游一个字节不发（本布景执勤位）；🛡️ 防 无钥匙出站（INV-1 最致命的先问）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">整条链最便宜的保险：钥匙不在，一切免谈</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_ENV（读）/ INJ_CRED / AGENT_OUT（503）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INJ_CRED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">裁决2 白名单字段（metadata）占位符换真值：白名单外占位符原样透传永不替换；查不到对应 env → 503 deny_missing_credential；🛡️ 防 半替换的体出站（FR-S1.2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">只有声明过的「收件人格子」才给钥匙——绝不带半替换的体出站</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_ENV（读）/ SCAN_LEAK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SCAN_LEAK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">裁决3 scan_leak 金丝雀扫描：拿 env 全部 SECRETS_ 真值当已知图案做子串匹配，模型可见字段命中 → 503 deny_leak_detected；🛡️ 防 凭证进模型可见字段（INV-4 运行时闸）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">方向的反转：不是写万能正则找钥匙，是拿已知钥匙值当图案找——钥匙值是已知的</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_ENV（读）/ AUDIT_GW / INJECT_PT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INJECT_PT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">★唯一注入点（一行代码）：Authorization: Bearer 真 key——金丝雀扫描之后、转发之前，不落盘不进日志不回显；🛡️ 防 注入点多处化（全系统就这一行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">钥匙的「出站瞬间」被压缩到一次内存赋值——扫的时候 key 还没进 body</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDIT_GW（出站元数据）/（上游 provider）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDIT_GW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">audit()：stdout JSON 行（compose logs 可 grep），只记占位符名/字段路径/元数据——绝不记请求体、绝不记凭证值；🛡️ 防 审计自身成泄露面（FR-S1.3/INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">泄露日志样板：detail 只写 secret value at .messages[0].content——说了在哪，没说是什么</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（compose logs 观测面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CH_COLL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">chroma 集合 kb_entries（检索面 · AI 唯一翻的书）：写入口唯一=agent 验票执行体 kb_write（3.3）；count 恒 1——幽灵/rejected/proposed 全进不来；🛡️ 防 毒条目进检索面（INV-5/9 结构保证）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「approved 进检索面」由验票执行体串起来——绕过人审的批准物理上摸不到这支笔</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KB_CHK（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_BTN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">web 审批页批准/驳回按钮：值班长在卡上看到毒草稿全文</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">按钮背后就是 agent approvals REST——web 不另立数据源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REJ_CARD</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["操作者（值班长/SOC1/教学脚本）<br/>web 审批页驳回毒卡 · curl REST · replay 推告警"]
+        subgraph ATTACKERS["攻击者动作（暗灰虚线 · 教学说明位 · 非系统组件非数据流）"]
+            direction TB
+            ATTACK_A["5.1 攻击者：报案单里夹带指令<br/>四植入位各埋雷 full_log/previous_output/srcuser/url（间接注入）<br/>目标排序：泄露系统提示词 > 替我动手 > 放水关警"]
+            ATTACK_B["5.2 攻击者：坐到对话框前（偷来的会话票）<br/>M1 放水关警 / M2 伪造值班长批准 / M3 会话外传 / M4 英文变体"]
+            ATTACK_C["5.3 攻击者：往知识库种毒草（RAG 投毒）<br/>毒 runbook：攻击IP 属白名单 + 三条毒步骤（判误报/不取证/不通知）"]
+            ATTACK_D["5.4 攻击者：毒 analyzer 脚本（供应链污染位）<br/>表面吐正常 Cortex 结果 · 外联 C2/偷宿主凭证/写 /tmp/pwned"]
+            ATTACK_E["5.5 攻击者：不打防线直接找钥匙<br/>把金丝雀当真钥匙塞进出站请求偷渡"]
+        end
+        CANARY["金丝雀大搜查（INV-4 断言 · CI 测试锚 + 手工 grep）<br/>agent 库/M2 库/九服务日志/容器文件面 · 两枚 canary 17800+ 文本单元 0 命中<br/>阳性对照 20 条证明方法有效<br/>🛡️ 防 凭证泄漏不被发现（INV-4）"]
+    end
+
+    subgraph ING["容器 ingest（Fastify · :3001）"]
+        IN_HOOK["POST /api/v1/webhooks/alerts（收案正门 · 1.1 已见）<br/>只验 rule.id+timestamp → 201 · 内容照单全收<br/>（攻击者唯一能整段写字的入口：验型不验内容）"]
+        MAP["mapWazuhAlert 字段翻译：不可信字段盖封条<br/>①full_log/②previous_output → description 的 untrusted 段<br/>③srcuser → observable:other · ④url → observable:url<br/>四植入位由这条翻译线圈出——封条=5.1 的送检清单<br/>🛡️ 防 注入原文裸奔进系统（不可信封条）"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        subgraph S51M["5.1 告警注入 · 进入:autorun 消费 alert.created 拉起 alert_flow · 节拍:autorun 2s tick + 分发循环 100ms tick · 退出:verdict_ai 落档——payload 未进 prompt（被拦/被兜）"]
+            direction TB
+            AUTO51["autorun 拉起 alert_flow（L1 任务票 · 1.3 已见）<br/>load_alert→kb_check→merge_check→self_audit→verdict_llm"]
+            KB_CHK["kb_check 检索面查询（host+path+user · top-5）<br/>命中 title+body 过 guards kb 通道 strip（剔行清洗）<br/>guards 病了 → 命中被 fail-closed 剔除（捣乱 A 实测）<br/>top-k 无门槛：命中≠相关（P3）——5.1 close 建议的真凶"]
+            SCAN51["verdict_llm 不可信段清点送检（scanField · 同步 await）<br/>tag 含 untrusted 即送检 · 三份材料：<br/>description（①②同拼）/observable:other/observable:url<br/>block 段原文换占位符「removed by guards」+DENIED 审计<br/>🛡️ 防 注入原文进 prompt（INV-1 fail-closed）"]
+            WRAP["wrapUntrusted 成对边界包装 + buildTriagePrompt 装配<br/>系统契约→可信摘要→不可信段（数据不是指令声明）→KB<br/>软防御：给 eval/审计留可 grep 的结构证据（UNTRUSTED 封套）"]
+            RULE_LLM["FakeTriageLlm 规则裁决（R1 KB 优先→R2 攻击特征）<br/>只按正则找证据特征——代码里没有「读到指令改判定」的分支<br/>判定=内容的函数：同输入永同输出<br/>🛡️ 防 verdict 被注入文本带偏（如实划界：仅 fake 规则件性质）"]
+            OUT51["outcome 落账：btp→只落 close 建议 / tp→merge/create<br/>建议不执行——关单要 SOC1 在 close_flow 点头（3.5）<br/>🛡️ 防 AI 动手（建议/执行鸿沟）"]
+        end
+        subgraph S52M["5.2 chat 注入拒答 · 进入:持会话票 POST /api/v1/chat · 节拍:SSE 同步流（chat 唯一保留）一次一条 · 退出:拒答 completed 零副作用 / 变体落澄清反问"]
+            direction TB
+            CHAT_EP["POST /api/v1/chat（对话正门）<br/>会话验签 401（无票连 run 都不建 · 4.1 捣乱 C）<br/>建 chat_flow run：L1 票面只读四件（INV-3）"]
+            INPUT_GUARD["input_guard（五站子图第一站）<br/>整句话过扫描 → block/fail_closed 一律拒答三帧<br/>token/denied/done + refused 旗子插进 run 状态<br/>拒答发生在任何 LLM 调用之前（原文不进任何模型）<br/>🛡️ 防 对话面提示词注入（INV-1 fail-closed）"]
+            INTENT_CLS["intent_classify 意图分类兜底<br/>M4 变体词面盲区滑过 → unknown/0.2 → 澄清反问零动作<br/>（过闸≠得逞——第二层接住第一层漏的）"]
+            SENTINEL["chatFlags 哨兵：后四站第一行 refused→return<br/>零工具/零卡/零 LLM · run completed<br/>拒答=正常业务态非故障（台账 DENIED 不 FAILURE）"]
+        end
+        subgraph S53A["5.3 毒 KB（agent 侧审批链）· 进入:chat 意图 kb_write require_approval · 节拍:审批卡一次 + 分发循环领 resume · 退出:rejected 不进闸 · run completed 零提案"]
+            direction TB
+            KB_CARD["execute 开审批卡（4.3 同款）<br/>params=毒草稿全文+params_hash · interrupt 冻结 run<br/>值班长在卡上看到毒草稿全文——人审闸在这"]
+            REJ_CARD["值班长驳回：POST /approvals/:id/reject<br/>approver 署名必填（INV-9 真人）· 卡终态 rejected+reason<br/>resume 领起 → kb_write 重跑查卡 → 不进闸不执行<br/>🛡️ 防 AI 提议直接入库（人审闸 · INV-5 正门）"]
+            MOCK_KB["kb_write 执行体=mockAction 演习弹<br/>批准也只 mock_kb:written 不真写库<br/>真笔只在知识沉淀子图的验票执行体（3.3）"]
+        end
+        subgraph S54M["5.4 毒沙箱 · 进入:富化 flow 对 artifact 挑 analyzer 查证（scriptFor seam 换毒脚本） · 节拍:每个 artifact 一台一次性 microVM · 退出:AnalyzerResult 进报告 / 拦截 DENIED · 逃逸零成功"]
+            direction TB
+            LOOKUP["MsbAnalyzerBackend.lookup<br/>scriptFor 定位脚本（seam 换脚：默认查表 backend/演示切毒脚本）<br/>没脚本 → fail-closed 拒不开机（INV-1）"]
+            MSB_ARGS["buildMsbArgs 拼命令行（纯函数=拓扑承诺）<br/>msb run python:3.12 --name enrich-… --no-net --timeout 120s<br/>--copy 脚本 --copy-dir 情报表（能干活≠能外联）<br/>整张参数表无任何 -e/--env（缺省即关）"]
+            VM["一次性 microVM（libkrun · msb 宿主 CLI · compose 外）真跑<br/>毒脚本：外联 errno=111 / env 只镜像 9 键金丝雀不可见<br/>/ 写 /tmp/pwned（随 VM 蒸发）<br/>stdout 协议一行标记行（result+attempts 遥测）<br/>🛡️ 防 毒 analyzer 逃逸三件套（egress/env/一次性）"]
+            SHAPE["checkShape 验形状 + recordAttempts 审计<br/>VM 输出当不可信输入：形状不对 refuse（INV-1）<br/>拦截 → sandbox_egress_blocked/env_denied DENIED<br/>没拦住 → breach FAILURE（宿主侧独立度量 不信 VM 口供）"]
+            PROBE["msbProbe 能力探测（CLI→冒烟 VM 两级）<br/>失败返回人话原因 · skip 可见不静默<br/>降级：富化走 FixtureAnalyzerTable 查表（不断供不装死）"]
+        end
+        subgraph S55A["5.5 凭证金丝雀（agent 侧）· 进入:real LLM 出站调用 · 节拍:每次出站一次 · 退出:出站体只含占位符原文（金丝雀测试锚）"]
+            direction TB
+            AGENT_OUT["llm-client 出站体（POST /proxy/llm/*）<br/>凭证位只写占位符原文——模型上下文不见真值<br/>测试锚：出站体+错误正文双金丝雀断言（INV-4 agent 半边）"]
+        end
+        subgraph A_DB["agent 存储（better-sqlite3 · agent.sqlite）"]
+            T_APPROVALS[("表 approvals（审批卡）<br/>params 带毒草稿全文+params_hash<br/>pending→rejected/approved 终态再裁 409")]
+            T_RUNEVENTS[("表 run_events<br/>denied/token/done 帧 · node_enter/exit · mock 工具帧<br/>零工具帧=零副作用看得见")]
+        end
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        subgraph S53M["5.3 毒 KB（M2 账面侧）· 进入:对话提请（经 agent 审批卡）或 REST 直投 · 节拍:REST 一次性 · 退出:卡 rejected 零提案 / 幽灵 approved 进不了检索面"]
+            direction TB
+            KB_POISON["POST /api/v1/kb/proposals（内网信任口）<br/>闸门只有三字段 400 支票：kind/title/body 非空<br/>proposed_by 可冒名 agent:knowledge（缺省即它）<br/>201 → proposed 躺进账面（chroma 无感）"]
+            GHOST["直连 M2 approve 幽灵批准（3.2 幽灵入口）<br/>reviewer 缺省补 duty_lead——冒名镜像（INV-9 反面）<br/>重复裁决 → 409 InvalidTransition（INV-10）"]
+            KB_SEARCH["GET /api/v1/kb/search 账面查询面<br/>只吐 approved（LIKE 模糊）<br/>幽灵骗得过——吐出毒 runbook（声明的世界）"]
+            T_KB[("表 kb_entries（KB 账面）<br/>proposed→approved/rejected 终态再裁 409<br/>账面四格对照组：正门/幽灵×2/驳回/proposed")]
+        end
+        T_OUTBOX[("表 outbox_events<br/>告警入库同事务 alert.created（INV-6 家族）<br/>autorun 只认这里——201 回执与循环无触发关系")]
+        T_ALERTS[("表 alerts<br/>四颗雷躺进告警字段等分诊 · verdict_ai 落档处")]
+        CB_ALERT_W["告警写口 PATCH /api/v1/alerts/:id<br/>verdict_ai 落档（status 不动——AI 只建议不执行）"]
+        T_AUDIT[("表 audit_entries · M2 总台账（INV-8）<br/>guards_block DENIED 三通道 / kb create·approve·reject<br/>投毒未遂全程可回放")]
+    end
+
+    subgraph GUARDS["容器 guards（FastAPI · llm-guard+Presidio · :8001）"]
+        GUARD_EP["POST /scan/injection（安检员 · TERMS 条目）<br/>llm-guard 六族扫描器打分（五 Regex+InvisibleText）<br/>score=族权重求和 · ≥THRESHOLD 0.5 判注入<br/>CHANNEL_POLICY：alert_field=block · user_input=block<br/>kb=strip · tool_output=flag（处置跟证据价值走）<br/>🛡️ 防 提示词注入（打分归扫描器 · 处置归通道策略）"]
+    end
+
+    subgraph GW["容器 gateway（FastAPI · :8002）"]
+        subgraph S55M["5.5 凭证金丝雀（网关侧）· 进入:POST /proxy/llm/*（验票闸在 agent 侧） · 节拍:每次出站一次 · 退出:转发 / 三 deny 之一（上游零字节）"]
+            direction TB
+            GW_ENV[("SECRETS_* 进程 env（钥匙户口 · compose 钉死）<br/>LLM key（本布景空=deny_no_secret 执勤位）<br/>VT/SIEM 金丝雀缺省自报家门 · 实测 agent=0 其余=0<br/>🛡️ 防 凭证散落（INV-4 户口）")]
+            DENY_NS["裁决1 deny_no_secret：key/upstream 缺失 → 503<br/>连请求体都不看——钥匙不在一切免谈<br/>（本布景执勤位 · INV-1 最致命的先问）<br/>🛡️ 防 无钥匙出站（INV-1 fail-closed）"]
+            INJ_CRED["裁决2 白名单字段（metadata）占位符换真值<br/>白名单外占位符原样透传永不替换<br/>查不到对应 env → 503 deny_missing_credential<br/>🛡️ 防 半替换的体出站（FR-S1.2）"]
+            SCAN_LEAK["裁决3 scan_leak 金丝雀扫描<br/>拿 env 全部 SECRETS_ 真值当已知图案子串匹配<br/>模型可见字段命中 → 503 deny_leak_detected<br/>🛡️ 防 凭证进模型可见字段（INV-4 运行时闸）"]
+            INJECT_PT["★唯一注入点（一行代码）<br/>Authorization: Bearer 真 key<br/>金丝雀扫描之后·转发之前 · 不落盘不进日志不回显<br/>🛡️ 防 注入点多处化（全系统就这一行）"]
+            AUDIT_GW["audit()：stdout JSON 行（compose logs 可 grep）<br/>只记占位符名/字段路径/元数据——绝不记 body/值<br/>泄露日志样板：detail 只写路径不写值<br/>🛡️ 防 审计自身成泄露面（FR-S1.3/INV-4）"]
+        end
+    end
+
+    subgraph CHROMA["容器 chroma（官方镜像 · 宿主 18000）"]
+        CH_COLL[("集合 kb_entries（检索面 · AI 唯一翻的书）<br/>写入口唯一=agent 验票执行体 kb_write（3.3）<br/>count 恒 1：幽灵/rejected/proposed 全进不来<br/>🛡️ 防 毒条目进检索面（INV-5/9 结构保证）")]
+    end
+
+    subgraph WEB["容器 web（Vite + React + antd · :5173）"]
+        WEB_BTN["审批页批准/驳回按钮<br/>值班长在卡上看到的是毒草稿全文<br/>背后就是 agent approvals REST"]
+    end
+
+    %% ===== 5.1 告警注入 =====
+    ATTACK_A -. "攻击者动作：四植入位各埋一颗雷（间接注入）<br/>赌 AI 把数据当指令——他只能写数据，改不了代码" .-> IN_HOOK
+    IN_HOOK -- "T+0s: 只验 rule.id+timestamp → 201<br/>内容照单全收（攻击面：不验内容）" --> MAP
+    MAP -. "请求 翻译好的 M2 告警落库（四颗雷躺进字段）<br/>同事务 alert.created 落 outbox · 跨容器→case-backend:3002" .-> T_ALERTS
+    T_ALERTS -- "同一事务塞事件小票（档案与叫号对得上 · INV-6 家族）" --> T_OUTBOX
+    AUTO51 -. "读 GET :3002/api/v1/events?after=游标<br/>T+≤2s: autorun tick 领走 alert.created<br/>（201 回执与循环无触发关系——循环只认表）· 跨容器→case-backend:3002" .-> T_OUTBOX
+    AUTO51 -- "launch → 分发循环领起 → 分诊子图第一站" --> KB_CHK
+    KB_CHK -. "读 chroma 查询 top-5（命中的 title+body 先过 kb 通道 strip）<br/>跨容器→chroma:18000" .-> CH_COLL
+    KB_CHK -- "top-5 命中喂裁决（R1 只看 kind 不看 score——P3）" --> SCAN51
+    SCAN51 -. "请求 POST :8001/scan/injection channel=alert_field<br/>三份送检段同步 await（站在柜台等）· 跨容器→guards:8001" .-> GUARD_EP
+    GUARD_EP -. "响应 score+action<br/>score≥0.5 → block（通道策略）· 编码变体可能滑过（盲区如实记）<br/>异常：guards 停机 → fail_closed（捣乱 A 全占位）" .-> SCAN51
+    SCAN51 -- "block 段占位符化 · 放行段原文照走 → 统一包装" --> WRAP
+    SCAN51 -. "审计 guards_block DENIED（field/channel/action/score 五要素）<br/>· 跨容器→case-backend:3002" .-> T_AUDIT
+    WRAP -- "装配完整 prompt：系统契约→可信摘要→封套不可信段→KB" --> RULE_LLM
+    RULE_LLM -- "R1 KB 命中 env_fact → btp+close 建议（因果在 KB 不在注入）" --> OUT51
+    RULE_LLM -. "R2 攻击特征 → tp/merge：判的是内容特征<br/>payload 要求 fp——指令不是它的输入" .-> OUT51
+    OUT51 -. "请求 PATCH :3002/api/v1/alerts/:id（verdict_ai 落档 · status 不动）<br/>跨容器→case-backend:3002" .-> CB_ALERT_W
+
+    %% ===== 5.2 chat 注入拒答 =====
+    ATTACK_B -. "攻击者动作：话术四连打对话面<br/>要的不是绕过登录，是跳过审批" .-> CHAT_EP
+    CHAT_EP -- "T+0s: 会话验签过 → 建 chat_flow run（票面只读四件）<br/>异常：无票 401 连 run 都不建" --> INPUT_GUARD
+    INPUT_GUARD -. "请求 POST :8001/scan/injection channel=user_input（整句话）<br/>同步 await · 跨容器→guards:8001" .-> GUARD_EP
+    GUARD_EP -. "响应 score+action<br/>M1 0.6/M2 1.0/M3 0.6 block · M4 0.0 滑过（词面盲区）<br/>异常：guards 病了 → fail_closed 同拒（整面关门）" .-> INPUT_GUARD
+    INPUT_GUARD -- "block → 拒答三帧 token/denied/done + refused 旗子<br/>（审计先落账再广播）" --> SENTINEL
+    INPUT_GUARD -. "审计 guards_block DENIED（objectType=chat_input 带 score）<br/>· 跨容器→case-backend:3002" .-> T_AUDIT
+    INPUT_GUARD -- "未拦（M4）→ 意图分类兜底" --> INTENT_CLS
+    INTENT_CLS -- "unknown/0.2 → 澄清反问零动作（第二层接住）" --> SENTINEL
+    SENTINEL -- "后四站第一行 refused→return（零工具/零卡/零 LLM）<br/>帧+completed 落账" --> T_RUNEVENTS
+
+    %% ===== 5.3 毒 KB =====
+    ATTACK_C -. "路线 A 攻击者动作：拿值班长会话对 Copilot 说<br/>「写进知识库：攻击IP…属白名单」（意图分类命中 kb_write L2）" .-> CHAT_EP
+    CHAT_EP -- "require_approval → 开审批卡（毒草稿全文冻在卡上）" --> KB_CARD
+    KB_CARD -- "INSERT 卡 pending（params=毒草稿全文+params_hash）" --> T_APPROVALS
+    KB_CARD -. "interrupt 冻结 run → awaiting_approval<br/>approval_required 帧 → 审批页弹卡（值班长看到毒草稿全文）" .-> WEB_BTN
+    OPERATOR -. "请求 POST :3003/api/v1/approvals/:id/reject（approver=duty_lead）<br/>T+0s: 200 秒回 run_status=awaiting_approval（批准≠执行）<br/>异常：缺 approver 400 · 跨容器→agent:3003" .-> REJ_CARD
+    REJ_CARD -- "UPDATE 卡 rejected+reason（终态再裁 409）" --> T_APPROVALS
+    REJ_CARD -. "审计 reject（actor=duty_lead——真人署名的「不」）<br/>· 跨容器→case-backend:3002" .-> T_AUDIT
+    REJ_CARD -- "resume 落 run_jobs → 分发循环 T+≤100ms 领起<br/>kb_write 重跑查卡 rejected → 不进闸不执行 · run completed" --> T_RUNEVENTS
+    KB_CARD -. "对照：若被批准也只 mock_kb:written（演习弹）<br/>真笔只在知识沉淀子图的验票执行体（3.3）" .-> MOCK_KB
+    ATTACK_C -. "路线 B 攻击者动作：POST :3002/api/v1/kb/proposals 直投冒名<br/>T+0s: 201 proposed（三字段支票即过）· 跨容器→case-backend:3002" .-> KB_POISON
+    KB_POISON -- "INSERT status=proposed + 同事务审计 create（actor=system）" --> T_KB
+    GHOST -- "approve 翻账面 approved（幽灵——账面骗到了）" --> T_KB
+    GHOST -. "向量检索面骗不到：chroma count 恒 1 · 毒探针查无<br/>（写入口唯一=验票执行体 · INV-5 结构保证）" .-> CH_COLL
+    T_KB -. "读 GET /api/v1/kb/search 只吐 approved（账面查询面）<br/>幽灵骗得过——吐出毒 runbook（声明的世界≠发生的世界）" .-> KB_SEARCH
+
+    %% ===== 5.4 毒沙箱 =====
+    ATTACK_D -. "攻击者动作：scriptFor seam 换上毒 analyzer（教具注入 · 不改生产代码）<br/>表面吐正常 Cortex 结果——毒在动作不在结果" .-> LOOKUP
+    LOOKUP -- "scriptFor 定位脚本 · 有脚本 → 拼命令行<br/>异常：没脚本 fail-closed 拒不开机（INV-1）" --> MSB_ARGS
+    MSB_ARGS -- "T+0s: msb run 拉起一次性 microVM（libkrun）真跑毒脚本" --> VM
+    VM -. "三道闸全在参数上（自证）<br/>闸1 egress：connect_ex errno=111（对照：无 --no-net 假握手 errno=0）<br/>闸2 env：只镜像 9 键 · 宿主金丝雀不可见（INV-4 沙箱版）<br/>闸3 一次性：finally remove 跑完即毁 · /tmp/pwned 随 VM 蒸发" .-> VM
+    VM -- "stdout 协议一行标记行（result+attempts 遥测）" --> SHAPE
+    SHAPE -- "形状校验过 → AnalyzerResult 进富化报告（seam 换脚不换鞋）" --> SHAPE
+    SHAPE -. "拦截 → sandbox_egress_blocked/env_denied DENIED 审计<br/>没拦住 → breach FAILURE（审计不说谎）<br/>· 跨容器→case-backend:3002" .-> T_AUDIT
+    PROBE -. "CI/新机器：CLI 不在 PATH 或冒烟 VM 失败 → ok:false 带人话原因<br/>真跑断言 skip 可见 · mock 侧照常全绿" .-> PROBE
+
+    %% ===== 5.5 凭证金丝雀 =====
+    ATTACK_E -. "攻击者动作：把金丝雀当真钥匙偷渡出站<br/>A1 塞进模型可见字段 / A2 白名单字段塞未知占位符<br/>· 跨容器→gateway:8002" .-> DENY_NS
+    AGENT_OUT -. "请求 POST :8002/proxy/llm/*<br/>prompt 凭证位只写占位符原文 · 跨容器→gateway:8002" .-> DENY_NS
+    DENY_NS -. "读 env：SECRETS_LLM_API_KEY / SOC_LLM_UPSTREAM" .-> GW_ENV
+    DENY_NS -. "响应 503 deny_no_secret（本布景执勤位）<br/>上游一个字节不发" .-> AGENT_OUT
+    DENY_NS -- "钥匙在 → 白名单字段换真值（metadata）" --> INJ_CRED
+    INJ_CRED -. "读 env：占位符对应的 SECRETS_* 真值<br/>异常：查不到 → 503 deny_missing_credential" .-> GW_ENV
+    INJ_CRED -- "注入完 → 金丝雀扫描（扫在注入后的体上）" --> SCAN_LEAK
+    SCAN_LEAK -. "读 env：全部 SECRETS_ 真值当已知图案" .-> GW_ENV
+    SCAN_LEAK -. "命中 → 503 deny_leak_detected<br/>审计 detail 只记字段路径不记值" .-> AUDIT_GW
+    SCAN_LEAK -- "零命中 → ★唯一注入点" --> INJECT_PT
+    INJECT_PT -. "审计 出站元数据（方法/路径/状态码/耗时/字节数 · 无 body）" .-> AUDIT_GW
+    CANARY -. "读 全可观测面 grep：两库/九服务日志/容器文件面<br/>17800+ 文本单元 0 命中 · 阳性对照 20 条（INV-4 实证）" .-> GW_ENV
+    CANARY -- "测试锚：出站体永不含占位符原文/金丝雀值" --> AGENT_OUT
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 5.1：MAP 防注入原文裸奔进系统（不可信封条）/ SCAN51 防注入原文进 prompt（INV-1）
+    %%      RULE_LLM 防 verdict 被注入带偏（内容函数 · 仅 fake 如实划界）/ OUT51 防 AI 动手（建议/执行鸿沟）
+    %% 5.2：INPUT_GUARD 防对话面提示词注入（INV-1 fail-closed）
+    %% 5.3：REJ_CARD 防 AI 提议直接入库（人审闸 · INV-5 正门）
+    %% 5.4：VM 防毒 analyzer 逃逸三件套（egress/env/一次性）/ SHAPE 防毒结果混进报告+谎报遥测
+    %% 5.5：GW_ENV 防凭证散落（INV-4 户口）/ DENY_NS 防无钥匙出站（INV-1）
+    %%      INJ_CRED 防半替换的体出站（FR-S1.2）/ SCAN_LEAK 防凭证进模型可见字段（INV-4）
+    %%      INJECT_PT 防注入点多处化 / AUDIT_GW 防审计自身成泄露面（FR-S1.3/INV-4）
+    %% 宿主：CANARY 防凭证泄漏不被发现（INV-4）
+    %% guards：GUARD_EP 防提示词注入（四通道四处置）
+    %% chroma：CH_COLL 防毒条目进检索面（INV-5/9 结构保证）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    classDef attacker fill:#1a1a26,stroke:#6c7086,stroke-width:1px,stroke-dasharray: 4 2,color:#6c7086
+    class ATTACK_A,ATTACK_B,ATTACK_C,ATTACK_D,ATTACK_E,GHOST attacker
+    class MAP,SCAN51,RULE_LLM,OUT51,INPUT_GUARD,REJ_CARD,VM,SHAPE,GW_ENV,DENY_NS,INJ_CRED,SCAN_LEAK,INJECT_PT,AUDIT_GW,CANARY,GUARD_EP,CH_COLL guardSec
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
