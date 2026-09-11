@@ -284,15 +284,16 @@
 ### 公开接口
 
 - `verifyTicket(toolCall, ctx) → allow|403+reason`（TS 中间件签名，PRD §6-M9-S2）
-- 审批卡 REST：`GET /api/v1/approvals?status=pending`、`POST .../approve|reject`（挂 agent 服务，铸票调 gateway）
+- 审批卡 REST：`GET /api/v1/approvals?status=pending`、`POST .../approve|reject`（挂 agent 服务；内部模式铸票调 gateway，外部模式经椒图中继——请求头 `x-approver-token` 透传、409 仲裁权在椒图，2026-09-11 票 58；approvals wire 带 `external_id`）
 - gateway：`POST /internal/mint`（签任务票/ApprovalToken，py 侧，手写 HMAC 三段式票型——ADR 0001 搬票型不搬代码，fixtures/tickets/ 契约）
 - gateway：`/proxy/llm/*`（凭证代理转发，proxy.py 参数化，LLM base_url 指这里）
-- guards：`POST /scan/injection`、`POST /pii/anonymize`
+- guards：`POST /scan/injection`、`POST /pii/anonymize`、`POST /pii/reveal`（受控反查，票 49；审计只记「谁查了占位符、命中几条」不记原文）
+- agent pii 反查代理：`POST /api/v1/pii/reveal`（挂 agent 服务，转发 guards 反查口，票 49；走线由 vite-proxy.test.ts 机器锁定）
 
 ### 依赖
 
 - 模块: `m2`
-- 外部: openfga 镜像（FGA）、contextforge 镜像（RBAC 渠道面）
+- 外部: openfga 镜像（FGA）、contextforge 镜像（RBAC 渠道面）；jiaotu-gateway（env `JIAOTU_GATEWAY_URL` 设定时的狗粮外接，见备注）
 
 ### Seam 与测试
 
@@ -306,6 +307,7 @@
 - 这是差异化主体，六张卡（S1-S6）共用这一张模块卡，但每个 S 的验收标准独立可测
 - 内部架构图见 `docs/architecture-gateway-internal.html`、`docs/architecture-guards-internal.html`
 - 狗粮外接形态（2026-09-11 票 57/58/59 落地，soc-demo 合流 7b4cd9c；CONTEXT「防线换防」）：env `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 设定时，四件安全职能（LLM 代理/任务票铸发/审批铸票/焚毁账本）在运行面整体交棒椒图（adapter 见 `services/agent/src/jiaotu/`：token-ports-jiaotu + approval-gateway），soc-demo 永不自铸审批票（INV-2 单口在椒图 g4），保留消费侧验票闸/KB 人审/业务审计；未设 = 内部 gateway 形态逐字节不变（默认形态即教学资产本貌）。六幕经椒图活体冒烟全绿（`scripts/jiaotu-smoke-11.sh`，默认 fake LLM）；compose jiaotu 形态见 `docker-compose.jiaotu.yml` overlay
+- 外部模式装配面（票 58）：`buildApp` opts `approvalGateway?` 注入 seam（生产 = `JiaoTuApprovalGateway`，测试注入假件）；审批申报/对账/中继/G9 四路共用该端口，接口立在领域模块 approvals.ts
 
 ## m10
 
