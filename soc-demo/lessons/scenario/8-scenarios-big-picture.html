@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>八场景全流程大图</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>八场景全流程大图 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        PNP["pnpm replay 脚本（回放推单）<br/>读 fixtures 排队逐份 POST :3001<br/>每份等回包才递下一份<br/>scripts/replay.ts:39-67"]
+        FX[("fixtures/alerts/*.json<br/>告警 payload 文件 × 12")]
+    end
+
+    subgraph ING["容器 ingest（Fastify · TypeScript · :3001）"]
+        subgraph ING_IN["入站面 HTTP"]
+            H["健康检查<br/>GET /healthz<br/>app.ts:14"]
+            ERR["错误盖写器<br/>setErrorHandler app.ts:18-34<br/>畸形 JSON / 400 改写 422<br/>🛡️ 防 框架默认 400 露馅"]
+            WH["告警 webhook 端点<br/>POST /api/v1/webhooks/alerts<br/>app.ts:48<br/>入参字段: rule.id / timestamp<br/>单/批量归一 + 状态码分流"]
+        end
+        subgraph ING_FUN["1.1 业务步骤"]
+            VAL["告警校验（只卡最低限度）<br/>对象性 + rule.id 必填<br/>+ timestamp 可解析<br/>其余字段照收进 raw 留底<br/>wazuh.ts:21-33"]
+            MAP["字段翻译 Wazuh → M2 schema<br/>严重度 0-15→1-4 · TLP 溯源 · PAP<br/>full_log 封 untrusted 封条<br/>抽五类可观测物（攻路字段封条）<br/>raw 整包留存 · wazuh.ts:107-140<br/>🛡️ 防 提示词注入"]
+            REJ["422 拒收编排<br/>app.ts:56-66<br/>校验失败 → 归档 → 422<br/>🛡️ 防 脏数据进系统"]
+        end
+        subgraph ING_OUT["出站"]
+            ING_CALL["出站 adapter<br/>HttpM2Client.ingestAlert<br/>POST :3002/api/v1/alerts<br/>201 新建 / 200 去重<br/>其余状态码一律抛错<br/>m2client.ts:57-70"]
+            AUD["出站 adapter<br/>HttpM2Client.auditFailure<br/>POST :3002/internal/audit<br/>2s 超时 · 失败自吞不拦 422<br/>m2client.ts:74-99"]
+        end
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        subgraph CB_IN["入站面 HTTP"]
+            CB_WH_ALERTS["告警入库端点<br/>POST /api/v1/alerts<br/>四要素缺一 400 · dedup?200:201<br/>app.ts:89-101"]
+            CB_AUD["审计写入端点<br/>POST /internal/audit<br/>app.ts:342 · result 白名单"]
+            CB_GET_ALERT["告警读取端点<br/>GET /api/v1/alerts/:id<br/>app.ts:108（1.4 load_alert 用）"]
+            CB_PATCH_ALERT["告警改写端点<br/>PATCH /api/v1/alerts/:id<br/>app.ts:138（1.4 抢锁 / 1.5 落判用）"]
+            CB_CASES_ACTIVE["同主机活跃案端点<br/>GET /api/v1/cases/active<br/>?host=&within_hours= · app.ts:148"]
+            CB_CREATE_CASE["建案端点<br/>POST /api/v1/alerts/:id/create-case<br/>app.ts:114（1.5 TP 无活跃案时）"]
+            CB_MERGE["并案端点<br/>POST /api/v1/alerts/:id/merge/:caseId<br/>app.ts:121（1.5 TP 有活跃案时）"]
+        end
+        subgraph CB_FUN["1.2 业务步骤"]
+            VAL_INPUT["输入验型（不信任上一站）<br/>alerts 四必填 / audit 四必填字符串<br/>+ result 白名单（可缺省）<br/>🛡️ 防 脏数据"]
+            UPSERT["告警 upsert（事务内一条 SQL）<br/>INSERT ON CONFLICT(source,source_ref)<br/>DO UPDATE occurrences+1<br/>RETURNING id,occurrences<br/>+ 新建时插 observables<br/>store.ts:233-274"]
+            RECORD_AUDIT["审计写入（与业务写同事务）<br/>audit_entries 增一行<br/>action/actor/object/details/result<br/>store.ts:110-133"]
+            EMIT_EVENT["事件发布（仅新建档发）<br/>outbox_events 增一行<br/>topic=alert.created<br/>payload={alertId, 来源, 警情编号}<br/>去重命中不重发（INV-6 后半）<br/>store.ts:135-139"]
+        end
+        subgraph CB_FUN14["1.4 分诊落点（读 / 锁 / 查）"]
+            CB_LOCK["verdict 拾取锁 SQL<br/>UPDATE alerts SET verdict='in-progress'<br/>WHERE id=? AND verdict IS NULL<br/>0 行 → VerdictLockedError 409<br/>store.ts:585-587<br/>🛡️ 防 并发重复分诊（INV-6）"]
+            CB_FIND["findActiveCases 查询<br/>JOIN observables（hostname 类型）<br/>status IN (New,InProgress) · 24h 窗<br/>store.ts:734-746"]
+        end
+        subgraph CB_FUN15["1.5 落判落点"]
+            CB_WRITE_VERDICT["verdict_ai 全文落列<br/>UPDATE alerts SET verdict_ai=…<br/>列 verdict_ai TEXT（db.ts:22）· store.ts:601<br/>含 confidence/rationale/self_audit/<br/>recommended_action/agent_run_id 回链"]
+        end
+        subgraph CB_DB["存储"]
+            T_ALERTS[("表 alerts<br/>PK id · UNIQUE(来源, 警情编号)<br/>唯一索引 idx_alerts_dedup（db.ts:34）<br/>occurrences 默认 1（db.ts:26）<br/>🛡️ UNIQUE 兜底（INV-6）")]
+            T_AUDIT[("表 audit_entries<br/>9 列 append-only（db.ts:95-105）")]
+            T_OUTBOX[("表 outbox_events<br/>id 自增主键（db.ts:109-114）")]
+        end
+        CB_POLL["事件轮询端点<br/>GET /api/v1/events?after=&limit=<br/>按自增 id 翻页（store.ts:899-910）<br/>app.ts:318 · 供 agent autorun 读事件"]
+    end
+
+    PNP -- "请求 fetch POST :3001" --> WH
+    FX -. "读" .-> PNP
+    WH -. "响应 200/201/422" .-> PNP
+
+    %% ingest 内部数据流（入站 → 主链 → 出站）
+    H -. "承载框架件" .-> WH
+    WH --> VAL
+    VAL -- "ok" --> MAP
+    VAL -. "失败累积 details[]<br/>走拒收路径" .-> REJ
+    MAP -- "翻译好的 M2 告警<br/>（含可观测物 + 不信任字段包裹）" --> ING_CALL
+    REJ -- "调 auditFailure" --> AUD
+    REJ -. "回 422 invalid_alert<br/>带 details[]" .-> WH
+    ERR -- "畸形 JSON / 400 时<br/>另一条 422 路径" --> AUD
+    ERR -. "回 422 invalid_alert<br/>盖写 400 → 422" .-> WH
+
+    %% ingest → 下游 case-backend（1.2 接收 → 同事务 → 落表）
+    ING_CALL -- "请求 POST :3002/api/v1/alerts" --> CB_WH_ALERTS
+    ING_CALL -. "响应 201 新建 / 200 去重 → {alertId, dedup}" .-> WH
+    AUD -- "请求 POST :3002/internal/audit" --> CB_AUD
+    %% CB_WH_ALERTS 端点验型 → 失败回 400
+    CB_WH_ALERTS -- "四必填 ok 走验型" --> VAL_INPUT
+    VAL_INPUT -. "缺字段 → 400 invalid_alert<br/>回 CB_WH_ALERTS 端点" .-> CB_WH_ALERTS
+    %% CB_AUD 端点字段验型
+    CB_AUD -- "五要素必填 + result 白名单" --> VAL_INPUT
+    VAL_INPUT -. "缺字段/result 不在白名单<br/>400 invalid_audit → 回 CB_AUD 端点" .-> CB_AUD
+
+    %% 主链：同事务三步（拆开后）
+    VAL_INPUT -- "ok alerts" --> UPSERT
+    UPSERT -- "RETURNING id, occurrences" --> T_ALERTS
+    UPSERT -- "去重命中：只记 update audit<br/>正常：发事件 + 记 create audit<br/>失败：整事务 ROLLBACK 一切不落" --> RECORD_AUDIT
+    UPSERT -- "去重命中时跳过<br/>正常才调" --> EMIT_EVENT
+    RECORD_AUDIT --> T_AUDIT
+    EMIT_EVENT --> T_OUTBOX
+    CB_AUD -- "复用 recordAudit 工具<br/>正常：201 + id" --> RECORD_AUDIT
+
+    %% 1.2 与 1.3 接口：outbox 事件被 agent autorun 轮询消费（1.3 主场）
+    T_OUTBOX -. "outbox → polling 端点" .-> CB_POLL
+
+    %% ===== S1.3 业务：自动拉起与铸票 =====
+    %% 拆分原则：每个节点只做一件事；箭头标签写明"调用目的 + 正常 + 失败"
+    subgraph AGENT["容器 agent（Fastify · :3003）"]
+        direction TB
+        subgraph A_LOOP["autorun.ts · 常驻循环"]
+            direction LR
+            A_LOOP_TICK["autorun 主循环<br/>每 2 秒 tick（autorun.ts:234）<br/>游标落 event_cursors · 停机可重入"]
+            A_POLL["autorun poll（autorun.ts:206-229）<br/>eventsAfter(cursor,100) 读一批<br/>逐条裁决逐条推游标<br/>拉起失败=游标不动下轮重试"]
+        end
+        subgraph A_DECIDE["autorun.ts · decide"]
+            direction LR
+            A_DISPATCH["事件分发<br/>按 topic 路由<br/>alert.created / case.closed<br/>其它 ignored"]
+            A_VALIDATE["payload 验型<br/>警情编号是字符串？<br/>坏值 → skipped<br/>🛡️ malformed_payload 兜底"]
+            DEDUP_BATCH["本批 Set 去重<br/>本轮里见过就不再说<br/>🛡️ 防 同批重起"]
+            DEDUP_RUNS["runs 表查活跃<br/>同警情已有非 failed run 就跳过<br/>failed 允许重拉（autorun.ts:110-115）<br/>🛡️ 防 重复起流水线（INV-6）"]
+            DEDUP_KB["M2 kb 提案查重<br/>GET /api/v1/kb/proposals 按 source_case_id<br/>proposed/approved 在册即跳过<br/>仅 knowledge_flow 走（autorun.ts:120-133）<br/>🛡️ 防 知识重复提议"]
+            A_LAUNCH["launch 出站包裹<br/>app.inject 打自家正门 /internal/runs<br/>自动与人手同轨道（index.ts:148-158）<br/>抛错 → failed decision<br/>游标不动 · 下轮重试"]
+        end
+        subgraph A_RUN["app.ts:259 · /internal/runs"]
+            direction LR
+            RUN_VALIDATE["请求体校验<br/>五道 400：kind 缺 / 不在册 kind /<br/>case_id 缺 / alert_id 缺 / message 缺<br/>app.ts:259-276<br/>🛡️ 防 非法拉起（INV-1）"]
+            RUN_CREATE["createRun<br/>runs 表 INSERT status=queued<br/>+ actor 派生 + 建档必配审计（INV-8）<br/>runs.ts:49-71"]
+            RUN_ENQUEUE["enqueueRunJob(start) 入 run_jobs<br/>202 {run_id, status:queued} 秒回<br/>app.ts:314-315"]
+            REG_LOOKUP["run-kinds.ts 注册表查表<br/>kind → 描述符（REGISTRY :140）<br/>🛡️ 防 未注册 kind"]
+            REG_TICKET["读 desc.ticket 票面<br/>sub=agent:triage · scope 两项<br/>allowed_tools=三族 L1 并集<br/>（run-kinds.ts:146-155）<br/>🛡️ 防 worker 自作主张（INV-3）"]
+            REG_GRAPH["desc.makeGraph(deps)<br/>组图工厂（1.4 详）"]
+        end
+        subgraph A_DISP["run-dispatcher.ts + app.ts · 分发循环"]
+            direction LR
+            DISP_LOOP["分发主循环<br/>每 100ms tick（app.ts:48）<br/>先扫审批卡过期再领任务<br/>（run-dispatcher.ts:197-234，场景4 伏笔）"]
+            DISP_CLAIM["claimRunJobs<br/>事务内 pending→claimed<br/>FIFO 领任务（run-dispatcher.ts:85-98）"]
+            DISP_EXEC["executeStartJob（app.ts:373-413）<br/>协调 铸票 → 组图 → 开跑<br/>铸票失败 → mint_failed 兜底"]
+            MINT_CALL["HttpMintClient.mintTaskTicket<br/>POST :8002/internal/mint · 2s 超时<br/>agent 不持签名密钥<br/>token-ports.ts:69-79,4-6"]
+            MINT_GUARD["铸票失败兜底<br/>两步迁移 + FAILURE 审计<br/>+ error 事件<br/>🛡️ 防 无票奔跑"]
+        end
+        subgraph A_EXEC["graph.ts · LangGraph 执行器（1.4）"]
+            direction LR
+            EXEC_RUNFLOW["runFlow 开跑<br/>queued→running 状态正门<br/>每次迁移镜像一条 audit 事件<br/>graph.ts:393-403"]
+            EXEC_COMPILE["StateGraph 声明编排<br/>FlowNode[] addSequence 串边<br/>末节点接 END<br/>graph.ts:367-377"]
+            EXEC_SHELL["节点壳（每个节点同套一层）<br/>进节点广播 node_enter → 预算计一步<br/>max_steps 默认 20 超限强杀<br/>出节点广播 node_exit → 进度/token 回写<br/>节点抛错 → run 打 failed<br/>graph.ts:351-365"]
+            EXEC_CHECKPOINT["信封检查点<br/>每节点跑完盖存档 durability=sync<br/>存档带前一份的 hash 指纹<br/>verifyChain 整链可复核<br/>🛡️ 防 存档链篡改"]
+        end
+        subgraph A_TRIAGE1["workers/triage/flow.ts · 分诊前三节点（1.4）"]
+            direction LR
+            T_LOAD["load_alert 领告警<br/>亮票 get_alert 读告警全文<br/>404 → alert_not_found 抛错"]
+            T_CLAIM["verdict 拾取锁<br/>PATCH verdict=in-progress<br/>WHERE verdict IS NULL 条件更新<br/>抢不到 → skipped 让路<br/>🛡️ 防 并发重复分诊（INV-6）"]
+            T_KB["kb_check 问知识库<br/>亮票 kb_lookup<br/>拿 host/path/user 三可观测物查<br/>KB 优先核验 · top-k=5"]
+            T_KB_GUARD["KB 命中逐条安检<br/>scan channel=kb<br/>strip 清洗放行 / block 剔除该条<br/>🛡️ 防 KB 内容注入（INV-5）"]
+            T_MERGE["merge_check 查同主机<br/>亮票 search_cases_by_host<br/>同主机 24h 活跃案<br/>结果存 state.merge（1.5 裁判用）"]
+        end
+        subgraph A_GATE["src/gated-call.ts · 唯一动作闸（1.4）"]
+            GATED["makeGatedCall 动作闸<br/>①paramsHash 参数指纹 SHA-256<br/>②verifyTicket 防伪章/过期/allowed_tools<br/>③闸拒 = 台账 DENIED + 抛错强杀<br/>④放行 = 广播 tool_call/tool_result<br/>🛡️ 防 伪票/超范围工具调用（INV-3）"]
+        end
+        subgraph A_OUT14["1.4 出站 adapter"]
+            direction LR
+            ADPT_M2["出站 adapter HttpTriageM2<br/>→ case-backend:3002 · 5s 超时<br/>getAlert / claimVerdict / findActiveCases（1.4）<br/>patchOutcome / mergeAlert / createCase（1.5）"]
+            ADPT_KB["出站 adapter ChromaKb<br/>→ chroma:8000 · 5s 超时<br/>检索面病了 → 降级 0 命中（fail-open）"]
+            ADPT_GUARDS["出站 adapter guards-client<br/>→ guards:8001 · 2s 超时<br/>guards 挂 → fail_closed 占位符（fail-closed）"]
+            AUD_SINK["出站 adapter HttpAuditSink<br/>→ case-backend:3002/internal/audit<br/>动作：deny / triage_skip / guards_block"]
+        end
+        subgraph A_TRIAGE2["workers/triage/flow.ts · 分诊后三节点（1.5）"]
+            direction LR
+            T_SELF_AUDIT["self_audit_checkpoint 建案前书面声明<br/>三字段：open_cases_checked / host_searched /<br/>same_host_case_found → state.self_audit<br/>台账 100% 可数 + 发 audit 事件<br/>flow.ts:194-215<br/>🛡️ 防 AI 口说无凭（FR-M4.4）"]
+            T_SCAN_FIELD["不可信段逐段安检 scanField<br/>送检名单：description + untrusted 标签可观测物<br/>channel=alert_field · block → 占位符，原文不进 prompt<br/>flow.ts:102-115,226-230<br/>🛡️ 防 提示词注入（FR-S3.1/S3.2）"]
+            T_PROMPT["prompt 装配 buildTriagePrompt（改动视同接口变更）<br/>顺序：输出合同（四分类 JSON）→ 可信摘要<br/>→ 不可信段逐段 wrapUntrusted 成对边界包装<br/>→ KB 命中 → merge_check 实际结果<br/>prompt.ts:87-138"]
+            T_LLM["verdict_llm 调用 LLM + 把关<br/>temperature 0 · 解析不合 schema 重试 1 次<br/>再失败 → uncertain 交人工（宁可升级不可猜）<br/>charge 计费 + 墙钟兜底<br/>flow.ts:247-266<br/>🛡️ 防 上游病了硬猜（INV-1）"]
+            T_CONFRONT["对质：AI 复述 vs 机器实查<br/>same_host_case_found 对不上 → 强制降 uncertain<br/>+ recommended_action=human<br/>台账 self_audit_mismatch FAILURE<br/>flow.ts:268-285<br/>🛡️ 防 AI 幻觉/谎报"]
+            T_OUTCOME["outcome 落判 · 三结局动词<br/>TP → merge_alert / create_case（亮票 L1 动作）<br/>FP/BTP → 只落 close 建议 · 告警状态不动<br/>uncertain → 置 InProgress 挂人工<br/>verdict + verdict_ai 全文 PATCH 回档案<br/>flow.ts:289-329"]
+        end
+        subgraph A_LLM["triage/llm.ts + llm-real.ts + src/llm-client.ts · LLM seam（1.5）"]
+            direction LR
+            T_FAKE["fake 脚（教学缺省）<br/>规则引擎 R1-R4：KB 已知变更→btp<br/>攻击证据→tp · 孤立试探→uncertain · 噪声→fp<br/>判定全凭内容不偷看文件名 · 固定报 64 tokens<br/>llm.ts:34-130"]
+            T_REAL["real 脚（AGENT_LLM=real）<br/>seam.chat 出站必经凭证代理 · 不直连厂商<br/>unwrapJsonText 剥 think 段/围栏 · 剥不动不硬修<br/>上游病 → 返回必不合 schema 的标记回包<br/>llm-real.ts:27-35"]
+            ADPT_LLM["出站 adapter GatewayLlmClient<br/>POST gateway:8002/proxy/llm/v1/chat/completions<br/>temperature 0（判定要稳定不要创造性）<br/>llm-client.ts:91-104"]
+        end
+        subgraph A_DB["agent 存储（better-sqlite3 · agent.sqlite）"]
+            T_RUNEVENTS[("表 run_events<br/>自增 id · run_id · type · payload<br/>type：audit / node_enter / node_exit /<br/>tool_call / tool_result<br/>db.ts:25-32 · 写入 events.ts:50")]
+        end
+        subgraph A_SSE["app.ts · SSE 事件流（1.6）"]
+            direction LR
+            SSE_EP["SSE 直播端点<br/>GET :3003/api/v1/events/stream?run_id=<br/>缺 run_id → 400 · run 不存在 → 404<br/>reply.hijack 接管原始响应<br/>app.ts:550-566"]
+            SSE_PUSH["100ms 增量推帧<br/>eventsAfter(cursor) 逐条推新事件<br/>每帧带自增 id · 游标在末尾就安静挂着"]
+            SSE_RESUME["断线续传 Last-Event-ID<br/>浏览器重连自动带头 · 服务端断点后补发<br/>直播 + 点播二合一<br/>🛡️ 防 事件丢失/重复（INV-7 恰好一次）"]
+        end
+        subgraph A_CHAIN["run-kinds.ts · 同 run 链（1.6 → 场景 2）"]
+            CHAIN["alert_flow 一张图两段<br/>分诊六节点 + makeCaseChain 调查富化<br/>（investigate_case → enrich_case）<br/>只有 create_case 分支写 state.case_id 链上才真干活<br/>FP/merge 分支链上空转 · run-kinds.ts:106-171"]
+        end
+    end
+
+    subgraph GW["容器 gateway（FastAPI · :8002）"]
+        GW_HUB["POST /internal/mint（app.py:24）<br/>端点装配 + 密钥闸<br/>缺 SOC_HMAC_KEY → 500 拒签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+        GW_TASK["mint_task_ticket（mint.py:49-67）<br/>任务字段集 8 项 + _seal<br/>票型 b64url.b64url.hex(HMAC-SHA256)<br/>教学变体非 JWT（mint.py:6-8）<br/>TASK_TTL=900s（mint.py:24）"]
+        GW_APPR["mint_approval_token<br/>审批字段集 + params_hash<br/>+ _seal · APPROVAL_TTL=300s（mint.py:25）<br/>场景4 详"]
+        UP["POST /proxy/llm/v1/chat/completions 凭证代理<br/>占位符契约：白名单字段才换真 key<br/>缺 SECRETS_LLM_API_KEY → 503 拒转发<br/>金丝雀：出站体出现密钥 → 503 拒绝<br/>proxy.py:152-192<br/>🛡️ 防 凭证泄漏/裸转发（INV-4/INV-1）"]
+        GW_MODEL["上游模型厂商（minimax-m2）<br/>OpenAI 兼容 /v1/chat/completions<br/>SOC_LLM_UPSTREAM 换厂商不改代码"]
+    end
+
+    subgraph GUARD["容器 guards（FastAPI · llm-guard + Presidio · :8001）"]
+        GU_SCAN["POST /scan/injection<br/>注入检测链三裁决<br/>allow 原文 / strip 清洗 / block 拒绝<br/>guards/app.py:27"]
+    end
+
+    subgraph KBC["容器 chroma（chromadb 向量库 · 容器内 :8000 / 宿主 :18000）"]
+        KB_STORE[("collection kb_entries<br/>向量检索 top-k=5<br/>只收人审 approved 条目入库<br/>🛡️ 防 未审条目入检索面（INV-5）")]
+    end
+
+    subgraph WEB["容器 web（Vite 6 + React 19 + antd 5 · :5173）"]
+        WEB_PAGES["七个页面（人的窗口）<br/>LoginPage 选脸登录 · AlertsPage 告警台<br/>CasePage 案卷 · PipelinePage 流水线直播<br/>ApprovalsPage 审批卡 · AuditPage 审计台账<br/>EvalPage 评测报告"]
+        WEB_PROXY["vite dev 代理 · 同源分流<br/>auth/chat/approvals/events/pii/internal → agent:3003<br/>alerts/cases/audit → case-backend:3002<br/>webhooks → ingest:3001<br/>vite.config.ts:31-50"]
+    end
+
+    %% ===== 节点调用 + 三态语义标注 =====
+    A_LOOP_TICK -- "setTimeout tick<br/>正常：触发 poll<br/>异常：仅 log.warn 不中断" --> A_POLL
+    A_POLL -- "eventsAfter(after, limit)<br/>正常：拿到一批<br/>异常：catch 留本轮 · 重试" --> CB_POLL
+    CB_POLL -. "响应 [{id,topic,payload},...]<br/>正常：拿到一批事件<br/>异常：5xx / 超时 → A_POLL 内捕" .-> A_POLL
+
+    %% 事件分发链
+    A_POLL -- "逐条" --> A_DISPATCH
+    A_DISPATCH -- "ok topic<br/>alert.created / case.closed" --> A_VALIDATE
+    A_DISPATCH -. "兜底：其它 topic → skipped ignored" .-> A_VALIDATE
+    A_VALIDATE -- "valid payload<br/>alertId/caseId 是 string" --> DEDUP_BATCH
+    A_VALIDATE -. "malformed_payload → skipped<br/>推游标 · 不拉起" .-> A_POLL
+
+    %% 三道防重
+    DEDUP_BATCH -- "本批未见过<br/>正常：通过<br/>命中：skipped dup_batch" --> DEDUP_RUNS
+    DEDUP_RUNS -- "无活跃 run<br/>正常：通过<br/>命中：skipped run_exists" --> DEDUP_KB
+    DEDUP_KB -- "kb 无重<br/>正常：通过<br/>命中：skipped kb_exists<br/>（仅 knowledge_flow）" --> A_LAUNCH
+
+    %% launch 链
+    A_LAUNCH -- "请求 launch<br/>POST /internal/runs" --> RUN_VALIDATE
+    A_LAUNCH -. "异常：launch 抛错<br/>catch → failed decision<br/>autorun 游标不动 · 下轮重试" .-> A_POLL
+    RUN_VALIDATE -- "查 kind" --> REG_LOOKUP
+    REG_LOOKUP -. "不在册<br/>400 unknown_kind" .-> RUN_VALIDATE
+    RUN_VALIDATE -- "kind 合法" --> RUN_CREATE
+    RUN_CREATE -- "建 run + actor" --> RUN_ENQUEUE
+    RUN_ENQUEUE -. "202 {run_id, status:queued}<br/>launch resolve → launched decision<br/>推游标" .-> A_LAUNCH
+
+    %% dispatcher 异步铸票链
+    DISP_LOOP -- "tick 100ms" --> DISP_CLAIM
+    DISP_CLAIM -- "领到 start 任务" --> DISP_EXEC
+    DISP_EXEC -- "读 ticket.sub + scope" --> REG_TICKET
+    REG_TICKET -. "读 desc.ticket<br/>正常：拿到 sub/scope/allowed_tools" .-> DISP_EXEC
+    DISP_EXEC -- "调 MINT_CALL 出站" --> MINT_CALL
+    MINT_CALL -- "请求 POST :8002/internal/mint<br/>type=task_ticket" --> GW_HUB
+    GW_HUB -. "缺密钥 / 未知 type<br/>500 / 400 → 抛错 → MINT_GUARD" .-> MINT_CALL
+    GW_HUB -- "key ok + type 路由" --> GW_TASK
+    GW_TASK -. "返回 {token, payload}<br/>TTL=900s 任务票" .-> MINT_CALL
+    MINT_CALL -. "正常：拿到 token<br/>异常：超时 / 5xx → catch → MINT_GUARD" .-> DISP_EXEC
+    DISP_EXEC -- "拿到 token<br/>组图开工" --> REG_GRAPH
+
+    %% 失败收口
+    MINT_CALL -. "异常 / 失败" .-> MINT_GUARD
+    MINT_GUARD -- "queued→running→failed(mint_failed)<br/>+ audit FAILURE + error 事件<br/>🛡️ 不留无票奔跑" --> DISP_EXEC
+
+    %% ===== S1.4 业务：LangGraph 执行器 + 分诊前三节点 =====
+    %% 衔接 1.3：铸票成功后组图开工
+    REG_GRAPH -- "makeTriageFlow 产出六节点 FlowNode[]<br/>executeStartJob（app.ts:389-412）<br/>正常：executeRun 启动 runFlow" --> EXEC_RUNFLOW
+    EXEC_RUNFLOW -- "状态正门迁移 queued→running<br/>非法迁移 409（INV-10）" --> EXEC_COMPILE
+    EXEC_COMPILE -- "按数组顺序串边<br/>每个节点套同一层壳" --> EXEC_SHELL
+    EXEC_SHELL -- "节点跑完盖检查点<br/>正常：durability=sync 落库才走下一步" --> EXEC_CHECKPOINT
+    EXEC_CHECKPOINT -. "存档带前链 hash 指纹<br/>verifyChain 整链复核<br/>改历史 → 当场穿帮" .-> EXEC_SHELL
+    EXEC_SHELL -- "壳内依次跑六节点<br/>第一个：load_alert<br/>异常：节点抛错 → run failed" --> T_LOAD
+
+    %% load_alert：领告警 + 抢分诊锁
+    T_LOAD -- "读到告警后抢锁" --> T_CLAIM
+    T_CLAIM -- "抢到：verdict=in-progress<br/>进 kb_check" --> T_KB
+    T_CLAIM -. "抢锁失败 409 verdict_locked<br/>→ triage.skipped 让路<br/>后五节点早退 · run completed" .-> EXEC_SHELL
+
+    %% 前三节点全部亮票过闸（只读工具照样过闸，INV-3）
+    T_LOAD -- "get_alert 亮票过闸" --> GATED
+    T_KB -- "kb_lookup 亮票过闸" --> GATED
+    T_MERGE -- "search_cases_by_host 亮票过闸" --> GATED
+
+    %% 闸的两个方向：放行出站 / 闸拒强杀
+    GATED -- "④放行：验票通过才出站<br/>异常：5s 超时 → 抛错" --> ADPT_M2
+    GATED -- "④放行：验票通过才出站" --> ADPT_KB
+    GATED -. "③闸拒：台账 DENIED + 抛错<br/>_gate_denied:原因码 → run failed<br/>🛡️ fail-closed 无绕行（INV-1）" .-> EXEC_SHELL
+
+    %% kb_check：命中的卫生检查（不经闸——安检是卫生件不是工具调用）
+    T_KB -- "每条命中出站安检" --> T_KB_GUARD
+    T_KB_GUARD -- "干净命中存 state.kb" --> T_MERGE
+
+    %% 台账动作收口（横切：审计是真相源）
+    GATED -. "③闸拒记 deny DENIED" .-> AUD_SINK
+    T_CLAIM -. "让路记 triage_skip SUCCESS" .-> AUD_SINK
+    T_KB_GUARD -. "block 记 guards_block DENIED" .-> AUD_SINK
+    AUD_SINK -- "请求 POST :3002/internal/audit<br/>复用 1.2 审计端点" --> CB_AUD
+
+    %% 出站：M2 一读一锁一查
+    ADPT_M2 -- "请求 GET :3002/api/v1/alerts/:id" --> CB_GET_ALERT
+    CB_GET_ALERT -. "响应 告警全文<br/>404 → alert_not_found 抛错" .-> ADPT_M2
+    ADPT_M2 -- "请求 PATCH :3002/api/v1/alerts/:id<br/>{verdict:'in-progress'}" --> CB_PATCH_ALERT
+    CB_PATCH_ALERT -- "条件更新放行" --> CB_LOCK
+    CB_LOCK -. "0 行 → 409 verdict_locked" .-> CB_PATCH_ALERT
+    CB_PATCH_ALERT -. "响应 200 抢到 / 409 锁在别人手里" .-> ADPT_M2
+    ADPT_M2 -- "请求 GET :3002/api/v1/cases/active<br/>?host=&within_hours=24" --> CB_CASES_ACTIVE
+    CB_CASES_ACTIVE -- "SQL 查 hostname 可观测物" --> CB_FIND
+    CB_FIND -. "响应 同主机活跃案列表" .-> ADPT_M2
+
+    %% 出站：chroma 向量检索（fail-open 提速件）
+    ADPT_KB -- "请求 POST chroma:8000<br/>/api/v2/…/collections/kb_entries/query" --> KB_STORE
+    KB_STORE -. "响应 top-5 命中<br/>异常：5s 超时 → 降级 0 命中照跑" .-> ADPT_KB
+
+    %% 出站：guards 注入安检（fail-closed 安全件）
+    T_KB_GUARD -- "请求 scan（text, channel=kb）" --> ADPT_GUARDS
+    ADPT_GUARDS -- "请求 POST :8001/scan/injection" --> GU_SCAN
+    GU_SCAN -. "响应 allow 原文 / strip 清洗 / block 拒绝<br/>异常：guards 挂/超时 → fail_closed 占位符<br/>🛡️ fail-closed（INV-1）" .-> ADPT_GUARDS
+
+    %% ===== S1.5 业务：自我声明 → LLM 判定 → 落判 =====
+    T_MERGE -- "merge 结果就绪<br/>进后三节点" --> T_SELF_AUDIT
+    T_SELF_AUDIT -- "声明存 state.self_audit<br/>供下一站 AI 复述对质" --> T_SCAN_FIELD
+    T_SCAN_FIELD -- "送检：description + untrusted 可观测物<br/>channel=alert_field" --> ADPT_GUARDS
+    T_SCAN_FIELD -- "安检过的不可信段<br/>block 只剩占位符" --> T_PROMPT
+    T_PROMPT -- "装配好的 prompt<br/>（合同+可信+不可信+KB+merge 实查）" --> T_LLM
+
+    %% LLM seam 双脚
+    T_LLM -- "AGENT_LLM=fake（教学缺省）" --> T_FAKE
+    T_LLM -- "AGENT_LLM=real" --> T_REAL
+    T_FAKE -. "响应 规则引擎 JSON 判定<br/>+ 固定 64 tokens 计费" .-> T_LLM
+    T_REAL -- "请求 chat 出站" --> ADPT_LLM
+    ADPT_LLM -- "请求 POST :8002/proxy/llm/v1/chat/completions<br/>装 Authorization 转发" --> UP
+    UP -- "转发上游（key 只活在出站瞬间）" --> GW_MODEL
+    GW_MODEL -. "响应 OpenAI 兼容回包（带 think 段）" .-> ADPT_LLM
+    UP -. "缺 key → 503 deny_no_secret<br/>金丝雀命中 → 503 deny_leak_detected<br/>🛡️ fail-closed 拒绝裸转发" .-> ADPT_LLM
+    ADPT_LLM -. "响应 剥壳后文本 + tokens<br/>上游病 → llm_upstream 原因码标记回包" .-> T_REAL
+    T_REAL -. "标记回包必不合 schema<br/>→ 交重试/降级链" .-> T_LLM
+
+    %% 对质与落判
+    T_LLM -- "解析出的四分类判定" --> T_CONFRONT
+    T_MERGE -. "state.merge 实查结果 = 对质基准" .-> T_CONFRONT
+    T_CONFRONT -- "对质通过 → 采信判定<br/>矛盾 → 强制 uncertain" --> T_OUTCOME
+    T_OUTCOME -- "merge_alert / create_case<br/>亮票过闸（L1 写动作也要票）" --> GATED
+
+    %% 落判出站：M2 正门（INV-10 状态机合法迁移）
+    ADPT_M2 -- "请求 POST :3002/api/v1/alerts/:id/merge/:caseId" --> CB_MERGE
+    ADPT_M2 -- "请求 POST :3002/api/v1/alerts/:id/create-case" --> CB_CREATE_CASE
+    CB_MERGE -. "响应 并案完成 · New→InProgress→Imported<br/>两次合法迁移（INV-10）" .-> ADPT_M2
+    CB_CREATE_CASE -. "响应 新 caseId → state.case_id（同 run 链入口）" .-> ADPT_M2
+    CB_PATCH_ALERT -- "落判分支：verdict/verdict_ai 落列" --> CB_WRITE_VERDICT
+    CB_WRITE_VERDICT -. "响应 200（uncertain 附带 status=InProgress）" .-> CB_PATCH_ALERT
+
+    %% 台账收口（1.5 动作，INV-8）
+    T_SELF_AUDIT -. "self_audit_checkpoint 台账" .-> AUD_SINK
+    T_SCAN_FIELD -. "block 记 guards_block DENIED" .-> AUD_SINK
+    T_LLM -. "不合 schema 记 llm_retry FAILURE" .-> AUD_SINK
+    T_CONFRONT -. "矛盾记 self_audit_mismatch FAILURE" .-> AUD_SINK
+
+    %% ===== S1.6 业务：事件账本 → SSE 直播 → web 动线 + 同 run 链 =====
+    %% 谁写事件账本：run 的一生每一步都落 run_events
+    EXEC_RUNFLOW -. "audit 镜像事件（状态迁移）" .-> T_RUNEVENTS
+    EXEC_SHELL -. "node_enter / node_exit 事件" .-> T_RUNEVENTS
+    GATED -. "tool_call / tool_result 广播" .-> T_RUNEVENTS
+
+    %% SSE 直播 + 断点补发（INV-7 恰好一次）
+    SSE_EP -- "连接挂住 · 100ms tick 推帧" --> SSE_PUSH
+    SSE_PUSH -. "读 eventsAfter(cursor) 增量事件" .-> T_RUNEVENTS
+    WEB_PAGES -- "EventSource 订阅 run 直播<br/>（/api/v1/events 前缀 → :3003）" --> SSE_EP
+    SSE_EP -. "响应 text/event-stream 帧流<br/>异常：缺 run_id 400 / run 不存在 404" .-> WEB_PAGES
+    WEB_PAGES -- "断线重连自动带 Last-Event-ID" --> SSE_RESUME
+    SSE_RESUME -- "游标定位 → 断点后补发<br/>两段拼接不重不漏" --> SSE_PUSH
+
+    %% web 数据面：同源代理分流（映射见节点说明）
+    WEB_PAGES -- "同源相对路径 fetch<br/>（告警台/案卷/审批/审计页数据面）" --> WEB_PROXY
+
+    %% 同 run 链：分诊落判 → 调查富化接力（场景 2 入口）
+    T_OUTCOME -- "TP create_case 分支写 state.case_id<br/>同 run 链上 investigate_case 接力（同一张票）" --> CHAIN
+
+    %% ===== 文件归属分组着色（节点底色）=====
+    classDef autorunGroup fill:#1e3a3a,stroke:#94e2d5,color:#cdd6f4
+    classDef dispatcherGroup fill:#3a2a1a,stroke:#fab387,color:#cdd6f4
+    classDef gatewayGroup fill:#2a1e3a,stroke:#cba6f7,color:#cdd6f4
+    classDef executorGroup fill:#1e3a1e,stroke:#a6e3a1,color:#cdd6f4
+    classDef triageGroup fill:#3a351a,stroke:#f9e2af,color:#cdd6f4
+    classDef gatedGroup fill:#3a2020,stroke:#eba0ac,color:#cdd6f4
+    classDef adapterGroup fill:#2a203a,stroke:#b4befe,color:#cdd6f4
+    classDef promptGroup fill:#1a2a3a,stroke:#89dceb,color:#cdd6f4
+    classDef llmGroup fill:#3a1a2a,stroke:#f5c2e7,color:#cdd6f4
+    %% autorun.ts 拥有：A_LOOP_TICK / A_POLL / A_DISPATCH / A_VALIDATE / DEDUP_*
+    class A_LOOP_TICK,A_POLL,A_DISPATCH,A_VALIDATE,DEDUP_BATCH,DEDUP_RUNS,DEDUP_KB autorunGroup
+    %% app.ts + run-kinds.ts + token-ports.ts 拥有：RUN_* / REG_* / DISP_* / MINT_* / A_LAUNCH
+    %%                                    + SSE_*（app.ts:550）/ CHAIN（run-kinds.ts，1.6）
+    class RUN_VALIDATE,RUN_CREATE,RUN_ENQUEUE,REG_LOOKUP,REG_TICKET,REG_GRAPH,DISP_LOOP,DISP_CLAIM,DISP_EXEC,MINT_CALL,MINT_GUARD,A_LAUNCH,SSE_EP,SSE_PUSH,SSE_RESUME,CHAIN dispatcherGroup
+    %% gateway 拥有：GW_HUB / GW_TASK / GW_APPR / UP / GW_MODEL
+    class GW_HUB,GW_TASK,GW_APPR,UP,GW_MODEL gatewayGroup
+    %% graph.ts + checkpointer.ts + budget.ts 拥有：EXEC_*
+    class EXEC_RUNFLOW,EXEC_COMPILE,EXEC_SHELL,EXEC_CHECKPOINT executorGroup
+    %% workers/triage/flow.ts 拥有：T_LOAD / T_CLAIM / T_KB / T_KB_GUARD / T_MERGE（1.4）
+    %%                              T_SELF_AUDIT / T_SCAN_FIELD / T_LLM / T_CONFRONT / T_OUTCOME（1.5）
+    class T_LOAD,T_CLAIM,T_KB,T_KB_GUARD,T_MERGE,T_SELF_AUDIT,T_SCAN_FIELD,T_LLM,T_CONFRONT,T_OUTCOME triageGroup
+    %% src/gated-call.ts 拥有：GATED
+    class GATED gatedGroup
+    %% workers/triage/m2.ts + knowledge/{kb,vector-store}.ts + src/guards-client.ts + src/audit.ts 拥有：ADPT_* / AUD_SINK
+    class ADPT_M2,ADPT_KB,ADPT_GUARDS,AUD_SINK adapterGroup
+    %% workers/triage/prompt.ts 拥有：T_PROMPT
+    class T_PROMPT promptGroup
+    %% triage/llm.ts + llm-real.ts + src/llm-client.ts 拥有：T_FAKE / T_REAL / ADPT_LLM
+    class T_FAKE,T_REAL,ADPT_LLM llmGroup
+
+    %% 服务与中间件说明（无箭头虚线链接 · 说明性而非数据流）
+
+    %% 安全防护节点（红色描边 + 🛡️ 防xxx 标注）
+    %% 约定：每个安全防护节点都套这套样式 + 🛡️ 标签 + 标对应 INV
+    %% 1.1：MAP 防提示词注入 / REJ 防脏数据 / ERR 防框架默认 400 露馅
+    %% 1.2：VAL_INPUT 防脏数据
+    %% 1.3：DEDUP_RUNS 防重起流水线（INV-6）/ DEDUP_BATCH 防同批重起
+    %%      DEDUP_KB 防知识重复提议 / A_VALIDATE 防 malformed_payload
+    %%      RUN_VALIDATE 防非法拉起（INV-1）/ REG_LOOKUP 防未注册 kind
+    %%      REG_TICKET 防 worker 自作主张（INV-3）
+    %%      MINT_GUARD 防无票奔跑 / GW_HUB 防 fail-open 铸票（INV-1）
+    %%      UP 防凭证泄漏（INV-4）
+    %% 1.4：EXEC_CHECKPOINT 防存档链篡改 / T_CLAIM 防并发重复分诊（INV-6）
+    %%      GATED 防 伪票/超范围工具调用（INV-3）/ T_KB_GUARD 防 KB 内容注入（INV-5）
+    %%      CB_LOCK 防并发重复分诊 SQL 兜底（INV-6）/ KB_STORE 防未审条目入检索面（INV-5）
+    %% 1.5：T_SELF_AUDIT 防 AI 口说无凭（FR-M4.4）/ T_SCAN_FIELD 防提示词注入（FR-S3.1/S3.2）
+    %%      T_LLM 防 上游病了硬猜（INV-1）/ T_CONFRONT 防 AI 幻觉/谎报
+    %%      UP 防 凭证泄漏/裸转发（INV-4/INV-1，1.5 细化为代理路由）
+    %% 1.6：SSE_RESUME 防 事件丢失/重复（INV-7 恰好一次）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class MAP,REJ,ERR,VAL_INPUT,DEDUP_RUNS,DEDUP_BATCH,DEDUP_KB,A_VALIDATE,RUN_VALIDATE,REG_LOOKUP,REG_TICKET,MINT_GUARD,GW_HUB,UP,EXEC_CHECKPOINT,T_CLAIM,GATED,T_KB_GUARD,CB_LOCK,KB_STORE,T_SELF_AUDIT,T_SCAN_FIELD,T_LLM,T_CONFRONT,SSE_RESUME guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
