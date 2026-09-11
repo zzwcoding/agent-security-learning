@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 4 大图 · 一次高危动作的审批之旅</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 4 大图 · 一次高危动作的审批之旅 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 4「一次高危动作的审批之旅」全链的代码落点索引：调查报告只把「建议隔离」写进案卷
+（调查 worker 结构上没有执行管，零开卡）；值班长在 chat 里真开口，意图经 <code>input_guard</code> 注入扫描 +
+<code>intent_gate</code> 三态裁决（OpenFGA 外置裁判 + 可见性收窄，soc1 对高危两族 100% deny）判为
+<code>require_approval</code> → <code>executeApproved</code> 一个事务开审批卡 + interrupt 冻结 run（<code>awaiting_approval</code>）→
+值班长批准，agent 出站找 gateway 铸一次性 ApprovalToken（HMAC 三段 · TTL 300s · 烧 params_hash），决定落卡 +
+resume 诉求落 <code>run_jobs</code> 后 200 秒回（<b>批准≠执行</b>）→ 分发循环 500ms tick 领走、信封链复核、execute 节点从头重跑 →
+验票闸五连（签名/时效/焚毁/工具/参数指纹）放行才执行 → 焚毁入 M2 坟场 + 卡盖执行章 + 审计四连；
+没人批的卡由 TTL 扫描作废（时间出的裁决也是裁决）。本场景数字：<b>7 步 / 46 个节点 / 17 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）； cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+≤500ms</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 4-1..4-7（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「隔离主机这个念头从哪来、为什么报告建议永远不开卡」→ <code>INV_SUGGEST → TL_WRITE</code> 对照 <code>CHAT_EP → INTENT_CLS</code>（4.1）。</li>
+  <li>想看「soc1 为什么连提请资格都没有、裁判停了为什么全拒」→ <code>GATE / FGA_CHK / FGA_WORLD</code>（4.2）。</li>
+  <li>想看「run 怎么停在半路几个小时还能被唤醒」→ <code>AWAIT → OPEN_CARD → ENVELOPE → T_CKPT</code>（4.3）。</li>
+  <li>想看「批准按钮按下到枪响之间发生了什么」→ <code>APR_EP → APR_MINT → GW_MINT → DECIDE → T_RUNJOBS → RESUME_JOB → RESUME_RUN → RE_AWAIT → AGATE → EXEC_ACT</code>（4.4/4.5）。</li>
+  <li>想看「用过的票怎么保证永远用不了、没人批的卡怎么收场」→ <code>USED_RD / T_USED / BURN / MARK / FIND_CARD</code> 与 <code>TTL_SCAN</code>（4.6/4.7）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（46 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧操作者（值班长/SOC1/教学脚本）：curl chat/approve/internal/runs、web 审批页按钮</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人的每个动作都走公开 REST 正门，与自动化同轨道</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP / APR_EP / ENQ_202</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV_SUGGEST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">调查报告建议生成：severity≥3 且有主机 → recommended_actions 写 isolate_host；🛡️ 防 AI 自行执行高危动作（INV-3 结构保证）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">调查 worker 类里没有 executeApproved——「只建议不动手」落在代码结构上，不落在提示词品格上</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TL_WRITE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TL_WRITE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">write_timeline：建议渲染进报告 markdown，add_timeline_entry 过 L1 闸落 M2 时间线——建议的最终归宿是案卷文字</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">到此为止、没有后续环节——建议与执行之间隔着读报告的人（建议/执行鸿沟的结构根）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_TIMELINE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/chat 对话正门：会话验签 401、SSE 同步流（chat 是唯一保留同步的 kind）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对话体验即产品：SSE 流本身就是回答，不能改成 202+另开流听</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GUARD_IN / INTENT_CLS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INTENT_CLS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">intent_classify 意图分类：fake=关键词规则 / real=LLM 经凭证代理；只提名 tool+confidence（低置信澄清反问不猜）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">参数走 deriveParams 确定性通道——模型想编参数都没有口子（聊天面是攻击者可自由输入的面）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">intent_gate decideIntent 三态裁决：①角色在册②工具在册③可见性收窄（A.2）④OpenFGA check+分级分道；🛡️ 防不可见越权与权限提升（INV-1/FR-M8.2/8.4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">可见≠可直查（两个正交的位）；写工具哪怕 FGA allow 对话面也只提请——Copilot 没有写手</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FGA_CHK / EXEC_SPLIT / AWAIT / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FGA_CHK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">fga-client 出站裁决客户端：非 200 抛错、回包非布尔抛错、超时/不可达/对牌不可读一律 deny；🛡️ 防 裁判病了放行（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">除「裁判明确说 allow」外一切都不是 allow——deny 覆盖 allow 在授权链上的形状</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FGA_WORLD（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_SPLIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">execute 节点分岔（FR-M8.4）：allow → gated 只读直查；require_approval → ctx.executeApproved；消息文本「已批准」不构成授权（INV-9）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分岔本身是防线：动作意图物理上进不了直查通道，对话历史翻遍也没有授权判定位</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_ALLOW / AWAIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_ALLOW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">allow 分支执行：gated L0 免票族（related_alerts 等），工具帧照常落账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">只读直查也走闸——闸是每次工具调用的唯一入口（闸体唯一拷贝）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">awaitApproval 无限循环（同步段）：findDecidableCard 查卡——DB 是唯一真相，不信框架回吞的 resume 值；pending 幂等再 interrupt</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LangGraph 唤醒时会把旧 resume 值回吞给 interrupt()，看起来「继续跑了」但决定可能没落——框架会骗人，数据库不会</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPEN_CARD / ENVELOPE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPEN_CARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">openApprovalCard 一个事务四件事：①run 状态门（非 running 409 整卡回滚）②INSERT 卡 pending+params_hash ③emitEvent approval_required ④审计 create；🛡️ 防 状态机外挂起与僵尸卡（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">原子性埋掉两种惨案：死卡（卡开着 run 终局）与无卡挂起（run 挂着无卡可批）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNS / T_APPROVALS / EV_APPR / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EV_APPR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">emitEvent approval_required：事务内落盘事件总线（非内存回调）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">值班长页面哪怕此刻断线，重连按游标补发照样收到（INV-7 不丢不重）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENVELOPE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">信封链 checkpointer：每 superstep sealEnvelope 盖印（hash 逐环相扣、stateRef 锁状态原始字节、连键序重排都算篡改）；🛡️ 防 检查点篡改（resume 必拒 INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">挂起的 run=暂停的授权支票，恢复的是 state 现场——验不过就不复活，绝不带被调包的现场执行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CKPT / SUSPEND / RESUME_RUN（复核）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SUSPEND</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">isSuspended/runFlow 收尾：invoke 返回带 __interrupt__ = 挂起；计费 steps/tokens 照记；二次挂起落回 awaiting_approval</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">挂起不是失败也不是完成——状态机与 web 观察面必须一致（budget 跨 resume 连续计费）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/approvals/:id/approve·reject：approver 必填 400（审批正门不留白）、非 pending 廉价预检 409；🛡️ 防 匿名批准与后到者白铸票（INV-9/10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">署名进审计（INV-9 真人）；预检省掉后到者白铸随即作废的票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先铸票后裁决：mintApprovalToken（tool/params 取自卡不取自请求）；失败 502 mint_failed 卡仍 pending 可重试；🛡️ 防「已批准无票」悬置态（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">顺序反了会死锁（卡非 pending 非 executed）；批的对象开卡时就冻住——想批 A 执行 B 请求里没有 B 的容身之处</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / DECIDE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DECIDE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">decideAndResume 决定落卡：UPDATE approved+token/token_jti（终态再裁 409 先到者赢）+ 审计 approve(user:duty_lead) + approval_decided 事件 + enqueueRunJob(resume) → 200 秒回</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">批准与执行解耦：产出就是两张表各多一行（approvals+run_jobs），执行归分发循环（批准≠执行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_RUNJOBS / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RESUME_JOB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">executeResumeJob：run 非 awaiting_approval → 陈旧诉求安静跳过；重铸 L1 任务票（票面无 L2）+ 重组 worker 图</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">排队期间 run 可能已被 TTL 判死——不硬走 409 的路；图不重组=薄径静默丢 L2（票 17 教训）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / RESUME_RUN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RESUME_RUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">resumeRun 两道门：状态门只有 awaiting_approval 能被唤醒（INV-10）+ 链门 restoreCheckpoint 整链复核；🛡️ 防 唤醒状态不对或现场被调包的 run（INV-10/1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先验货再放行：链被动时状态原样不动+FAILURE 审计（一个空格都不行）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENVELOPE（复核）/ RE_AWAIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RE_AWAIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">execute 节点从头重跑：awaitApproval 再查卡，approved+token → 带决定返回（同款 token 帧再说一遍=节点级重跑语义）；rejected → 走驳回分支</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LangGraph 语义是重跑整个节点不是从冻结行继续——事件流前后两帧一模一样不是 bug</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS（读）/ LOAD_USED / REJ_END</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LOAD_USED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">resolveUsed 进闸前装填：GET /internal/used-tokens/:jti（200=已焚/404=未焚/其余抛）；装填叠加取或，任一路说已焚必拒</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">闸是同步函数而焚毁真相在另一进程的库里——先问回来装进一次性读口，读口病了闸必须病</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">USED_RD / AGATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">verifyApproval 验票闸五连：验签→时效 exp 300s→焚毁 has(jti)→工具→参数指纹→案件绑定；403 六拒因；拒=DENIED 审计+抛错强杀；🛡️ 防 伪造/过期/重放/换参/跨案（INV-1/2/9）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">批什么执行什么的全部保证=执行前重算参数哈希跟票面对一下；验签在最前——伪造票第一关就死，轮不到碰共享资源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_ACT / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REJ_END</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">驳回分支：不进闸不执行不焚毁，M2 留 reject_reason，run 照常 completed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">驳回不是失败——node_exit 无工具帧=「执行没发生」看得见</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_ACT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">执行 action(params)：mock_edr isolated（演习弹在验票闸之后）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">mock 的位置保证「演习弹」不影响「枪栓流程」的教学价值：验票/焚毁/审计全真</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BURN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BURN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">burn(jti) 焚毁写口 fire-and-forget：POST /internal/used-tokens，失败只打日志不阻塞；兜底链=执行章→TTL 300s→账本补齐；🛡️ 防 token 重放（INV-2 用后即焚）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写读不对称：写失败在事后登记路径（有兜底），读失败在裁决前（必须病）——判据是失败发生在裁决前还是后</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">USED_WR / MARK</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MARK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">markApprovalExecuted 执行章：UPDATE executed_at + 审计 execute（记操作不记内容：tool/params_hash/jti）；🛡️ 防 同卡二次授权（一次性）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票面 used:false 只是声明、账本是跨进程真相、执行章是进程内权威——三处咬合才有三重保险</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_AUDIT / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FIND_CARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">findDecidableCard 查卡条件 executed_at IS NULL：已执行卡连「查卡」都不配；🛡️ 防 批准一次永久生效（一次性结构面）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">同一 run 再提请同样动作只能开新卡走新人审——「批准一次永久生效」在查询条件层焊死</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TTL_SCAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TTL 扫描先行（过期比干活急）：listExpiredPendingApprovals→expireApprovalCard；卡 expired+run 两步合法迁移 failed(approval_expired)+审计；竞态 409 下轮再看；🛡️ 防 过期提请被追批（时间出的裁决 INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审批的资格和意愿都会过期，系统必须替人记住——没有终局才是 bug</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS / T_RUNS / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CLAIM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">claimRunJobs 领任务：事务内 pending→claimed 防双吃；resume 同 run 未完结复用一条（去重）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">全系统唯一领单人；陈旧双批不叠加执行（队列层幂等，不住 HTTP 层）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RESUME_JOB / COMPLETE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">COMPLETE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">completeRunJob：成功失败都算消费完（毒丸不重试，重试归上游）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">任务完结、循环健康、错误只在日志面——与 autorun「不推游标=必然重试」哲学相反</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENQ_202</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /internal/runs（非 chat kind）：enqueueRunJob(start) 即 202 秒回 queued；actor 随任务落盘</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HTTP 请求替执行期背锅的翻转：落队即回，后台细嚼慢咽；异步后审计还得记到人头（票 39 先见）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECOVER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">recoverDispatcherState 重启收盘：claimed 没人认领→回 pending；孤儿 running→failed(orphaned_by_restart) 不重跑</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">重跑会让图从头重放节点、M2 时间线/审计重复留痕——宁可判死不重放</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS / T_RUNS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 runs：queued→running→awaiting_approval→completed/failed 终局必达；steps/tokens 跨 resume 连续计费</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">状态机是全部裁决的仲裁者：挂起/过期/审批竞态都先过它（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（web 轮询观察）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_APPROVALS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 approvals（审批卡）：pending→approved/rejected/expired 终态再裁 409；params+params_hash 指纹、token/token_jti/executed_at</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">卡是唯一真相：批准/驳回/过期都裁在卡上，节点重跑只认它</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT / RE_AWAIT / FIND_CARD（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_jobs：start/resume 任务 pending→claimed→done</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">秒回（202/批准）都只落表；分发循环全系统唯一领单人防双吃——回执与循环无触发关系</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CLAIM（读）/ COMPLETE（写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_events：node_enter/exit、tool_call/result、approval_required/decided、denied 帧</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">动作当场落账；SSE 每 100ms 读增量——表是事实、直播是视图（执行没发生=少一对工具帧）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（SSE 直播/回放）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CKPT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 checkpoints + checkpoint_writes：信封链逐环 hash 相扣；idx=-3 __interrupt__ 闹钟（value=卡 id）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">挂起态的全部真相在盘上——进程可以死，run 不会丢；resume 读闹钟拉起节点</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENVELOPE（写）/ RESUME_RUN（复核读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /internal/mint（type=approval_token）：HMAC 三段、九 claims、TTL 300s 烧 params_hash；SOC_HMAC_KEY 只在这里（agent 只求签不持钥）；缺钥 500 拒签、票型未知 400；🛡️ 防 fail-open 铸票（INV-1/INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">唯一签票方：agent 被攻破拿到的只是「请求铸票的能力」不是「自签授权书的能力」</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_MINT / RESUME_JOB（重铸 L1）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FGA_WORLD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">授权世界（内存存储 · setup-openfga.sh 幂等重建）：4 角色×4 族×17 工具两组元组（user→family can_execute、family→tool member_of），tupleToUserset 展开</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">授权是数据不是代码：改权限不发版、裁判独立部署、每次裁决天然可审计</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FGA_CHK（check 响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">USED_RD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GET /internal/used-tokens/:jti 读口：200=已焚/404=未焚/其余一切抛错；「查不到真相」≠「真相是没有」；🛡️ 防 读口病了放行重放（INV-1 fail-closed）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">一次性必须跨进程可信：卡在 agent 库、坟场在 M2 库，谁也伪造不了对方的账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_USED（读）/ LOAD_USED</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">USED_WR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /internal/used-tokens 写口：INSERT + recordAudit 同一个事务；UNIQUE 约束同 jti 二次登记 409 jti_exists；🛡️ 防 同票二次登记（INV-2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「烧过」和「记得烧过」是同一笔写（审计同库同事务）；UNIQUE 是闸全瞎时账本层的最后兜底</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_USED / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_USED</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 used_tokens（焚毁坟场 · INV-2）：跨进程重放真相；无 TTL 无清理永生（案底不过期）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">在不在坟场=执行有没有发生——坟场只收烧过的票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">USED_RD/USED_WR（读写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries · M2 总台账（INV-8）：一张卡四连 create→approve→execute→execute(used_token)</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审计真相源——事件流只是广播视图；谁批的、谁执行的、烧了哪张票串成铁案</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（对账只读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_TIMELINE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 timeline_entries（案件时间线）：调查报告+建议动作躺在这里（案卷文字）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">建议的物理归宿——与 approvals 表零外键零触发，鸿沟就落在这两张表之间</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">（web 案件页呈现）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GUARD_IN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /scan/injection（user_input 通道）：注入话术打标/拦截、DENIED 审计；停机 fail_closed 拒答；🛡️ 防 对话面提示词注入</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">拦话术的闸：无害消息也拒是对话面 fail-closed 的可用性账单（场景 5 主场预演）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAT_EP（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_APR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">web 审批页批准/驳回按钮（SSE 收 approval_required 弹卡）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">按钮背后就是 agent 的 approvals REST——web 不另立数据源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APR_EP</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["操作者（值班长/SOC1/教学脚本）<br/>curl REST · web 页按钮 · chat 对话"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        subgraph S41M["4.1 建议来源 · 进入:调查 write_timeline 落案卷 或 值班长 POST /api/v1/chat · 节拍:REST/SSE 一次一条 · 退出:报告建议止于案卷（零开卡）/ chat 意图交 intent_gate"]
+            direction TB
+            INV_SUGGEST["调查报告建议生成（fake 规则件）<br/>severity≥3 且有主机实体 → 建议 isolate_host<br/>调查 worker 类里没有 executeApproved<br/>🛡️ 防 AI 自行执行高危动作（INV-3 结构保证）"]
+            TL_WRITE["write_timeline：建议渲染进报告 markdown<br/>add_timeline_entry 过 L1 任务票闸<br/>落 M2 时间线——建议的最终归宿是案卷文字"]
+            CHAT_EP["POST /api/v1/chat（对话正门）<br/>会话验签 401 · SSE 同步流（chat 唯一保留）<br/>五站子图：input_guard→load_context→<br/>intent_classify→intent_gate→execute"]
+            INTENT_CLS["intent_classify 意图分类<br/>fake=关键词规则 / real=LLM 经凭证代理<br/>只提名 tool+confidence（低置信澄清反问）<br/>参数走 deriveParams 确定性推导"]
+        end
+        subgraph S42M["4.2 意图闸三态 · 进入:intent_classify 产出意图 · 节拍:每条消息一次 · 退出:allow 只读直查 / require_approval 转审批 / deny 拒绝"]
+            direction TB
+            GATE["intent_gate decideIntent 三态裁决<br/>①角色在册 ②工具在册 ③可见性收窄（A.2）<br/>④OpenFGA check + 分级分道<br/>可见≠可直查 · 写工具 allow 也只提请<br/>🛡️ 防不可见越权与权限提升（INV-1/FR-M8.2/8.4）"]
+            FGA_CHK["fga-client 出站裁决客户端<br/>非 200 抛错 / 回包非布尔抛错<br/>超时/不可达/对牌不可读一律 deny<br/>🛡️ 防 裁判病了放行（INV-1 fail-closed）"]
+            EXEC_SPLIT["execute 节点分岔（FR-M8.4）<br/>allow → gated 只读直查<br/>require_approval → ctx.executeApproved<br/>消息文本「已批准」不构成授权（INV-9）"]
+            EXEC_ALLOW["allow 分支执行<br/>gated L0 免票族（related_alerts 等）<br/>工具帧照常落账"]
+        end
+        subgraph S43M["4.3 挂起与审批卡 · 进入:require_approval → ctx.executeApproved · 节拍:同步段一次 · 退出:开卡+interrupt 冻结 → run awaiting_approval"]
+            direction TB
+            AWAIT["awaitApproval 无限循环（同步段）<br/>findDecidableCard 查卡——DB 是唯一真相<br/>不信框架回吞的 resume 值<br/>pending 幂等再 interrupt 不重复开卡"]
+            OPEN_CARD["openApprovalCard 一个事务四件事<br/>①run 状态门（非 running 409 整卡回滚）<br/>②INSERT 卡 pending+params_hash ③approval_required ④审计<br/>🛡️ 防 状态机外挂起与僵尸卡（INV-10）"]
+            EV_APPR["emitEvent approval_required<br/>事务内落盘事件总线（非内存回调）<br/>断线重连按游标补发（INV-7）"]
+            ENVELOPE["信封链 checkpointer（EnvelopeCheckpointSaver）<br/>每 superstep sealEnvelope 盖印：hash 逐环相扣<br/>stateRef 锁状态原始字节 · 连键序重排都算篡改<br/>🛡️ 防 检查点篡改（resume 必拒 INV-1）"]
+            SUSPEND["isSuspended/runFlow 收尾<br/>invoke 返回带 __interrupt__ = 挂起<br/>计费 steps/tokens 照记 · 二次挂起落回 awaiting_approval"]
+        end
+        subgraph S44M["4.4 批准铸票 · 进入:值班长 POST /api/v1/approvals/:id/approve · 节拍:REST 一次一卡 · 退出:approved+token 落卡+resume 入队 · 200 秒回（批准≠执行）"]
+            direction TB
+            APR_EP["POST /api/v1/approvals/:id/approve · /reject<br/>approver 必填 400（审批正门不留白 INV-9）<br/>廉价预检：非 pending 直接 409<br/>🛡️ 防 匿名批准与后到者白铸票（INV-9/10）"]
+            APR_MINT["先铸票后裁决<br/>mintApprovalToken（tool/params 取自卡不取自请求）<br/>失败 502 mint_failed 卡仍 pending 可重试<br/>🛡️ 防「已批准无票」悬置态（INV-1）"]
+            DECIDE["decideAndResume 决定落卡<br/>UPDATE approved+token/token_jti（终态再裁 409）<br/>审计 approve（actor=user:duty_lead）+approval_decided 事件<br/>→ enqueueRunJob(resume) → 200 秒回"]
+        end
+        subgraph S45M["4.5 resume 验票 · 进入:run_jobs 出现 resume 任务 · 节拍:分发循环 500ms tick · 退出:闸 allow → 执行 / 403 拒因 → DENIED 审计+强杀"]
+            direction TB
+            RESUME_JOB["executeResumeJob<br/>run 非 awaiting_approval → 陈旧诉求安静跳过<br/>重铸 L1 任务票（票面无 L2 · INV-3）<br/>重组 worker 图（缺位=薄径静默丢 L2）"]
+            RESUME_RUN["resumeRun 两道门<br/>状态门：只有 awaiting_approval 能被唤醒（INV-10）<br/>链门：restoreCheckpoint 整链复核<br/>🛡️ 防 唤醒状态不对或现场被调包的 run（INV-10/1）"]
+            RE_AWAIT["execute 节点从头重跑<br/>awaitApproval 再查卡：approved+token → 带决定返回<br/>（同款 token 帧再说一遍=节点级重跑语义）<br/>rejected → 走驳回分支"]
+            LOAD_USED["resolveUsed 进闸前装填<br/>GET /internal/used-tokens/:jti<br/>200=已焚 / 404=未焚 / 其余抛<br/>装填叠加取或：任一路说已焚必拒"]
+            AGATE["verifyApproval 验票闸五连裁决<br/>验签→时效 exp 300s→焚毁 has(jti)→工具→参数指纹→案件绑定<br/>403 六拒因：signature_invalid/token_expired/token_used/<br/>params_mismatch/scope_insufficient/no_ticket（+require_approval）<br/>拒=DENIED 审计+抛错强杀<br/>🛡️ 防 伪造/过期/重放/换参/跨案（INV-1/2/9）"]
+            REJ_END["驳回分支：不进闸不执行不焚毁<br/>M2 留 reject_reason · run 照常 completed<br/>node_exit 无工具帧=执行没发生看得见"]
+        end
+        subgraph S46M["4.6 焚毁与一次性 · 进入:验票闸 allow · 节拍:执行收尾一次 · 退出:坟场落账+卡盖执行章+审计四连"]
+            direction TB
+            EXEC_ACT["执行 action(params)<br/>mock_edr isolated（演习弹在验票闸之后）"]
+            BURN["burn(jti) 焚毁写口 fire-and-forget<br/>POST /internal/used-tokens 失败只打日志不阻塞<br/>兜底链：执行章→TTL 300s→账本补齐<br/>🛡️ 防 token 重放（INV-2 用后即焚）"]
+            MARK["markApprovalExecuted 执行章<br/>UPDATE approvals SET executed_at<br/>审计 execute 记操作不记内容（tool/params_hash/jti）<br/>🛡️ 防 同卡二次授权（一次性）"]
+            FIND_CARD["findDecidableCard 查卡排除已执行<br/>WHERE executed_at IS NULL<br/>再提请同样动作必须开新卡走新人审<br/>🛡️ 防 批准一次永久生效（一次性结构面）"]
+        end
+        subgraph S47M["4.7 保质期与队列 · 进入:agent 后台常驻 · 节拍:dispatchOnce 500ms 一轮 · 退出:过期裁决 / 任务 done / 循环不崩"]
+            direction TB
+            TTL_SCAN["TTL 扫描先行（过期比干活急）<br/>listExpiredPendingApprovals→expireApprovalCard<br/>卡 expired+run 两步合法迁移 failed(approval_expired)<br/>竞态 409 下轮再看 · 循环不崩<br/>🛡️ 防 过期提请被追批（时间出的裁决 INV-10）"]
+            CLAIM["claimRunJobs 领任务<br/>事务内 pending→claimed 防双吃<br/>resume 同 run 未完结复用一条（去重）"]
+            COMPLETE["completeRunJob<br/>成功失败都算消费完（毒丸不重试）<br/>错误只在日志面 · 循环健康"]
+            ENQ_202["POST /internal/runs（非 chat kind）<br/>enqueueRunJob(start) 即 202 秒回 queued<br/>actor 随任务落盘（审计记到人头）"]
+            RECOVER["recoverDispatcherState 重启收盘<br/>claimed 没人认领→回 pending<br/>孤儿 running→failed(orphaned_by_restart) 不重跑"]
+        end
+        subgraph A_DB["agent 存储（better-sqlite3 · agent.sqlite）"]
+            T_RUNS[("表 runs<br/>queued→running→awaiting_approval→… 终局必达<br/>steps/tokens 跨 resume 连续计费")]
+            T_APPROVALS[("表 approvals（审批卡）<br/>pending→approved/rejected/expired 终态再裁 409<br/>params+params_hash 指纹 · token/token_jti/executed_at")]
+            T_RUNJOBS[("表 run_jobs<br/>start/resume 任务 pending→claimed→done")]
+            T_RUNEVENTS[("表 run_events<br/>approval_required/decided · tool_call/result 帧<br/>SSE 每 100ms 读增量（表是事实 直播是视图）")]
+            T_CKPT[("表 checkpoints + checkpoint_writes<br/>信封链逐环 hash · idx=-3 __interrupt__ 闹钟（value=卡 id）")]
+        end
+    end
+
+    subgraph GW["容器 gateway（FastAPI · :8002）"]
+        GW_MINT["POST /internal/mint（type=approval_token）<br/>HMAC 三段 · 九 claims · TTL 300s 烧 params_hash<br/>SOC_HMAC_KEY 只在这里（agent 只求签不持钥）<br/>缺钥 500 拒签 · 票型未知 400<br/>🛡️ 防 fail-open 铸票（INV-1/INV-4）"]
+    end
+
+    subgraph FGA["容器 openfga（官方镜像 · 宿主 18080）"]
+        FGA_WORLD[("授权世界（内存存储 · setup-openfga.sh 幂等重建）<br/>4 角色×4 族×17 工具两组元组<br/>user→family can_execute · family→tool member_of<br/>tupleToUserset 展开 · 授权是数据不是代码")]
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        USED_RD["GET /internal/used-tokens/:jti 读口<br/>200=已焚 / 404=未焚 / 其余一切抛错<br/>「查不到真相」≠「真相是没有」<br/>🛡️ 防 读口病了放行重放（INV-1 fail-closed）"]
+        USED_WR["POST /internal/used-tokens 写口<br/>INSERT + recordAudit 同一个事务<br/>UNIQUE 约束：同 jti 二次登记 409 jti_exists<br/>🛡️ 防 同票二次登记（INV-2）"]
+        T_USED[("表 used_tokens（焚毁坟场 · INV-2）<br/>跨进程重放真相 · 无 TTL 永生（案底不过期）<br/>在不在坟场=执行有没有发生")]
+        T_AUDIT[("表 audit_entries · M2 总台账（INV-8）<br/>一张卡四连：create→approve→execute→execute(used_token)")]
+        T_TIMELINE[("表 timeline_entries（案件时间线）<br/>调查报告+建议动作躺在这里（案卷文字）")]
+    end
+
+    subgraph GUARDS["容器 guards（FastAPI · llm-guard+Presidio · :8001）"]
+        GUARD_IN["POST /scan/injection（user_input 通道）<br/>注入话术打标/拦截 · DENIED 审计<br/>停机 fail_closed 拒答（对话面全关门）<br/>🛡️ 防 对话面提示词注入"]
+    end
+
+    subgraph WEB["容器 web（Vite + React + antd · :5173）"]
+        WEB_APR["审批页批准/驳回按钮<br/>SSE 收 approval_required 弹卡<br/>背后是 agent approvals REST"]
+    end
+
+    %% ===== 4.1 建议来源 =====
+    INV_SUGGEST -- "severity≥3 且有主机 → 建议写进报告（case_flow 调查子图内 · 场景 2 主场）" --> TL_WRITE
+    TL_WRITE -. "请求 POST /api/v1/cases/:id/timeline（add_timeline_entry 过 L1 闸）<br/>到此为止——没有后续环节 · 跨容器→case-backend:3002" .-> T_TIMELINE
+    OPERATOR -. "请求 POST :3003/api/v1/chat（Bearer 会话票）message+case_id<br/>T+0s: SSE 流开 · 异常：无会话 401（连 run 都不建）· 跨容器→agent:3003" .-> CHAT_EP
+    CHAT_EP -. "请求 POST /scan/injection 通道=user_input<br/>裁决 pass/block · 停机 fail_closed 拒答 · 跨容器→guards:8001" .-> GUARD_IN
+    GUARD_IN -. "响应 score+action<br/>block → denied 帧+DENIED 审计 拒答收场" .-> CHAT_EP
+    CHAT_EP -- "验签过 → 五站子图" --> INTENT_CLS
+    INTENT_CLS -- "意图 tool+confidence · 参数 deriveParams 推导（LLM 不编参数）" --> GATE
+
+    %% ===== 4.2 意图闸三态 =====
+    GATE -. "①②③ 收窄（纯内存查表）<br/>未知角色/未知工具/不可见 → deny 并解释<br/>soc1×isolate_host 死在可见性这关（100% deny）" .-> GATE
+    GATE -- "④ 可见 → 问裁判" --> FGA_CHK
+    FGA_CHK -. "请求 POST /stores/:id/check（can_execute · 超时即抛）<br/>跨容器→openfga:18080" .-> FGA_WORLD
+    FGA_WORLD -. "响应 allowed 布尔<br/>tupleToUserset：tool→family→角色顺藤摸瓜" .-> FGA_CHK
+    FGA_CHK -- "L0+allow → allow / L1·L2 → require_approval（FGA deny 是预期答案）<br/>其余一律 deny（裁判病了 deny 覆盖 allow）" --> GATE
+    GATE -- "state=allow" --> EXEC_SPLIT
+    GATE -- "state=require_approval → ctx.executeApproved（开卡挂起）" --> AWAIT
+    GATE -. "state=deny → denied 帧+DENIED 审计（run 照常走完 零卡）" .-> T_RUNEVENTS
+    GATE -. "裁决落审计 intent_gate（decision/reason 逐字）· 跨容器→case-backend:3002" .-> T_AUDIT
+    EXEC_SPLIT -- "allow → gated 只读直查（L0 免票）" --> EXEC_ALLOW
+
+    %% ===== 4.3 挂起与审批卡 =====
+    AWAIT -- "查无未决卡 → 开卡（一个事务）" --> OPEN_CARD
+    OPEN_CARD -- "① 状态门 running→awaiting_approval" --> T_RUNS
+    OPEN_CARD -- "② INSERT 卡 pending（params_hash 指纹烙上）" --> T_APPROVALS
+    OPEN_CARD -- "③ emitEvent approval_required（事务内落盘）" --> EV_APPR
+    OPEN_CARD -. "④ 审计 create（actor=m3:supervisor）· 跨容器→case-backend:3002" .-> T_AUDIT
+    EV_APPR -- "帧落事件总线" --> T_RUNEVENTS
+    T_RUNEVENTS -. "SSE GET /api/v1/events/stream<br/>100ms 增量 · 断线按 after 游标补发（INV-7）· 审批页弹卡" .-> WEB_APR
+    AWAIT -- "interrupt(card.id) 同步抛 GraphInterrupt → 图冻结本 superstep" --> ENVELOPE
+    ENVELOPE -- "sealEnvelope 盖印落盘（每 superstep 一环）" --> T_CKPT
+    ENVELOPE -. "invoke 返回带 __interrupt__ → isSuspended 判挂起" .-> SUSPEND
+    SUSPEND -- "saveProgress 计费照记 · 二次挂起落回 awaiting_approval" --> T_RUNS
+    AWAIT -. "盘上静物：进程无任何东西为此 run 转<br/>闹钟 idx=-3 value=卡 id（进程可死 run 不丢）" .-> T_CKPT
+
+    %% ===== 4.4 批准铸票 =====
+    WEB_APR -. "读 GET :3003/api/v1/approvals?status=pending<br/>跨容器→agent:3003" .-> APR_EP
+    OPERATOR -. "请求 POST :3003/api/v1/approvals/:id/approve (approver=duty_lead)<br/>T+0s: 200 秒回 run_status=awaiting_approval（批准≠执行）<br/>异常：缺名 400 / 非 pending 409 / 铸票败 502 · 跨容器→agent:3003" .-> APR_EP
+    APR_EP -- "预检过 → 先铸票后裁决" --> APR_MINT
+    APR_MINT -. "请求 POST :8002/internal/mint type=approval_token<br/>tool/params 取自卡不取自请求 · 跨容器→gateway:8002" .-> GW_MINT
+    GW_MINT -. "响应 ap_… HMAC 三段 九 claims TTL 300s<br/>异常：缺钥 500 / 缺字段 400" .-> APR_MINT
+    APR_MINT -- "票在手 → 落决定（同一事务）" --> DECIDE
+    DECIDE -- "UPDATE approved+token/token_jti（终态再裁 409 先到者赢）" --> T_APPROVALS
+    DECIDE -- "enqueueRunJob(resume) · 200 秒回（产出=两张表各多一行）" --> T_RUNJOBS
+    DECIDE -. "审计 approve（actor=user:duty_lead 真人）+ approval_decided 事件 · 跨容器→case-backend:3002" .-> T_AUDIT
+
+    %% ===== 4.5 resume 验票 =====
+    T_RUNJOBS -. "T+≤500ms: 分发循环 tick 领走 · pending→claimed 事务内翻<br/>（200 秒回与循环无触发关系——循环只认表）" .-> CLAIM
+    CLAIM -- "resume 任务 → executeResumeJob" --> RESUME_JOB
+    RESUME_JOB -. "请求 POST :8002/internal/mint（重铸 L1 任务票 900s 票面无 L2）<br/>跨容器→gateway:8002" .-> GW_MINT
+    RESUME_JOB -- "重组 worker 图 → resumeRun" --> RESUME_RUN
+    RESUME_RUN -- "状态门：非 awaiting_approval 拒唤醒（INV-10）" --> T_RUNS
+    RESUME_RUN -. "链门：restoreCheckpoint 整链复核<br/>篡改任意字节 → 拒恢复+FAILURE 审计（checkpoint_tampered）" .-> ENVELOPE
+    RESUME_RUN -- "两门全过 → Command(resume) 唤醒 execute 从头重跑" --> RE_AWAIT
+    RE_AWAIT -. "读 卡 findDecidableCard（DB 唯一真相）" .-> T_APPROVALS
+    RE_AWAIT -- "approved+token → 进闸前装填" --> LOAD_USED
+    RE_AWAIT -. "卡 rejected → 驳回分支" .-> REJ_END
+    LOAD_USED -. "读 GET :3002/internal/used-tokens/:jti<br/>200=已焚 / 404=未焚 / 其余抛（哑读口 闸内一碰就炸）· 跨容器→case-backend:3002" .-> USED_RD
+    USED_RD -. "读 SELECT used_tokens WHERE jti" .-> T_USED
+    LOAD_USED -- "装填完 → 验票闸" --> AGATE
+    AGATE -- "五连全过 → 放行执行" --> EXEC_ACT
+    AGATE -. "任一不过：403 拒因 + DENIED 审计 + 抛错强杀（run failed 不吞错）<br/>读口病了归 signature_invalid——宁拒好票不赌重放" .-> T_AUDIT
+    REJ_END -. "node_exit 无工具帧（执行没发生看得见）" .-> T_RUNEVENTS
+
+    %% ===== 4.6 焚毁与一次性 =====
+    EXEC_ACT -- "T+0s: 枪响 mock_edr isolated → 用后即焚" --> BURN
+    BURN -. "写 POST :3002/internal/used-tokens fire-and-forget<br/>失败只打日志不阻塞（兜底：执行章+TTL）· 跨容器→case-backend:3002" .-> USED_WR
+    USED_WR -- "INSERT used_tokens + 审计同事务 · UNIQUE 二焚 409" --> T_USED
+    USED_WR -. "同事务审计 execute（object_type=used_token）" .-> T_AUDIT
+    BURN -- "焚毁发出 → 盖执行章" --> MARK
+    MARK -- "UPDATE executed_at（记操作不记内容）" --> T_APPROVALS
+    MARK -. "审计 execute（tool/params_hash/jti · 跨容器→case-backend:3002）" .-> T_AUDIT
+    MARK -- "tool_result 事件（带 approval_id+result）" --> T_RUNEVENTS
+    RE_AWAIT -. "查卡条件 executed_at IS NULL（已执行卡连查都不配）" .-> FIND_CARD
+    FIND_CARD -. "读 SELECT … run+tool+params_hash+executed_at IS NULL" .-> T_APPROVALS
+
+    %% ===== 4.7 保质期与队列 =====
+    OPERATOR -. "请求 POST :3003/internal/runs kind=case_flow<br/>T+0s: 202 秒回 queued（执行在后台）· 跨容器→agent:3003" .-> ENQ_202
+    ENQ_202 -- "enqueueRunJob(start)（actor 随任务落盘）" --> T_RUNJOBS
+    T_APPROVALS -. "读 listExpiredPendingApprovals（pending 且 created_at 早于截点）" .-> TTL_SCAN
+    TTL_SCAN -- "UPDATE 卡 expired（终态再裁 409 竞态下轮再看）" --> T_APPROVALS
+    TTL_SCAN -- "run 终局：awaiting_approval→running→failed(approval_expired)" --> T_RUNS
+    TTL_SCAN -. "审计 expire（actor=m3:dispatcher）+ approval_decided(expired) 事件 · 跨容器→case-backend:3002" .-> T_AUDIT
+    CLAIM -- "执行完（成败都算）" --> COMPLETE
+    COMPLETE -- "UPDATE done（毒丸不重试 重试归上游）" --> T_RUNJOBS
+    RECOVER -. "启动时：claimed 没人认领→回 pending" .-> T_RUNJOBS
+    RECOVER -. "孤儿 running→failed(orphaned_by_restart)（不重跑防重复留痕）" .-> T_RUNS
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 4.1：INV_SUGGEST 防 AI 自行执行高危动作（INV-3 结构保证）
+    %%      GUARD_IN 防 对话面提示词注入（user_input 通道 fail-closed）
+    %% 4.2：GATE 防不可见越权与权限提升（INV-1/FR-M8.2/8.4）/ FGA_CHK 防 裁判病了放行（INV-1）
+    %% 4.3：OPEN_CARD 防 状态机外挂起与僵尸卡（INV-10）/ ENVELOPE 防 检查点篡改（INV-1）
+    %% 4.4：APR_EP 防 匿名批准与后到者白铸票（INV-9/10）/ APR_MINT 防「已批准无票」悬置态（INV-1）
+    %%      GW_MINT 防 fail-open 铸票（INV-1/INV-4）
+    %% 4.5：RESUME_RUN 防 唤醒状态不对或现场被调包的 run（INV-10/1）
+    %%      AGATE 防 伪造/过期/重放/换参/跨案（INV-1/2/9）
+    %% 4.6：BURN 防 token 重放（INV-2）/ MARK 防 同卡二次授权（一次性）/ FIND_CARD 防 批准一次永久生效
+    %% 4.7：TTL_SCAN 防 过期提请被追批（INV-10）
+    %% case-backend：USED_RD 防 读口病了放行重放（INV-1 fail-closed）/ USED_WR 防 同票二次登记（INV-2）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class INV_SUGGEST,GATE,FGA_CHK,OPEN_CARD,ENVELOPE,APR_EP,APR_MINT,RESUME_RUN,AGATE,BURN,MARK,FIND_CARD,TTL_SCAN,GW_MINT,USED_RD,USED_WR,GUARD_IN guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
