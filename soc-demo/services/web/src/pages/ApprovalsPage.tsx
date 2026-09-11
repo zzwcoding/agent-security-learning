@@ -25,6 +25,10 @@ export default function ApprovalsPage({ go }: { go: (route: string) => void }) {
   const [deciding, setDeciding] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<ApprovalCard | null>(null);
   const [reason, setReason] = useState("");
+  // 狗粮票 58：审批口令（外部模式 = 椒图 APPROVER_TOKEN，批准人身份由椒图口令证明，
+  // 随 approve/reject 走 x-approver-token 头；内部模式留空 → 头不发后端原路径）。
+  // 页面级 state，一处组件改动不引状态库。
+  const [approverToken, setApproverToken] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -51,6 +55,9 @@ export default function ApprovalsPage({ go }: { go: (route: string) => void }) {
         approve,
         approver: session?.username ?? "unknown",
         ...(approve ? {} : { reason: why }),
+        // 票 58：口令留空不发头（内部模式逐字节现状）；外部模式必填——椒图 401 时
+        // decideErrorText 会透出 unauthorized 提示补口令重试
+        ...(approverToken.trim() ? { approverToken: approverToken.trim() } : {}),
       });
       message.success(
         `${approve ? "已批准（ApprovalToken 已铸）" : "已驳回"}：run ${r.runId} 状态 → ${r.runStatus ?? "?"}`,
@@ -192,6 +199,15 @@ export default function ApprovalsPage({ go }: { go: (route: string) => void }) {
         <Button onClick={() => void load()} loading={loading}>
           刷新
         </Button>
+        {/* 狗粮票 58：审批口令。外部模式（JIAOTU_GATEWAY_URL）下必填——批准人身份由
+            椒图口令证明，soc-demo 只中继不保管；内部模式留空即现状。 */}
+        <Input.Password
+          placeholder="审批口令（外部模式必填，内部模式留空）"
+          value={approverToken}
+          onChange={(e) => setApproverToken(e.target.value)}
+          style={{ width: 260 }}
+          autoComplete="off"
+        />
         <Typography.Text type="secondary">
           待审批 {pendingCount} 张 · 每 {POLL_MS / 1000}s 轮询（卡翻面/执行标记自动刷回）
         </Typography.Text>

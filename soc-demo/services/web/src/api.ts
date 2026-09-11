@@ -176,15 +176,20 @@ export interface DecisionResult {
 }
 
 /** 裁决（批准/驳回）。approver 必填（INV-8 审计要记是谁）；驳回可带 reason。
- *  并发后到者 → 409 ApiError("InvalidTransition")（statemachine INV-10 仲裁）。 */
+ *  并发后到者 → 409 ApiError("InvalidTransition")（statemachine INV-10 仲裁）。
+ *  狗粮票 58：approverToken 选填（外部模式 = 椒图审批口令，放 x-approver-token 头
+ *  透传给裁决真相方；内部模式留空 → 头不发，后端原路径不变）。 */
 export function decideApproval(
   id: string,
-  d: { approve: boolean; approver: string; reason?: string },
+  d: { approve: boolean; approver: string; reason?: string; approverToken?: string },
 ): Promise<DecisionResult> {
   const path = `/api/v1/approvals/${encodeURIComponent(id)}/${d.approve ? "approve" : "reject"}`;
   const body: Record<string, unknown> = { approver: d.approver };
   if (!d.approve && d.reason) body.reason = d.reason;
-  return request<Record<string, unknown>>(path, { method: "POST", body: JSON.stringify(body) }).then(
+  // 票 58：init.headers 整体覆盖默认头（startRun 同款注意），content-type 自己补齐
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (d.approverToken) headers["x-approver-token"] = d.approverToken;
+  return request<Record<string, unknown>>(path, { method: "POST", headers, body: JSON.stringify(body) }).then(
     (r) => ({
       approvalId: String(r.approval_id ?? id),
       runId: String(r.run_id ?? ""),
