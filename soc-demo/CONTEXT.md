@@ -25,6 +25,9 @@
 - **深模块（deep module）**：简单接口 + 大量隐藏实现；本仓库的组织原则
 - **回放（replay）**：`scripts/replay.ts` 扮演外部 Wazuh，把 `fixtures/alerts/` 的告警按速率 POST 进 webhook；演示布景入口。推模式、不进 compose、绝不直接塞数据库
 - **防线（D1–D8）**：八道安全防线，编号与对照见 PRD §7.1
+- **狗粮接入（dogfood）**：soc-demo 作为椒图（agentjiaotu，独立安全网关，本仓安全思想的 TS 产品版）的第一个外部客户——workers 的 LLM 出站/票据申领/审批/焚毁全量改走椒图的接入形态。挂 `JIAOTU_GATEWAY_URL` env 开关，未设=默认形态逐字节不变。设计源：椒图仓 `docs/research/2026-09-10-狗粮全量接入设计.md`
+- **防线换防**：狗粮形态的叙事口径——网关侧安全职能（LLM 凭证/铸票/审批/焚毁）交棒椒图，soc-demo 保留消费侧验票闸、KB 人审与业务审计；六幕剧本在此形态下重跑。定位是"原型向产品交棒"非"功能新增"：soc-demo 内部安全面=原型版教学资产，默认形态完整保留
+- **jiaotu profile**：compose 第四个 profile——全外接形态：起椒图网关、**不启 soc-demo 内部 gateway**（四件安全职能运行面整体交棒）；默认形态=现九服务拓扑不动。两形态同仓共存靠配置表达，不开 git 分支
 
 ## 语义核心
 
