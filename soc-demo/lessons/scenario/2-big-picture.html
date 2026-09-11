@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 2 大图 · 调查与富化</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 2 大图 · 调查与富化 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 2「调查与富化」全链的代码落点索引：一条 <code>case_flow</code> run 拉起后，链上两个外壳节点
+<code>investigate_case</code>（LLM 驱动的调查子图：load_case→plan→tool_loop→report_llm→write_timeline）与
+<code>enrich_case</code>（零 LLM 的确定性富化流水线）先后跑完，报告双形态落进案件时间线，最后 web 把
+「时间线条目 + 审批卡」两路数据装配成一条时间线呈现。本场景数字：<b>5 步 / 46 个节点 / 11 道安全闸</b>
+（红描边 🛡️）。（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）； cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>T+0s / T+100ms</code> = 时序前缀（一条边一个动作，跨时刻已拆边）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 2-1..2-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「一条 curl 怎么变成一条 run、202 秒回之后谁接手」→ 从 <code>OPERATOR → RUN_GATE → RUN_QUEUE → T_RUNJOBS → DISP_CLAIM</code>（2.1）。</li>
+  <li>想看「LLM 为什么不会无限烧钱/原地兜圈」→ <code>TOOL_LOOP</code> 周边的三条缰绳 <code>REIN_MAX / REIN_REPEAT / REIN_SIG</code>（2.2）。</li>
+  <li>想看「说谎的报告怎么被拦、建议为什么动不了手」→ <code>REPORT_PARSE → REPORT_DEGRADE</code> 与 <code>WRITE_TIMELINE</code>（2.3）。</li>
+  <li>想看「密级高的数据为什么一个字节都出不了门」→ <code>TLP_GATE</code> 与 <code>TI_FIX</code>（2.4）。</li>
+  <li>想看「值班长看到的那条时间线怎么装配、为什么不会造假」→ <code>CB_READ_EP → ASM_TL → KIND_META / LEVELS_OF → CASE_PAGE</code>（2.5）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（46 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧操作者/自动化脚本：POST :3003/internal/runs 直拉 case_flow</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">链上入口只有 TP 建案一种；旧案重查靠直拉入口，与人手同一条正门</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHAIN_SRC</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">链上入口：alert_flow 分诊 TP 建案分支写 state.case_id，同 run 接力调查富化</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">一张票伺候全链（票 36），避免建案后二次授权</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /internal/runs 正门：intake=case 校验 case_id 必填；🛡️ 防 非法拉起（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">工种拉起唯一入口，先验型再立案；只查非空不查存在性（捣乱 A 伏笔）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG_CASE / RUN_QUEUE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG_CASE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run-kinds 注册表 case_flow 描述符：intake/票面/图工厂（run-kinds.ts:220-232）；🛡️ 防 worker 自作主张（INV-3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票面真相源在注册表：sub=agent:case_flow、scope=case:read/write、allowedTools=调查∪富化并集，并集无 L2</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_GATE（读）/ EXEC_START（读票面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_QUEUE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">createRun（runs 表 queued+审计 create）→ enqueueRunJob(start) 落 run_jobs → 202 秒回</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">202 是给调用方的回执，与分发循环无触发关系；活躺在表里等 tick（时序接缝）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS / DISP_CLAIM</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_jobs：start 任务 pending→claimed 事务内翻状态</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分发循环唯一领单人全系统只 1 个，数据库原子性防双吃/防重启窗口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISP_CLAIM（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISP_CLAIM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分发循环每 100ms tick（app.ts:48）领任务（run-dispatcher.ts:85-98,263-272）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">事件驱动的「不睡觉的人」；任务先落表、循环再领，最多 100ms 接手</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_START</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_START</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">executeStartJob：读注册表票面 → 铸票 → 组图 → 开跑（app.ts:373-413）；铸票时 caseId 随 kind 绑案（alert_flow=null）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票从出生绑定案件，动别的案子闸不认（FR-S2.2）；铸票失败 → failed(mint_failed) 不留无票奔跑</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MINT_CALL / STATE_SEAM</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MINT_CALL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">出站 adapter mintTaskTicket：POST :8002/internal/mint · 2s 超时（token-ports.ts:69-79）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">agent 不持签名密钥，出站授权全从 gateway 领（INV-4 凭证边界）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">gateway /internal/mint：HMAC 三段任务票 TTL 900s；缺密钥 500 拒签；🛡️ 防 fail-open 铸票（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">唯一签票方；票型 b64url.b64url.hex（教学变体非 JWT）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MINT_CALL（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">STATE_SEAM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">runner initialState 写交接态 {kind, case_id}（graph.ts:484-486）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">一句话决定后面每站去哪找实体；直拉/链上两种入口在此汇合</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_CHAIN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">外壳交接节点两格 investigate_case→enrich_case（case-flow.ts:31-76）；caseIdOf 无案号整链空转</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">两子图各有 load_case 同名节点进不了同一张 StateGraph；外壳只露两格，内部帧带内部节点名</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV_LOAD / ENR_LOAD</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV_LOAD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">调查 load_case：getCaseDetail 直读 + get_alert 亮票取日期锚点（flow.ts:290-307）→ caseViewOf 折简报（134-153）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">装配读不经 LLM 工具面；查 2023 年的事就要用 2023 年的窗口，锚点取告警日期而非建案墙钟</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP（跨容器红虚线）/ INV_PLAN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV_PLAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">plan：LLM 列任务清单 + plan 审计事件（flow.ts:308-320）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">先列清单再动手；fake 按实体优先级排 pivot/聚合/KB 核验，消费方式 fake/real 同契约</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TOOL_LOOP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REL_ALERT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">related_alerts 执行体：listAlerts 拉全量 → 时间窗+scope 过滤（m2.ts:116-146）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">确定性纯函数可复算；total 真命中数、alerts 按 max_results 截断——诚实接口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP（读，跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TOOL_LOOP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">tool_loop 循环骨架：decide 裁决 → 三道关 → 执行 → 观察（flow.ts:322-422）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LLM 只准决定、代码才准动手；decide 输入是滚雪球的观察史（缰绳三治理对象）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_REPEAT / REIN_SIG / GATED_S2 / REIN_CTX / REPORT_PROMPT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_MAX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">缰绳一 max_steps=20 用尽 → 循环正常退出，incomplete 落账 + investigation_truncated 审计（flow.ts:403-420）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">截断不是枪毙：收队写报告并写明没巡完，比谎报全巡完诚实</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_PROMPT（incomplete 提示）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_REPEAT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">缰绳二 防打转：tool+paramsHash 指纹重复拒（flow.ts:347-361）；🛡️ 防 原地兜圈烧钱</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">被拒不烧后端，错误观察喂回让 LLM 换路；同工具换参数的合理重查不拦</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TOOL_LOOP（观察喂回）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_SIG</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">签名契约 validateToolCall：siem_query 强制 time_window 无默认值（prompt.ts:80-113）；🛡️ 防 查全库撑爆上下文</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">在源头把查询规模钉死在窗口内——上下文治理最好的方式是让大结果根本不发生</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_S2（违约打回不执行）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_S2</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">makeGatedCall 唯一动作闸：亮票→验票→执行→记账；🛡️ 防 伪票/超范围调用（INV-3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">闸拒 = 审计 DENIED + 抛错强杀（INV-1）；工具报错只是证据缺口可继续——两种失败分岔</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_TOOL / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EXEC_TOOL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">execTool 分派：tool→adapter（siem_query/related_alerts/kb_verify，flow.ts:157-200）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">执行与闸分离：闸管授权，adapter 管数据面，换真件只换 adapter</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SIEM_FIX / REL_ALERT / REIN_CTX</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SIEM_FIX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FixtureSiem：fixtures/alerts/ 11 条语料按时间窗+实体过滤（siem.ts:75-105）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">数据源侧再过滤一次（调用方契约只管「不让 LLM 蒙混」）；全文口径召回广，毒日志也会被捞上来</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_CTX（输出交观察治理）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_CTX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">缰绳三 observe：guards 扫描打标（failMode:flag 票 50）→ &gt;50k 落盘 hits_ref / &gt;10k 小模型摘要（flow.ts:218-285）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扫描在治理阈值之前——注入指令不能靠「把自己写得很长」躲过扫描；证据不丢、白板不爆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GU_SCAN（跨容器红虚线）/ TOOL_LOOP（观察喂回）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GU_SCAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">guards POST :8001/scan/injection 三裁决 allow/strip/block（guards/app.py:27）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SIEM 语料/analyzer 输出是可污染数据源；flag 打标不拦=证据一个字节不丢，但两处留痕待人复核</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REIN_CTX（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_PROMPT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_OUTPUT_CONTRACT 契约 + buildReportPrompt 只喂观察史（prompt.ts:193-204,254-267）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「不许编造/只提建议」的牙齿在复核代码不在品格；没有观察史之外的任何材料可引</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_PARSE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_PARSE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">attempt：parseReport 显式验型 + source_tool∈executed 证据复核（flow.ts:437-448）；🛡️ 防 引用没跑过的工具</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">形（schema）+实（executed 交叉核对）两关；逐字比对归评测层（场景 8.1），两层合围</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_DEGRADE / WRITE_TIMELINE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_DEGRADE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">重试 1 次仍不过 → report_degraded 三重污点（注释+structured:null+审计 FAILURE，flow.ts:450-489）；🛡️ 防 说谎报告混入案卷</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">降级不是丢弃：原文照样归档但谁都知道不能直接信（粉色便签比喻）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRITE_TIMELINE（降级也落库）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPORT_RENDER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">renderReportMarkdown：structured 真相渲染成人读 body（schema.ts:98-131）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">渲染是确定性代码——web 上每个标题都能机械映射回 JSON 字段；incomplete 加 ⚠️ 尾注</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRITE_TIMELINE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WRITE_TIMELINE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">write_timeline：亮票 add_timeline_entry 落双形态（flow.ts:492-513）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写报告本身也是 L1 工具调用，调查员对自己同样过闸；kind 锁 TIMELINE_KINDS 枚举（agent 侧）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_WRITE_EP（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_LOAD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">富化外壳 enrich_case + load_case：读案件全部 observables（含 tlp/pap）（case-flow.ts:65-74, enrichment/flow.ts:132-142）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">富化是确定性管线没有 llm seam——不是每个 worker 都该有 LLM，按职责配装</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_ANALYZE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_ANALYZE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">analyze 包装层：ANALYZER_OF 类型白名单 → 签名 → gated → TLP/PAP 闸 → backend（flow.ts:35-43,108-129）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">签名管格式、闸门管语义、gated 管授权，三层互不抢活；非 IOC 类型 skipped_internal 对账交代</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_S2 / TLP_GATE / ENR_WRITE / ENR_REPORT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TLP_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">tlpPapGate 纯函数：tlp/pap &gt; max_tlp/max_pap → DENIED 审计 + refused 逐字拒因（analyzers.ts:68-78）；🛡️ 防 高密级数据外流（FR-M6.2）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TLP:RED 不外发压在三行纯函数上不在 prompt 里；拒发是业务结论不抛不杀，run 照常出报告</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TI_FIX（放行才查询）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TI_FIX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FixtureAnalyzerTable：fixtures/ti/&lt;值&gt;.json 命中读文件、未命中 no-record、零网络（analyzers.ts:93-117）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">目录即情报库，谁能往里放什么一目了然（场景 5 投毒 analyzer 的战场）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_ANALYZE（评级+artifacts）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_WRITE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">artifacts 回写：L1 add_observable 亮票 + from:&lt;analyzer&gt; 溯源标签（flow.ts:204-211）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">半年后翻案卷知道线索是谁查出来的；流水线吃自己的产出账目分毫不乱</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_WRITE_EP（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_REPORT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">write_report：buildSummary 对账式报告（查 N/拒 N/跳 N 可验算）+ 双形态落时间线（flow.ts:217-271）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">对账栏是「一条都没漏处理」的确定性证明；[malicious]/[refused] 可 grep 标记是契约</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_WRITE_EP（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">APPROV_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">agent GET :3003/api/v1/approvals 审批卡 REST（app.ts:321）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审批卡是审批/执行条目的唯一事实源（INV-8 全链审计），web 投影它进时间线不另立数据源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ASM_TL（web 读，跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_events：audit/node_enter/node_exit/tool_call/tool_result 帧（events.ts）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run 的一生每一步都落账；外壳 steps=2 但子图内部帧带内部节点名——外壳哑了内部不哑</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_S2（写入）/ 审计回放</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">case-backend 读口：GET /api/v1/cases/:id（详情/observables）、GET /api/v1/cases/:id/timeline（app.ts:166,186-187）、GET /api/v1/alerts（:103）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">读口不做业务加工——加工是消费者（web/agent）自己的事</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV_LOAD / REL_ALERT / ASM_TL</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_WRITE_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">case-backend 写口：POST /api/v1/cases/:id/timeline（app.ts:205）、POST /api/v1/cases/:id/observables（app.ts:192，dedup 200/新建 201）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">内网信任口薄（kind 不校验枚举）——防线分层教学点；写动作全在 M2 留审计</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_TIMELINE / T_OBS / T_AUDIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_TIMELINE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 timeline_entries：系统/调查/富化报告全在一张表；structured JSON 整存整取</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">listTimeline 排序双保险 created_at,rowid——同毫秒不抖动（2.5）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP（读出）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_OBS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 observables：addCaseObservable 按 (case_id,dataType,data) 查重只并 tags（store.ts:670-692）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">报档案只登记一次，重复出现只加批注——1.2 upsert 哲学的富化版</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ENR_WRITE（回写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 audit_entries：M2 总台账（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">审计真相源——事件流只是广播视图，「事件流缺一帧」≠「审计缺一条」</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_WRITE_EP（写入）/ 审计对账</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ASM_TL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">assembleTimeline 纯函数：两路合流按 ts 升序，不猜时间（web timeline.ts:91-98）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">wire 上没有的时间宁可并进文案也不编——「编一个就是造假」</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KIND_META / LEVELS_OF / CASE_PAGE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">KIND_META</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">metaOf：kind→标签/颜色翻译表，没见过的 kind 原样透传（timeline.ts:26-36）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写口松、存储实、视图诚、判断归人——全链宽容性在最后一环闭环</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_PAGE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LEVELS_OF</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">levelsOf：富化 structured→评级标签序列，拒发行如实给 refused（timeline.ts:38-45）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">被 TLP 闸拦下的 IOC 在 web 上不消失不假装——2.4 对账精神透传到 UI</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_PAGE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_PAGE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">web 案件页 antd Timeline：body 用 &lt;pre&gt; 原样呈现 + 评级配色（CasePage.tsx:166-189）；🛡️ 防 LLM 产物 XSS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">绝不 innerHTML LLM 产物——宁可朴素也要把「所见即所存」做实</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CB_READ_EP / APPROV_EP（跨容器红虚线）</td></tr>
+</table>
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["操作者 / 自动化脚本<br/>POST :3003/internal/runs<br/>声明 {kind:case_flow, case_id}<br/>（直拉旧案重查 / 教学主角入口）"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · better-sqlite3 · :3003）"]
+        subgraph S21["2.1 拉起与调查入口 · 进入:POST /internal/runs 或 alert_flow 链上建案 · 节拍:请求一次性 + 分发循环 100ms tick · 退出:investigation 子图五节点跑完"]
+            direction TB
+            CHAIN_SRC["链上入口（场景 1 接力）<br/>alert_flow 分诊 TP 建案分支写 state.case_id<br/>同一 run 同一张任务票<br/>run-kinds.ts:156-170"]
+            RUN_GATE["拉起正门 POST /internal/runs<br/>intake=case → case_id 必填 400 case_id_required<br/>校验过才 createRun（只查非空不查存在性）<br/>app.ts:259-316<br/>🛡️ 防 非法拉起（INV-1）"]
+            REG_CASE["run-kinds 注册表 case_flow 描述符<br/>sub=agent:case_flow · scope=case:read/case:write<br/>allowedTools=调查∪富化 L1 工具并集（无 L2）<br/>run-kinds.ts:220-232<br/>🛡️ 防 worker 自作主张（INV-3）"]
+            RUN_QUEUE["createRun + enqueueRunJob(start)<br/>runs 表 INSERT queued + 审计 create<br/>run_jobs 落任务 → 202 {run_id,status:queued} 秒回<br/>app.ts:289-315"]
+            T_RUNJOBS[("表 run_jobs<br/>start 任务 pending→claimed<br/>事务内翻状态防双吃")]
+            DISP_CLAIM["分发循环领任务<br/>每 100ms tick（app.ts:48）<br/>claimRunJobs FIFO 领 start<br/>run-dispatcher.ts:85-98,263-272"]
+            EXEC_START["executeStartJob 协调三步<br/>读注册表票面 → 铸票 → 组图开跑<br/>caseId 随 kind 绑案（alert_flow=null）<br/>铸票失败 → failed(mint_failed)<br/>app.ts:373-413"]
+            MINT_CALL["出站 adapter mintTaskTicket<br/>POST gateway:8002/internal/mint · 2s 超时<br/>agent 不持签名密钥<br/>token-ports.ts:69-79"]
+            STATE_SEAM["runner 交接态<br/>initialState 写 {kind, case_id}<br/>graph.ts:484-486"]
+            CASE_CHAIN["外壳交接节点两格<br/>investigate_case → enrich_case<br/>caseIdOf 无案号 → 整链空转跳过<br/>CASE_FLOW_NODES 契约锁<br/>case-flow.ts:31-76"]
+        end
+        subgraph S21_INV["调查子图（investigate_case 内部 · 节点名不进 runner 图但帧带内部名）"]
+            direction TB
+            INV_LOAD["load_case 领案件<br/>getCaseDetail 直读（不经 LLM 工具面）<br/>get_alert 亮票取 primary 告警日期锚点<br/>caseViewOf 折简报（实体+锚点）<br/>flow.ts:290-307,134-153"]
+            INV_PLAN["plan 列任务清单<br/>LLM 产出 tasks + plan 审计事件<br/>fake 按实体优先级确定性排查询<br/>flow.ts:308-320"]
+            REL_ALERT["related_alerts 执行体<br/>listAlerts 拉全量 → 时间窗+scope 过滤<br/>纯函数可复算 · total 真命中 alerts 截断<br/>m2.ts:116-146"]
+        end
+        subgraph S22["2.2 工具循环与三条缰绳 · 进入:plan 产出任务清单 · 节拍:每圈 = 一次 LLM 裁决 + 至多一次工具执行 · 退出:finish 或 20 圈截断(incomplete)"]
+            direction TB
+            TOOL_LOOP["tool_loop 循环骨架<br/>decide 裁决调什么工具/参数或 finish<br/>观察史全量喂回（滚雪球）<br/>flow.ts:322-422"]
+            REIN_REPEAT["缰绳二 防打转<br/>指纹=tool+paramsHash 重复直接拒<br/>拒绝不烧后端 · FAILURE 审计<br/>错误观察喂回让 LLM 换路<br/>flow.ts:347-361<br/>🛡️ 防 原地兜圈烧钱"]
+            REIN_SIG["签名契约 validateToolCall<br/>siem_query 强制 time_window 无默认值<br/>缺/倒挂 → time_window_required 等<br/>违约打回不执行<br/>prompt.ts:80-113<br/>🛡️ 防 查全库撑爆上下文"]
+            GATED_S2["makeGatedCall 唯一动作闸<br/>亮票 → verifyTicket → 执行 → 记账<br/>闸拒 = DENIED 审计 + 抛错强杀<br/>工具报错 = 证据缺口审计后继续<br/>gated-call.ts<br/>🛡️ 防 伪票/超范围调用（INV-3）"]
+            EXEC_TOOL["execTool 分派<br/>siem_query / related_alerts / kb_verify<br/>tool → adapter 函数<br/>flow.ts:157-200"]
+            SIEM_FIX["FixtureSiem 语料查询<br/>fixtures/alerts/ 11 条真 Wazuh 日志<br/>时间窗+实体过滤 · 全文口径召回<br/>siem.ts:75-105"]
+            REIN_CTX["缰绳三 observe 上下文治理<br/>扫描打标在治理阈值之前<br/>&gt;50k 落盘只留 hits_ref 引用<br/>&gt;10k 小模型摘要（只压不做决策）<br/>flow.ts:218-285"]
+            REIN_MAX["缰绳一 max_steps=20<br/>用尽 → 正常退出不枪毙<br/>incomplete 落账 + investigation_truncated 审计<br/>flow.ts:403-420"]
+        end
+        subgraph S23["2.3 调查报告 · 进入:tool_loop 出口 loop 账本就绪 · 节拍:一次 LLM 调用+复核（失败重试 1 次）· 退出:报告双形态落时间线（降级也落）"]
+            direction TB
+            REPORT_PROMPT["输出契约 + prompt 装配<br/>REPORT_OUTPUT_CONTRACT JSON schema 文本<br/>只喂 已执行工具的观察史<br/>prompt.ts:193-204,254-267"]
+            REPORT_PARSE["attempt 双关复核<br/>parseReport 显式逐字段验型（形）<br/>source_tool ∈ executed 交叉核对（实）<br/>flow.ts:437-448<br/>🛡️ 防 引用没跑过的工具"]
+            REPORT_DEGRADE["重试 1 次仍不过 → 降级<br/>report_degraded 三重污点<br/>污点注释 + structured:null + 审计 FAILURE<br/>原文照样归档自由文本<br/>flow.ts:450-489<br/>🛡️ 防 说谎报告混入案卷"]
+            REPORT_RENDER["renderReportMarkdown 渲染<br/>structured 真相 → 人读 body<br/>确定性代码 · incomplete 加 ⚠️ 尾注<br/>schema.ts:98-131"]
+            WRITE_TIMELINE["write_timeline 落库<br/>add_timeline_entry L1 亮票过闸<br/>双形态 body+structured 同写一条<br/>kind 锁 TIMELINE_KINDS 枚举<br/>flow.ts:492-513"]
+        end
+        subgraph S24["2.4 富化 · 进入:investigate_case 退出后 enrich_case 外壳 · 节拍:逐 observable 串行（零 LLM）· 退出:对账式富化报告落时间线"]
+            direction TB
+            ENR_LOAD["enrich_case 外壳 + load_case<br/>读案件全部 observables（含 tlp/pap）<br/>无 llm seam 的确定性管线<br/>case-flow.ts:65-74 · flow.ts:132-142"]
+            ENR_ANALYZE["analyze 包装层五步流水线<br/>ANALYZER_OF 类型白名单（hash/domain/fqdn/ip）<br/>非 IOC → skipped_internal 对账交代<br/>签名 → gated → 密级闸 → backend<br/>flow.ts:35-43,108-129"]
+            TLP_GATE["tlpPapGate 纯函数密级闸<br/>tlp/pap &gt; max_tlp/max_pap → 拒<br/>DENIED 审计 + 逐字拒因（tlp_exceeded:…）<br/>先 tlp 后 pap · 等于 max 放行<br/>analyzers.ts:68-78<br/>🛡️ 防 高密级数据外流（FR-M6.2）"]
+            TI_FIX["FixtureAnalyzerTable 情报表<br/>fixtures/ti/&lt;值&gt;.json 按值命名<br/>命中读文件 · 未命中 no-record · 零网络<br/>analyzers.ts:93-117"]
+            ENR_WRITE["artifacts 回写<br/>L1 add_observable 亮票<br/>自动带 from:&lt;analyzer&gt; 溯源标签<br/>flow.ts:204-211"]
+            ENR_REPORT["write_report 对账式报告<br/>buildSummary：查 N/拒 N/跳 N 可验算<br/>[malicious]/[refused] 可 grep 契约标记<br/>双形态落时间线<br/>flow.ts:217-271"]
+        end
+        subgraph A_DB["agent 存储（better-sqlite3 · agent.sqlite）"]
+            T_RUNEVENTS[("表 run_events<br/>audit/node_enter/node_exit<br/>tool_call/tool_result 帧<br/>外壳 steps=2 · 内部帧带内部节点名")]
+        end
+        APPROV_EP["审批卡读口<br/>GET :3003/api/v1/approvals<br/>app.ts:321 · 场景 2 只读它证明建议没动手"]
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        CB_READ_EP["案件/告警读口<br/>GET /api/v1/cases/:id（详情+observables）<br/>GET /api/v1/cases/:id/timeline · app.ts:186-187<br/>GET /api/v1/alerts · app.ts:103<br/>读口不做业务加工"]
+        CB_WRITE_EP["案件写口<br/>POST /api/v1/cases/:id/timeline · app.ts:205<br/>POST /api/v1/cases/:id/observables · app.ts:192<br/>dedup 命中 200 并 tags / 新建 201<br/>内网信任口 kind 不校验枚举（防线分层）"]
+        T_TIMELINE[("表 timeline_entries<br/>系统/调查/富化全在一张表<br/>排序双保险 created_at,rowid<br/>structured JSON 整存整取")]
+        T_OBS[("表 observables<br/>addCaseObservable 按 (case_id,dataType,data) 查重<br/>命中只并 tags 不建新行<br/>store.ts:670-692")]
+        T_AUDIT[("表 audit_entries<br/>M2 总台账（INV-8）<br/>create/plan/flag/deny/tlp_pap_denied 全落这")]
+    end
+
+    subgraph GW["容器 gateway（FastAPI · :8002）"]
+        GW_MINT["POST /internal/mint（app.py:24）<br/>HMAC 三段任务票 · TTL 900s<br/>票面绑 case_id · 缺密钥 500 拒签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+    end
+
+    subgraph GUARD["容器 guards（FastAPI · llm-guard + Presidio · :8001）"]
+        GU_SCAN["POST /scan/injection（guards/app.py:27）<br/>tool_output 通道策略 = flag 打标不拦<br/>票 50：不可达显式 failMode:flag<br/>折 flag 打标留痕（reason 可 grep）<br/>🛡️ 防 注入输出无痕进上下文"]
+    end
+
+    subgraph WEB["容器 web（Vite 6 + React 19 + antd 5 · :5173）"]
+        subgraph S25["2.5 timeline 装配与 web 呈现 · 进入:人打开 web 案件页 · 节拍:每次页面加载拉两路 REST · 退出:一条按时间升序的时间线渲染"]
+            direction TB
+            ASM_TL["assembleTimeline 装配纯函数<br/>时间线条目 + 审批卡 两路合流<br/>按 ts 升序 · 不猜时间<br/>web timeline.ts:91-98"]
+            KIND_META["metaOf 视图翻译表<br/>kind → 标签/颜色<br/>没见过的 kind 原样透传不猜<br/>timeline.ts:26-36"]
+            LEVELS_OF["levelsOf 字段透视<br/>富化 structured → 评级标签序列<br/>拒发行如实给 refused 标签<br/>timeline.ts:38-45"]
+            CASE_PAGE["web 案件页渲染<br/>antd Timeline + Tag 评级配色<br/>body 用 pre 原样呈现（不 innerHTML）<br/>CasePage.tsx:166-189<br/>🛡️ 防 LLM 产物 XSS"]
+        end
+    end
+
+    %% ===== 2.1 拉起与调查入口 =====
+    OPERATOR -. "请求 POST /internal/runs<br/>T+0s: 202 {run_id,status:queued} 秒回<br/>异常：kind 缺/case_id 缺 → 400<br/>跨容器→agent:3003" .-> RUN_GATE
+    RUN_GATE -. "响应 202 秒回（回执与分发循环无触发关系）" .-> OPERATOR
+    CHAIN_SRC -. "链上接力：TP 建案分支写 case_id<br/>正常：investigate_case 接力<br/>FP/merge 无案号：链整体空转" .-> CASE_CHAIN
+    RUN_GATE -- "查 kind 描述符" --> REG_CASE
+    REG_CASE -. "不在册 400 unknown_kind / 票面并集无 L2<br/>异常：LLM 提议 isolate_host 连票面都进不去" .-> RUN_GATE
+    RUN_GATE -- "校验过 → 立案入队" --> RUN_QUEUE
+    RUN_QUEUE -- "T+0s: INSERT pending + 审计 create" --> T_RUNJOBS
+    T_RUNJOBS -. "T+100ms: 分发循环 tick 领走<br/>pending→claimed 事务内翻" .-> DISP_CLAIM
+    DISP_CLAIM -- "领到 start 任务" --> EXEC_START
+    EXEC_START -- "读票面 sub/scope/allowedTools" --> REG_CASE
+    EXEC_START -- "调 mint 出站" --> MINT_CALL
+    MINT_CALL -- "请求 POST :8002/internal/mint<br/>跨容器→gateway:8002" --> GW_MINT
+    GW_MINT -. "响应 {token, TTL 900s}<br/>异常：超时/5xx → failed(mint_failed)" .-> MINT_CALL
+    EXEC_START -- "initialState 写交接态" --> STATE_SEAM
+    STATE_SEAM -- "开跑外壳" --> CASE_CHAIN
+    CASE_CHAIN -- "investigate_case 进场<br/>子状态隔离 {case_id, ticket}" --> INV_LOAD
+    INV_LOAD -- "请求 GET :3002/api/v1/cases/:id<br/>跨容器→case-backend:3002" --> CB_READ_EP
+    CB_READ_EP -. "响应 案件详情+observables<br/>异常：404 → case_not_found 抛错强杀" .-> INV_LOAD
+    INV_LOAD -- "锚点就绪 → 列计划" --> INV_PLAN
+    INV_PLAN -- "任务清单就绪 → 进循环" --> TOOL_LOOP
+
+    %% ===== 2.2 工具循环与三条缰绳 =====
+    TOOL_LOOP -- "每圈先过防打转" --> REIN_REPEAT
+    REIN_REPEAT -. "命中指纹：拒绝 + repeat_tool_call 审计<br/>错误观察喂回下一圈" .-> TOOL_LOOP
+    TOOL_LOOP -- "指纹新 → 验签名契约" --> REIN_SIG
+    REIN_SIG -. "违约：不执行不烧后端<br/>time_window_required 等错误喂回" .-> TOOL_LOOP
+    REIN_SIG -- "契约过 → 亮票过闸" --> GATED_S2
+    GATED_S2 -- "④放行 → execTool 分派" --> EXEC_TOOL
+    GATED_S2 -. "闸拒：DENIED 审计 + 抛错<br/>INV-1 fail-closed 整条 run 强杀" .-> TOOL_LOOP
+    GATED_S2 -. "tool_call/tool_result 帧落账" .-> T_RUNEVENTS
+    EXEC_TOOL -- "related_alerts 分支" --> REL_ALERT
+    REL_ALERT -- "读 GET :3002/api/v1/alerts<br/>跨容器→case-backend:3002" --> CB_READ_EP
+    CB_READ_EP -. "响应 全量告警 → 进程内时间窗+scope 过滤" .-> REL_ALERT
+    EXEC_TOOL -- "siem_query 分支" --> SIEM_FIX
+    SIEM_FIX -- "工具输出（含毒日志）" --> REIN_CTX
+    REL_ALERT -- "工具输出" --> REIN_CTX
+    REIN_CTX -- "请求 POST :8001/scan/injection<br/>failMode:flag · 跨容器→guards:8001" --> GU_SCAN
+    GU_SCAN -. "响应 flag 打标（原文照常进上下文）<br/>异常：不可达 → reason=guards_timeout 打标留痕" .-> REIN_CTX
+    REIN_CTX -- "观察（含 flag）喂回下一圈 decide" --> TOOL_LOOP
+    TOOL_LOOP -- "finish 或 20 圈用尽" --> REIN_MAX
+
+    %% ===== 2.3 调查报告 =====
+    REIN_MAX -- "loop 账本（含 incomplete）" --> REPORT_PROMPT
+    REPORT_PROMPT -- "报告 LLM 回包" --> REPORT_PARSE
+    REPORT_PARSE -. "验型/证据复核不过 → llm_retry 重试 1 次" .-> REPORT_PARSE
+    REPORT_PARSE -- "两关全过 → structured 就绪" --> REPORT_RENDER
+    REPORT_PARSE -- "重试仍不过" --> REPORT_DEGRADE
+    REPORT_DEGRADE -- "降级自由文本（带污点）也落库" --> WRITE_TIMELINE
+    REPORT_RENDER -- "渲染体 body" --> WRITE_TIMELINE
+    WRITE_TIMELINE -- "请求 POST :3002/api/v1/cases/:id/timeline<br/>跨容器→case-backend:3002" --> CB_WRITE_EP
+
+    %% ===== 2.4 富化 =====
+    CASE_CHAIN -- "investigate_case 退出<br/>enrich_case 进场（同一张票）" --> ENR_LOAD
+    ENR_LOAD -- "逐 observable" --> ENR_ANALYZE
+    ENR_ANALYZE -- "签名过 → 亮票过闸" --> GATED_S2
+    GATED_S2 -- "闸回调内先过密级闸" --> TLP_GATE
+    TLP_GATE -- "放行 → fixture 查询" --> TI_FIX
+    TLP_GATE -. "超限：DENIED 审计 + refused<br/>不外发不抛不杀 · run 照常出报告" .-> ENR_ANALYZE
+    TI_FIX -- "响应 评级 + artifacts" --> ENR_ANALYZE
+    ENR_ANALYZE -. "输出扫描（tool_output 通道同款）<br/>请求 POST :8001/scan/injection<br/>跨容器→guards:8001" .-> GU_SCAN
+    ENR_ANALYZE -- "artifacts 回写亮票" --> ENR_WRITE
+    ENR_WRITE -- "请求 POST :3002/api/v1/cases/:id/observables<br/>跨容器→case-backend:3002" --> CB_WRITE_EP
+    ENR_ANALYZE -- "五步旅程走完" --> ENR_REPORT
+    ENR_REPORT -- "请求 POST :3002/api/v1/cases/:id/timeline<br/>跨容器→case-backend:3002" --> CB_WRITE_EP
+    CB_WRITE_EP -- "(case_id,dataType,data) 查重<br/>命中并 tags / 未命中新建" --> T_OBS
+    CB_WRITE_EP -- "INSERT 时间线条目" --> T_TIMELINE
+    CB_WRITE_EP -. "同事务记审计（INV-8）" .-> T_AUDIT
+
+    %% ===== 2.5 timeline 装配与 web 呈现 =====
+    CASE_PAGE -- "读 GET :5173→:3002/api/v1/cases/:id/timeline<br/>跨容器→case-backend:3002" --> CB_READ_EP
+    CASE_PAGE -- "读 GET :5173→:3003/api/v1/approvals<br/>跨容器→agent:3003" --> APPROV_EP
+    CB_READ_EP -. "响应 timeline 行（structured JSON 还原）" .-> ASM_TL
+    APPROV_EP -. "响应 该案件的审批卡" .-> ASM_TL
+    ASM_TL -- "TimelineRow[]" --> KIND_META
+    ASM_TL -- "富化行透视" --> LEVELS_OF
+    KIND_META -- "标签/颜色" --> CASE_PAGE
+    LEVELS_OF -- "评级标签序列" --> CASE_PAGE
+    T_TIMELINE -. "listTimeline 读出<br/>ORDER BY created_at,rowid" .-> CB_READ_EP
+    T_OBS -. "案件 observables 读出" .-> CB_READ_EP
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 2.1：RUN_GATE 防非法拉起（INV-1）/ REG_CASE 防 worker 自作主张（INV-3）
+    %% 2.2：REIN_REPEAT 防原地兜圈烧钱 / REIN_SIG 防查全库撑爆上下文
+    %%      GATED_S2 防伪票/超范围调用（INV-3）
+    %% 2.3：REPORT_PARSE 防引用没跑过的工具 / REPORT_DEGRADE 防说谎报告混入案卷
+    %% 2.4：TLP_GATE 防高密级数据外流（FR-M6.2）
+    %% 2.5：CASE_PAGE 防 LLM 产物 XSS
+    %% gateway：GW_MINT 防 fail-open 铸票（INV-1）/ guards：GU_SCAN 防注入输出无痕进上下文
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class RUN_GATE,REG_CASE,REIN_REPEAT,REIN_SIG,GATED_S2,REPORT_PARSE,REPORT_DEGRADE,TLP_GATE,CASE_PAGE,GW_MINT,GU_SCAN guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
