@@ -777,7 +777,7 @@ POST http://guards:8001/scan/injection
 | 编号 | 名称 | 描述 | 优先级 |
 |---|---|---|---|
 | FR-S4.1 | Presidio 脱敏管道 | `POST /analyze` + `/anonymize`；识别 EMAIL/PHONE/IP（内网段豁免 RFC1918——已定，决策记录 #8）/PERSON 等实体，替换为类型占位符 | P0 |
-| FR-S4.2 | 脱敏映射会话级保留 | 映射表仅服务端内存保留、会话/run 结束即弃；不进审计 | P0 |
+| FR-S4.2 | 脱敏映射会话级保留 | 映射表落盘持久化、会话/run 结束即弃；受控反查口 /pii/reveal；审计记「谁查了占位符 X、命中几条」，不记查回原文（ADR 0004 裁决 3 改判 + 票 49 落实——2026-09-12 票 63 修订原文；原文「仅内存保留、不进审计」已过时） | P0 |
 
 **实现机制**：脱敏中间件挂在 LLM 出站调用前（出域边界），与 S1 凭证注入同层不同序——先脱敏后注入；识别器用 Presidio 默认 zh/en 实体集 + 内网网段白名单自定义识别器。
 
@@ -994,7 +994,7 @@ $ soc-mcp-audit "npx -y @modelcontextprotocol/server-filesystem /tmp"
 
 ## 8. 演示剧本（六幕，操作步骤级）
 
-> 目标：15 分钟演完全部亮点清单。每幕对应可复测 fixture；前置布景统一为 `docker compose up -d` + `pnpm fixtures:load`。
+> 目标：15 分钟演完全部亮点清单。每幕对应可复测 fixture；前置布景统一为 `docker compose up -d` + `bash scripts/setup-openfga.sh` + `pnpm replay`（告警 fixture 走 ingest webhook 正门；四种登录身份为代码预置——2026-09-12 票 63 修订：原文 `pnpm fixtures:load` 系幽灵引用，全仓无此脚本）。
 
 ### 幕 1 · 正常分诊（多 agent 协同 + 真实数据）
 
@@ -1065,7 +1065,7 @@ $ soc-mcp-audit "npx -y @modelcontextprotocol/server-filesystem /tmp"
 
 ### 9.3 一键可起
 
-`docker compose up -d` 服务清单：`ingest / case-backend / agent / guards / gateway / chroma / web`（C1-C7）；可选 profile `real-wazuh`（Wazuh manager 容器 + logtest 喂数脚本）。`pnpm fixtures:load` 灌入告警 fixture + client_env 种子 + 四种登录身份。README 按六幕组织即讲解稿。
+`docker compose up -d` 服务清单（默认九服务，2026-09-12 票 63 对齐实际拓扑）：`ingest / case-backend / agent / guards / gateway / chroma / web / openfga / contextforge`（C1-C7 + openfga[FGA 裁决] + contextforge[RBAC 渠道面]，票 12/26 加入；与 specs/modules.md §2"三个容器并排"口径一致）；可选 profile：`real-wazuh`（Wazuh manager 容器 + logtest 喂数脚本）、`observability`（langfuse）、`jiaotu`（狗粮全外接双模式，2026-09-11 票 59——四件安全职能运行面交棒椒图、不启内部 gateway，载体 `docker-compose.jiaotu.yml` overlay，详见 README「椒图狗粮形态」段）。布景：`bash scripts/setup-openfga.sh`（FGA 世界）+ `pnpm replay`（告警 fixture 走 webhook 正门；四种登录身份代码预置）。README 按六幕组织即讲解稿。
 
 ### 9.4 配置项清单
 
@@ -1162,6 +1162,7 @@ v0.2 补充声明：本 PRD 的章节细化（模块拆分、字段表、接口�
 | `deisolate_host` / `unblock_ip` | 无（仅审批链） | L2 | 总是 | 回滚动作同等级审批 |
 | `case_assign` / `case_update` | 调查（经审批参数规则） | L1 | `severity` 上调至 4 时升 L2 | 参数级升降级示例（HolmesGPT 参数级审批） |
 | `list_approvals` | 无（只读登记；台账读口待接对话面） | L1 | — | 审批台账查询（场景 7 经 gen:tool 落地：只读审批卡 id/工具/状态/案号；更严口径按 L1 过任务票，不做免验——get_case 同款先例；FGA 矩阵暂未收，不在 chat 可见面） |
+| `get_case` | 沉淀（读案） | L1 | — | 沉淀读案（票 17 引入，KNOWLEDGE_TOOLS 两件之一，knowledge_flow 票面持票；过任务票闸；FGA 矩阵暂未收，不在 chat 可见面——2026-09-12 票 63 补列，清票 48 挂账，tools-manifest.test.ts 具名偏差 KNOWN_NOT_IN_A1 同步收回） |
 
 设计说明：L2 工具「无任何 worker 持票」是 D7 的核心——遏制工具不在任何 agent 的能力面内，只能由审批回路铸一次性票执行（对照 M507：EDR 破坏性工具直接暴露给 LLM 无 HITL）。
 

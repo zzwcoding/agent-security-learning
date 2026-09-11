@@ -61,16 +61,16 @@ function parsePrdA1(): A1Row[] {
   return rows;
 }
 
-// ADR 0004-2 已知偏差（记票 48 出入①）：get_case 是票 17 引入的沉淀读案工具，
-// PRD A.1 漏列——manifest 按更严口径登记为 L1（读案也过任务票），不标 L0 免验。
-const KNOWN_NOT_IN_A1 = ["get_case"];
+// ADR 0004-2 已知偏差（记票 48 出入①，2026-09-12 票 63 收回）：get_case 已补列 PRD
+// A.1（L1，沉淀读案），具名偏差清零——列表保留作未来偏差的登记位，非空即红。
+const KNOWN_NOT_IN_A1: string[] = [];
 
 describe("ToolManifest ≡ PRD A.1（文档面：漂移必红）", () => {
   const manifest = loadToolsManifest().tools.map((t) => ({ name: t.name, tier: t.tier }));
   const a1 = parsePrdA1();
 
-  test("A.1 全量 24 工具已登记且分级逐字一致（PRD 改表不改 manifest → 红）", () => {
-    expect(a1.length).toBe(24); // 快照：A.1 若增删行，这里先红，逼人走「先 manifest 后文档」（场景 7：list_approvals 落表后 23→24）
+  test("A.1 全量 25 工具已登记且分级逐字一致（PRD 改表不改 manifest → 红）", () => {
+    expect(a1.length).toBe(25); // 快照：A.1 若增删行，这里先红，逼人走「先 manifest 后文档」（场景 7：list_approvals 落表后 23→24；票 63 补 get_case 后 24→25）
     const byName = new Map(manifest.map((t) => [t.name, t.tier]));
     for (const row of a1) {
       expect(byName.get(row.name), `A.1 工具 ${row.name} 未登记`).toBeTypeOf("string");
