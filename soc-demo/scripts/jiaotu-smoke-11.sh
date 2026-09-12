@@ -189,15 +189,15 @@ ATTEMPTS=1; [ "$REAL_LLM" = "1" ] && ATTEMPTS=3
 for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
   A1="$(replay fixtures/alerts/ssh-5712-real.json)"
   R1="$(launch "$A1")"
-  echo "alert_id=$A1 run_id=$R1（第 $ATTEMPT/$ATTEMPTS 次回放）"
+  echo "alert_id=$A1 run_id=${R1}（第 ${ATTEMPT}/${ATTEMPTS} 次回放）"
   SSE1="$(sse_done "$R1" "$SSE_WAIT")"
   need "$SSE1" "completed" "幕1：run 未到 completed（SSE 终态帧缺失，第 $ATTEMPT 次）"
   V1="$(curl -s "$WEB/api/v1/alerts/$A1" | json_field 'd["verdictAi"]["verdict"]')"
   [ "$V1" = "tp" ] && break
   [ "$REAL_LLM" = "1" ] || fail "幕1：verdictAi.verdict=$V1 (应 tp——假上游与内部模式 fake 同源判定)"
-  say "真网第 $ATTEMPT 次回放 verdict=$V1（真实模型方差，LLM 调用链已证通）——重放重试"
+  say "真网第 $ATTEMPT 次回放 verdict=${V1}（真实模型方差，LLM 调用链已证通）——重放重试"
 done
-[ "$V1" = "tp" ] || fail "幕1：真网 $ATTEMPTS 次回放 verdict 均非 tp（=$V1）——模型方差超出有界重放，人工研判"
+[ "$V1" = "tp" ] || fail "幕1：真网 ${ATTEMPTS} 次回放 verdict 均非 tp（=${V1}）——模型方差超出有界重放，人工研判"
 CASE_ID="$(curl -s "$WEB/api/v1/cases" | python3 -c '
 import json,sys
 aid=sys.argv[1]
