@@ -78,7 +78,9 @@ export JIAOTU_GATEWAY_URL=http://jiaotu-gateway:8080
 export EVENT_DRIVEN=off
 # 真网超时预算（2026-09-12 首跑实测：investigate_case 真实 minimax 调用超 60s 缺省链，
 # 客户端 fail-closed 强杀=纪律正确，不是故障——冒烟给足预算，走 llm-client 既有 env 口子）。
-[ "$REAL_LLM" = "1" ] && export LLM_TIMEOUT_MS=300000
+# 资源兜底同口径（第五次实测：真实推理模型 investigation 单节点 23 次 LLM 调用/近 300s，
+# 撞 MAX_STEPS=20/MAX_TOKENS_PER_RUN=50k 缺省 → budget_exceeded 强杀=纪律正确）。
+[ "$REAL_LLM" = "1" ] && export LLM_TIMEOUT_MS=300000 MAX_STEPS=40 MAX_TOKENS_PER_RUN=200000
 say "布景：起 jiaotu 形态栈（内部 gateway 不启动；jiaotu-gateway 先健康）"
 docker compose "${CPAIR[@]}" up -d --build > /tmp/jiaotu-smoke-up.log 2>&1 || { tail -20 /tmp/jiaotu-smoke-up.log; fail "compose up 失败"; }
 
@@ -191,7 +193,11 @@ for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
   R1="$(launch "$A1")"
   echo "alert_id=$A1 run_id=${R1}（第 ${ATTEMPT}/${ATTEMPTS} 次回放）"
   SSE1="$(sse_done "$R1" "$SSE_WAIT")"
-  need "$SSE1" "completed" "幕1：run 未到 completed（SSE 终态帧缺失，第 $ATTEMPT 次）"
+  if ! printf '%s' "$SSE1" | grep -q "completed"; then
+    [ "$REAL_LLM" = "1" ] || fail "幕1：run 未到 completed（SSE 终态帧缺失）"
+    say "真网第 $ATTEMPT 次回放 run 未到 completed（真实上游方差/资源兜底）——重放重试"
+    continue
+  fi
   V1="$(curl -s "$WEB/api/v1/alerts/$A1" | json_field 'd["verdictAi"]["verdict"]')"
   [ "$V1" = "tp" ] && break
   [ "$REAL_LLM" = "1" ] || fail "幕1：verdictAi.verdict=$V1 (应 tp——假上游与内部模式 fake 同源判定)"

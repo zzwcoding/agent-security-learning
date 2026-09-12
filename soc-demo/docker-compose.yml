@@ -77,6 +77,11 @@ services:
       # > 60s 缺省）：空缺省 = 60s 不变；真网冒烟（票 59 --real-llm）注入更大值——实测
       # investigate_case 的真实 minimax 调用会超 60s，fail-closed 强杀是纪律不是故障。
       LLM_TIMEOUT_MS: ${LLM_TIMEOUT_MS:-}
+      # 资源兜底预算（budget.ts 既有 env：MAX_STEPS 缺省 20 / MAX_TOKENS_PER_RUN 缺省 50k，
+      # 超 limit 强杀 budget_exceeded）：空缺省 = 教学保守值不变；真网冒烟注入更大值——实测
+      # 真实推理模型的 investigation 单节点就 23 次 LLM 调用/近 300s，保守缺省必撞线（纪律正确）。
+      MAX_STEPS: ${MAX_STEPS:-}
+      MAX_TOKENS_PER_RUN: ${MAX_TOKENS_PER_RUN:-}
     volumes:
       # 票 41（B5·对账一-4 清偿）：runs/run_events/checkpoints/审批卡落宿主盘，
       # 审批 interrupt 处杀进程重启可恢复（m3 卡测试计划）。落点 /app/data 不是
