@@ -7,6 +7,7 @@
   "scripts": {
     "test": "node --test",
     "b1": "node b1-endpoints.mjs",
+    "b2": "node b2-chain.mjs",
     "b3": "node b3-dispatcher.mjs"
   },
   "devDependencies": {
