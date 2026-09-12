@@ -2,6 +2,7 @@ import Fastify from "fastify";
 import { randomUUID } from "node:crypto";
 import { mapWazuhAlert, validateWazuhAlert } from "./wazuh.js";
 import { HttpM2Client, type M2Client } from "./m2client.js";
+import { registerUnderPressure } from "./under-pressure.js";
 
 // 票 09：m1 告警接入的 webhook 正门（PRD §6-M1）。链路 = 接收校验 → 映射 → 不可信标记
 // （校验/映射/标记都在 wazuh.ts 深模块）→ 写 M2 → 去重与发事件在 M2 侧完成。
@@ -16,6 +17,12 @@ export function buildApp(opts: { m2?: M2Client } = {}) {
   // PRD §6-M1：格式非法（缺 rule.id/timestamp）与畸形 JSON 一律 422 invalid_alert；
   // Fastify 默认给畸形 JSON 400（err.statusCode=400），这里盖成 422
   app.setErrorHandler((err, _req, reply) => {
+    // 票 68：under-pressure 的过载 503 原样放行（插件自带语义：503 + Retry-After 头 +
+    // FST_UNDER_PRESSURE body）——不落通用 500 兜底（卸载面必须诚实）；off 时该 code
+    // 不会出现，本分支零触发，既有错误行为逐字节不变。
+    if ((err as { code?: string }).code === "FST_UNDER_PRESSURE") {
+      return reply.send(err);
+    }
     const status = (err as { statusCode?: number }).statusCode;
     if (err instanceof SyntaxError || status === 400) {
       const reasons = [err instanceof Error ? err.message : String(err)];
@@ -32,6 +39,11 @@ export function buildApp(opts: { m2?: M2Client } = {}) {
     }
     return reply.status(500).send({ error: "internal_error" });
   });
+
+  // 票 68（框架红线）：under-pressure 过载卸载装配——UNDER_PRESSURE=on 才 register
+  //（env 缺省/其他值 = 零注册 = 默认形态逐字节不变，开关与阈值见 under-pressure.ts）；
+  // 503 语义与 /status 指标口都是插件自带。
+  registerUnderPressure(app);
 
   // 票 35：422 的 FAILURE 审计——objectId 尽力取声明告警 id（顶层 id 或 rule.id），
   // 取不到 unknown 占位；details 与 422 响应体的 reasons 同源（摘要，不复制整包载荷）。

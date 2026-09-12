@@ -83,6 +83,7 @@
 - 内部：接收校验 → 去重（唯一约束兜底在 M2 SQLite）→ 映射 → 不可信标记 → 写 M2 → 发事件；内部架构图见 `docs/architecture-m1-internal.html`
 - 回放载体（2026-09-04 与用户讨论定案）：`scripts/replay.ts` 几十行 CLI——读 fixture 目录按速率 POST 进 webhook，扮演外部 Wazuh。三条铁律：① 数据绝不直接塞数据库，必须走 webhook 正门（否则 M1 的去重/映射/不可信标记演了空城计）；② 推模式，不做定时轮询；③ 不进 compose，非运行时件；Web 告警列表页回放按钮（FR-M10.1）背后是同一个东西
 - 重复计数（2026-09-04 用户提出，PRD v1.1 变更 4）：重复推送时 `occurrences` +1 并刷新 `lastSeen`
+- 过载卸载（票 68，2026-09-13 收口）：`src/under-pressure.ts`——`UNDER_PRESSURE=on` 才 register `@fastify/under-pressure`（env 缺省=零注册=默认形态逐字节不变）；阈值 `UNDER_PRESSURE_MAX_*` env 可覆盖；503 语义插件自带，setErrorHandler 仅放行 `FST_UNDER_PRESSURE`；on 时 `/status` 为插件自带指标口
 
 ## m2
 
@@ -114,6 +115,7 @@
 ### 备注
 
 - 内部模块：`statemachine`（迁移函数集中定义，非法转移抛 InvalidTransition→409）、`audit-signal`（写操作拦截器自动落审计）、`autorun`（outbox 事件→自动拉起，EVENT_DRIVEN 开关，票 40）、`langfuse`（可选观测镜像旁路，票 37）——内部 seam，不进公开接口
+- 过载卸载（票 68，2026-09-13 收口）：`src/under-pressure.ts`——`UNDER_PRESSURE=on` 才 register `@fastify/under-pressure`（env 缺省=零注册=默认形态逐字节不变）；阈值 `UNDER_PRESSURE_MAX_*` env 可覆盖；503 语义插件自带，setErrorHandler 仅放行 `FST_UNDER_PRESSURE`；on 时 `/status` 为插件自带指标口
 
 ## m3
 
@@ -143,6 +145,7 @@
 - 资源兜底口径（PRD 决策记录 #4/#5/#12，2026-09-07 过 M3 节点用户复核确认）：LLM 超时统一 60s（留 per-node env 口子）、max_steps 20、token 50k/run——任一超限强杀 + 审计
 - 内部模块：`graph`（图定义）、`events`（SSE 总线 + offset 重放）、`envelope`（信封 hash）、`budget`（资源兜底计数）、`autorun`（票 40：M2 outbox 消费循环——alert.created/case.closed 事件自动拉起 run，EVENT_DRIVEN 开关）
 - 内部架构图见 `docs/architecture-m3-internal.html`
+- 过载卸载（票 68，2026-09-13 收口）：`src/under-pressure.ts`——`UNDER_PRESSURE=on` 才 register `@fastify/under-pressure`（env 缺省=零注册=默认形态逐字节不变）；阈值 `UNDER_PRESSURE_MAX_*` env 可覆盖；503 语义插件自带，setErrorHandler 仅放行 `FST_UNDER_PRESSURE`；on 时 `/status` 为插件自带指标口
 
 ## m4
 
@@ -405,7 +408,7 @@
 ### Seam 与测试
 
 - Seam: HTTP 客户端注入（fetch 包装，可指向 stub 服务做离线单测）；多步链路用 autocannon 的 requests/context API
-- Adapter: autocannon 编程 API；无服务端改动（B1-B4 零生产代码，under-pressure 归票 68 单独走）
+- Adapter: autocannon 编程 API；B1-B4 零生产代码（B5 防线实验亦零代码——只停/杀容器与灌压）。唯一服务端改动=票 68 under-pressure 装配（三 Fastify 服务 env 开关件，缺省形态逐字节不变，见 m1/m2/m3 卡备注）
 - 测试计划: harness 单测（stub 服务 200/422/超时三态断言 + sourceRef 唯一化生成器）；中立层边界由 check_boundary.py 既有"scripts/ 禁 import services 内部"规则覆盖
 
 ## m14

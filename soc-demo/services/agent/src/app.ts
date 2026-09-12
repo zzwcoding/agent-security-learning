@@ -23,6 +23,7 @@ import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "..
 import { visibleTools } from "../workers/chat/visible-tools.js";
 import type { RunRow } from "./runs.js";
 import { requireRunKind, runKindOf, type RunGraphFactory } from "./run-kinds.js";
+import { registerUnderPressure } from "./under-pressure.js";
 import {
   enqueueRunJob,
   runDispatchConcurrency,
@@ -115,6 +116,12 @@ export function buildApp(opts: {
   app.get("/healthz", () => ({ ok: true, service: "agent" }));
 
   app.setErrorHandler((err, _req, reply) => {
+    // 票 68：under-pressure 的过载 503 原样放行（插件自带语义：503 + Retry-After 头 +
+    // FST_UNDER_PRESSURE body）——不落通用 500 兜底（卸载面必须诚实）；off 时该 code
+    // 不会出现，本分支零触发，既有错误行为逐字节不变。
+    if ((err as { code?: string }).code === "FST_UNDER_PRESSURE") {
+      return reply.send(err);
+    }
     if (
       err instanceof InvalidRunTransitionError ||
       err instanceof InvalidApprovalTransitionError ||
@@ -128,6 +135,11 @@ export function buildApp(opts: {
     }
     return reply.status(500).send({ error: "internal_error" });
   });
+
+  // 票 68（框架红线）：under-pressure 过载卸载装配——UNDER_PRESSURE=on 才 register
+  //（env 缺省/其他值 = 零注册 = 默认形态逐字节不变，开关与阈值见 under-pressure.ts）；
+  // 503 语义与 /status 指标口都是插件自带。
+  registerUnderPressure(app);
 
   // 会话密钥（FR-M8.1 教学版会话的签名钥，与票同门 HMAC 纪律）：缺它 = 会话面整体
   // fail-closed——登录与 /chat 都 503，绝不开无签名的匿名会话（INV-1）。

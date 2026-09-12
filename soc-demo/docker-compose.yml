@@ -8,6 +8,13 @@ services:
     # 缺它 m2client 回退 127.0.0.1:3002——容器里指 ingest 自己，webhook 必 500
     environment:
       CASE_BACKEND_URL: http://case-backend:3002
+      # 票 68：under-pressure 过载卸载开关（三 Fastify 服务同款透传）。空缺省 = off =
+      # 零注册 = 默认形态逐字节不变；UNDER_PRESSURE=on 才注册，阈值缺省见
+      # services/ingest/src/under-pressure.ts（UNDER_PRESSURE_MAX_* 可逐项覆盖）。
+      UNDER_PRESSURE: ${UNDER_PRESSURE:-}
+      UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS: ${UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS:-}
+      UNDER_PRESSURE_MAX_HEAP_USED_BYTES: ${UNDER_PRESSURE_MAX_HEAP_USED_BYTES:-}
+      UNDER_PRESSURE_MAX_RSS_BYTES: ${UNDER_PRESSURE_MAX_RSS_BYTES:-}
     depends_on:
       case-backend: { condition: service_healthy }
     healthcheck:
@@ -21,6 +28,12 @@ services:
     ports: ["3002:3002"]
     # 库文件解析到 /app/data（index.ts 的 ../../../data/），必须挂这里；挂别处=每次重建丢数据
     volumes: ["./data/case-backend:/app/data"]
+    environment:
+      # 票 68：under-pressure 过载卸载开关（同 ingest/agent 口径）。空缺省 = off = 零注册。
+      UNDER_PRESSURE: ${UNDER_PRESSURE:-}
+      UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS: ${UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS:-}
+      UNDER_PRESSURE_MAX_HEAP_USED_BYTES: ${UNDER_PRESSURE_MAX_HEAP_USED_BYTES:-}
+      UNDER_PRESSURE_MAX_RSS_BYTES: ${UNDER_PRESSURE_MAX_RSS_BYTES:-}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3002/healthz"]
       interval: 5s
@@ -82,6 +95,13 @@ services:
       # 真实推理模型的 investigation 单节点就 23 次 LLM 调用/近 300s，保守缺省必撞线（纪律正确）。
       MAX_STEPS: ${MAX_STEPS:-}
       MAX_TOKENS_PER_RUN: ${MAX_TOKENS_PER_RUN:-}
+      # 票 68：under-pressure 过载卸载开关（三 Fastify 服务同款透传）。空缺省 = off =
+      # 零注册 = 默认形态逐字节不变；UNDER_PRESSURE=on 才注册，阈值缺省见
+      # services/agent/src/under-pressure.ts（UNDER_PRESSURE_MAX_* 可逐项覆盖）。
+      UNDER_PRESSURE: ${UNDER_PRESSURE:-}
+      UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS: ${UNDER_PRESSURE_MAX_EVENT_LOOP_DELAY_MS:-}
+      UNDER_PRESSURE_MAX_HEAP_USED_BYTES: ${UNDER_PRESSURE_MAX_HEAP_USED_BYTES:-}
+      UNDER_PRESSURE_MAX_RSS_BYTES: ${UNDER_PRESSURE_MAX_RSS_BYTES:-}
     volumes:
       # 票 41（B5·对账一-4 清偿）：runs/run_events/checkpoints/审批卡落宿主盘，
       # 审批 interrupt 处杀进程重启可恢复（m3 卡测试计划）。落点 /app/data 不是
