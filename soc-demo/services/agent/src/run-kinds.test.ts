@@ -44,8 +44,10 @@ const DEPS: RunKindGraphDeps = {
 };
 
 describe("run kind 注册表完整性（票 44：一处注册处处消费）", () => {
-  test("在册 kind 全集 = 五个（fail-closed 名单快照；新增 kind 先进注册表，本名单随之更新）", () => {
-    expect(RUN_KIND_IDS).toEqual(["alert_flow", "knowledge_flow", "chat_flow", "case_flow", "close_flow"]);
+  test("在册 kind 全集 = 七个（fail-closed 名单快照；新增 kind 先进注册表，本名单随之更新）", () => {
+    expect(RUN_KIND_IDS).toEqual([
+      "alert_flow", "knowledge_flow", "chat_flow", "case_flow", "close_flow", "hunt_flow", "hunt_task",
+    ]);
   });
 
   test("每个 kind 三件套齐全：intake 合法 / 票面齐全 / 图工厂在位（三张平行表一致性由单源保证）", () => {
@@ -90,15 +92,21 @@ describe("run kind 注册表完整性（票 44：一处注册处处消费）", (
     expect(requireRunKind("knowledge_flow").ticket.scope).toEqual(["case:read", "kb:propose"]);
   });
 
-  test("intake / requiresMessage 口径（票 17/18/36/39 原样）", () => {
+  test("intake / requiresMessage 口径（票 17/18/36/39/73 原样）", () => {
     expect(requireRunKind("alert_flow").intake).toBe("alert");
     expect(requireRunKind("close_flow").intake).toBe("alert");
-    for (const id of ["knowledge_flow", "chat_flow", "case_flow"]) {
+    for (const id of ["knowledge_flow", "chat_flow", "case_flow", "hunt_flow", "hunt_task"]) {
       expect(requireRunKind(id).intake).toBe("case");
     }
     // 只有 chat_flow 拉起必须带 message（没消息就没有图可跑）
     for (const id of RUN_KIND_IDS) {
       expect(requireRunKind(id).requiresMessage ?? false, `${id} requiresMessage`).toBe(id === "chat_flow");
+    }
+  });
+
+  test("票 73：hunt 两 kind 不进 fixtures flow_nodes 契约锁（节点从 node_enter 动态发现）", () => {
+    for (const id of ["hunt_flow", "hunt_task"]) {
+      expect(requireRunKind(id).pipelineNodes).toBeUndefined();
     }
   });
 

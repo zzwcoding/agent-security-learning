@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS cases (
   linked_alerts TEXT NOT NULL DEFAULT '[]',
   start_date INTEGER NOT NULL,
   end_date INTEGER,
-  intake_source TEXT NOT NULL DEFAULT 'auto_pipeline'
+  intake_source TEXT NOT NULL DEFAULT 'auto_pipeline',
+  hypothesis_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS observables (
@@ -138,6 +139,38 @@ CREATE TABLE IF NOT EXISTS kb_entries (
   expires_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_kb_entries_status ON kb_entries(status, created_at);
+
+-- 票 73（m2 假设实体，第七实体）：编排循环的输入账面。status 走 hypothesis 状态机
+--（CONTEXT.md 语义核心：proposed→hunting→concluded/refuted/cancelled，INV-10 表外 409）；
+-- cancel_reason 取消四因枚举（user_cancelled/planner_broken/spin/budget）。
+-- POST /api/v1/hypotheses 置 proposed 并在同一事务发 outbox hypothesis.created（拉起 hunt_flow）。
+CREATE TABLE IF NOT EXISTS hypotheses (
+  id TEXT PRIMARY KEY,
+  template_id TEXT NOT NULL DEFAULT '',
+  text TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'proposed',
+  proposed_by TEXT NOT NULL DEFAULT '',
+  cancel_reason TEXT,
+  created_at INTEGER NOT NULL,
+  decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_hypotheses_status ON hypotheses(status, created_at);
+
+-- 票 73：轮次归集段（m2 卡面新增读面的存储半边）。编排循环每轮 outcome 经公开写口
+-- 落一条；(hypothesis_id, round_no) 唯一——事件重放/重报同轮幂等替换（INV-6 同族口径）。
+-- tasks/children/judge/gap 存 JSON：children[{run_id,status}] 是父子 run 簿记的
+-- 假设侧读面（run 行真相在 agent 侧，这里是归集视图）。
+CREATE TABLE IF NOT EXISTS hypothesis_rounds (
+  id TEXT PRIMARY KEY,
+  hypothesis_id TEXT NOT NULL,
+  round_no INTEGER NOT NULL,
+  tasks TEXT NOT NULL DEFAULT '[]',
+  children TEXT NOT NULL DEFAULT '[]',
+  judge TEXT,
+  gap TEXT,
+  created_at INTEGER NOT NULL,
+  UNIQUE(hypothesis_id, round_no)
+);
 `;
 
 // 票 09：alerts 增 occurrences/last_seen。SQLite 的 CREATE TABLE IF NOT EXISTS 不会给
@@ -150,6 +183,13 @@ function migrate(db: DB): void {
   if (!cols.has("last_seen")) db.exec("ALTER TABLE alerts ADD COLUMN last_seen INTEGER");
   if (!cols.has("occurrences")) {
     db.exec("ALTER TABLE alerts ADD COLUMN occurrences INTEGER NOT NULL DEFAULT 1");
+  }
+  // 票 73：cases 增 hypothesis_id 可空列（命中建案时回填，Case↔假设溯源锚）。
+  const caseCols = new Set(
+    (db.prepare("PRAGMA table_info(cases)").all() as { name: string }[]).map((c) => c.name),
+  );
+  if (caseCols.size > 0 && !caseCols.has("hypothesis_id")) {
+    db.exec("ALTER TABLE cases ADD COLUMN hypothesis_id TEXT");
   }
 }
 

@@ -25,6 +25,7 @@ import type { AuditSink } from "./audit.js";
 import type { RunCtx } from "./runs.js";
 import { transitionRun } from "./runs.js";
 import { emitEvent } from "./events.js";
+import { runKindOf } from "./run-kinds.js";
 import { expireApprovalCard, listDeclaredPendingApprovals, listExpiredPendingApprovals, type ApprovalGateway } from "./approvals.js";
 
 /** 任务动作：start = 从 queued 开跑；resume = 从审批挂起处续跑。 */
@@ -277,6 +278,26 @@ export function startRunDispatcher(
     requestId: `dispatch_${randomUUID()}`,
     actor: { type: "system", id: "m3:dispatcher" },
   };
+  // 票 73（m14 fanout 的分发放行）：事件等待型 run（注册表 parksOnEvents 标记，即
+  // await_children 在图内挂起等子 run 终态事件）对本循环「领了就放」——本循环串行，
+  // 若被挂起的 execute 顶住，扇出的子 run 任务永远领不到（生产死锁）。放行后真完成
+  // 句柄脱账自理：失败已由执行件（executeStartJob）落 run failed + 审计 + error 事件，
+  // 进程重启的孤儿收口（recoverDispatcherState）照旧兜底。
+  const kindStmt = deps.db.prepare("SELECT kind FROM runs WHERE id = ?");
+  const loopDeps: RunDispatcherDeps = {
+    ...deps,
+    execute: (job) => {
+      const real = deps.execute(job);
+      const kind = (kindStmt.get(job.runId) as { kind?: string } | undefined)?.kind;
+      if (kind !== undefined && runKindOf(kind)?.parksOnEvents === true) {
+        real.catch((err: unknown) => {
+          deps.log?.({ warn: "parkable_run_job_failed", run_id: job.runId, action: job.action, error: String(err) });
+        });
+        return Promise.resolve();
+      }
+      return real;
+    },
+  };
   // 开工恢复（进程重启的盘面收口：孤儿 running / 无主 claimed）。单进程部署假设：
   // 构造时刻没有别人在跑这个库。
   try {
@@ -289,7 +310,7 @@ export function startRunDispatcher(
   }
   const tick = async (): Promise<void> => {
     if (stopped) return;
-    const run = dispatchOnce(deps).catch((err) => {
+    const run = dispatchOnce(loopDeps).catch((err) => {
       deps.log?.({ warn: "dispatcher_tick_failed", error: String(err) });
     });
     inflight = run;

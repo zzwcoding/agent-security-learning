@@ -63,6 +63,7 @@ function fakeDeps(over: Partial<AutorunDeps> = {}): FakeRig {
         active.add(`${req.kind}:${req.alertId ?? req.caseId}`);
       },
       hasActiveRun: (kind, refId) => active.has(`${kind}:${refId}`),
+      hasRoundRun: () => false, // 票 73：hunt 闸二默认不在册（hunt 分支的专项测试另咬）
       hasKbEntryForCase: async () => false,
     },
   };
@@ -343,6 +344,7 @@ describe("票 40 · 全链路集成（真 case-backend 子进程 + agent 正门�
         if (res.statusCode >= 300) throw new Error(`internal/runs HTTP ${res.statusCode} ${res.body}`);
       },
       hasActiveRun: runsLookup(adb),
+      hasRoundRun: () => false, // 票 73：本布景不装 m14 簿记（hunt 分支测试见 autorun-hunt.test.ts）
       hasKbEntryForCase: makeHttpKbEntryCheck(m2Url),
     };
   }

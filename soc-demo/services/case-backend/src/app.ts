@@ -45,6 +45,17 @@ import {
   listKbProposals,
   searchApprovedKb,
 } from "./kb.js";
+import {
+  HYPOTHESIS_STATUSES,
+  HypothesisForbiddenError,
+  HypothesisInvalidError,
+  cancelHypothesis,
+  createHypothesis,
+  getHypothesisDetail,
+  listHypotheses,
+  recordHypothesisRound,
+  transitionHypothesis,
+} from "./hypotheses.js";
 
 // buildApp 是纯工厂（seam，阶段 0.3 拆分沿用）：测试注入 :memory: db，生产注入文件 db。
 // REST 面照 PRD §6-M2 接口契约；另有四个薄出口，决策记录见票 03 实现记录：
@@ -83,6 +94,8 @@ export function buildApp(opts: { db?: DB } = {}) {
       err instanceof JtiExistsError ||
       err instanceof TaskCaseMismatchError ||
       err instanceof KbInvalidError ||
+      err instanceof HypothesisForbiddenError ||
+      err instanceof HypothesisInvalidError ||
       err instanceof NotFoundError
     ) {
       return reply.status(err.httpStatus).send({ error: err.code });
@@ -319,6 +332,72 @@ export function buildApp(opts: { db?: DB } = {}) {
   app.get("/api/v1/kb/search", (req) => {
     const q = req.query as { q?: string; kind?: string; k?: string };
     return { hits: searchApprovedKb(db, { q: q.q, kind: q.kind, k: q.k ? Number(q.k) : undefined }) };
+  });
+
+  // ---- hypotheses（票 73，m2 卡面新增：假设第七实体。编排循环的发起/取消/读面；
+  // 状态机内迁移由编排循环（agent:hunt_flow actor）经 PATCH 驱动，表外一律 409（INV-10）。
+  // 注意 /:id/rounds 与 /:id/cancel 是静态段，注册在 PATCH/GET /:id 语义不冲突的路径上）----
+  // 发起：置 proposed + outbox hypothesis.created 同事务（行为约定 1）——agent 侧 autorun
+  // 消费该事件拉起 hunt_flow（m14 卡「与其他 kind 同权」）。
+  app.post("/api/v1/hypotheses", (req, reply) => {
+    const body = (req.body ?? {}) as { template_id?: string; text?: string; actor?: string };
+    const ctx = ctxOf(req.headers);
+    return reply.status(201).send(
+      createHypothesis(
+        db,
+        {
+          template_id: body.template_id,
+          text: body.text ?? "",
+          proposed_by: body.actor ?? ctx.actor.id,
+        },
+        ctx,
+      ),
+    );
+  });
+
+  app.get("/api/v1/hypotheses", (req) => {
+    const q = req.query as { status?: string };
+    return { hypotheses: listHypotheses(db, { status: q.status }) };
+  });
+
+  app.post("/api/v1/hypotheses/:id/cancel", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { by?: string; reason?: string };
+    const ctx = ctxOf(req.headers);
+    // by 缺省取请求 actor（发起人比对锚在账面 proposed_by，裁决在 store 层）
+    return cancelHypothesis(db, id, { by: body.by ?? ctx.actor.id, reason: body.reason }, ctx);
+  });
+
+  // 轮次归集写口（编排循环每轮 outcome 调）：(hypothesis_id, round_no) 幂等，重放 200。
+  app.post("/api/v1/hypotheses/:id/rounds", (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as {
+      round_no?: number; tasks?: unknown; children?: unknown; judge?: unknown; gap?: unknown;
+    };
+    const { round, dedup } = recordHypothesisRound(
+      db, id,
+      {
+        round_no: body.round_no as number,
+        tasks: body.tasks, children: body.children, judge: body.judge, gap: body.gap,
+      },
+      ctxOf(req.headers),
+    );
+    return reply.status(dedup ? 200 : 201).send({ round, dedup });
+  });
+
+  app.patch("/api/v1/hypotheses/:id", (req) => {
+    const { id } = req.params as { id: string };
+    const body = (req.body ?? {}) as { status?: string; reason?: string };
+    if (body.status !== undefined && !(HYPOTHESIS_STATUSES as readonly string[]).includes(body.status)) {
+      throw new HypothesisInvalidError(`unknown_status: ${body.status}`);
+    }
+    return transitionHypothesis(db, id, body.status as string, { reason: body.reason }, ctxOf(req.headers));
+  });
+
+  app.get("/api/v1/hypotheses/:id", (req, reply) => {
+    const detail = getHypothesisDetail(db, (req.params as { id: string }).id);
+    if (!detail) return reply.status(404).send({ error: "not_found" });
+    return detail;
   });
 
   // ---- audit / events / internal ----

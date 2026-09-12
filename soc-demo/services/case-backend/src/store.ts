@@ -325,6 +325,8 @@ function mapCase(row: Record<string, unknown> | undefined): Record<string, unkno
     startDate: row.start_date,
     endDate: row.end_date,
     intakeSource: row.intake_source,
+    // 票 73：命中建案回填的假设锚（可空列，m2 卡「Case.hypothesis_id」）
+    hypothesisId: row.hypothesis_id ?? null,
   };
 }
 

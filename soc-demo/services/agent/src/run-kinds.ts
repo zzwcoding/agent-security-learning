@@ -49,6 +49,8 @@ import { RealKnowledgeLlm } from "../workers/knowledge/llm-real.js";
 import { GatewayLlmClient } from "./llm-client.js";
 import { scanInjection } from "./guards-client.js";
 import type { FgaChecker } from "./fga-client.js";
+import { makeHuntFlow, type OrchestrationDeps } from "./orchestration/flow.js";
+import { makeHuntTaskFlow } from "./orchestration/task-flow.js";
 
 /** 每-kind 的任务票规格（FR-M3.4 worker 拉起即申领最小 scope 票；INV-3：票面永不含
  *  L2——kb_write 不在 knowledge 的 allowed_tools 里，L2 走审批卡铸 ApprovalToken）。 */
@@ -82,6 +84,9 @@ export interface RunKindGraphDeps {
   fga: FgaChecker;
   /** AGENT_LLM 原值透传（fake = fixture 伪 LLM；其余 = 经凭证代理的 real adapter）。 */
   llmMode: string;
+  /** 票 73：m14 编排循环的注入总面（port/ledger/bus/door/templates/llm——生产装配在
+   *  index.ts，测试换假件）。hunt_flow/hunt_task 的 makeGraph 必需；缺 = 组图即炸响。 */
+  orchestration?: OrchestrationDeps;
 }
 
 /** run kind 描述符：一个 kind 的全部静态知识（票 44 的「一处注册」）。 */
@@ -95,6 +100,11 @@ export interface RunKindDescriptor {
   /** 流水线视图预置骨架（FR-M10.2，web 消费）；没有 = 节点从 node_enter 动态发现
    *  （不超前猜图）。名单与 fixtures/sse-events.json flow_nodes 两端契约锁。 */
   pipelineNodes?: readonly string[];
+  /** 事件等待型 run（票 73 m14：await_children 节点在图内挂起，等子 run 终态事件唤醒）。
+   *  分发循环对这类 start 任务「领了就放」：串行循环若被挂起的 execute 顶住，扇出的
+   *  子 run 永远领不到任务（生产死锁）；真完成句柄由循环脱账自理（失败已由执行件落
+   *  run failed + 审计，重启孤儿收口照旧）。 */
+  parksOnEvents?: boolean;
   /** 图工厂 maker：吃生产装配件、还一个每-run 组图函数（唯一允许碰 worker 装配的格子）。 */
   makeGraph?: (deps: RunKindGraphDeps) => RunGraphFactory;
 }
@@ -136,7 +146,22 @@ function makeCaseChain(deps: RunKindGraphDeps, runId: string, ticket: string): F
 //   knowledge_flow = 票 17 沉淀子图（案件关闭 → 提炼 → kb_write 人审闸）；
 //   chat_flow     = 票 18 对话 Copilot（公开面走 POST /api/v1/chat，编排侧同路进柴）；
 //   case_flow     = 票 36 调查+富化链直拉（PRD §4.2 步骤 7-8 的下半场入口）；
-//   close_flow    = 票 39 SOC1 一键确认关单（FR-M4.5：FP/BTP 建议的执行下半场）。
+//   close_flow    = 票 39 SOC1 一键确认关单（FR-M4.5：FP/BTP 建议的执行下半场）；
+//   hunt_flow     = 票 73 m14 轮次链（intake→planner→dispatch→await_children→judge→outcome，
+//                   一轮一条串行链；轮间接力在 dispatcher 层，见 orchestration/relay.ts）；
+//   hunt_task     = 票 73 m14 扇出的取证子 run（复用 plan/decide 循环的 hunt 桩形）。
+
+/** hunt 菜单（机制级能力名，无业务内容——R10）；与 orchestration/template.ts 默认档同源。 */
+const HUNT_MENU_TOOLS = ["kb_lookup", "siem_query", "related_alerts"] as const;
+
+/** hunt_flow/hunt_task 的图工厂必需编排注入面；缺 = 组装错误要炸响，绝不静默换图。 */
+function requireOrchestration(deps: RunKindGraphDeps): OrchestrationDeps {
+  if (!deps.orchestration) {
+    throw new Error("run kind hunt_flow/hunt_task 需要 RunKindGraphDeps.orchestration（生产装配见 index.ts）");
+  }
+  return deps.orchestration;
+}
+
 const REGISTRY: Record<string, RunKindDescriptor> = {
   alert_flow: {
     intake: "alert",
@@ -251,6 +276,38 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
         actor: ctx?.actor,
       });
     },
+  },
+  hunt_flow: {
+    // 票 73（m14）：拉起实体 = hypothesis_id，走 case_id 位承载——run 行无 hypothesis 列，
+    // 本票不扩 runs schema（m14 卡 {kind:"hunt_flow", hypothesis_id} 与 app.ts 既有 intake
+    // 校验相容的最小落法；扩列与否归后续票/体检追认）。流水线骨架不进 pipelineNodes：
+    // fixtures/sse-events.json flow_nodes 契约锁是旧 kind 的（注册表完整性测试双向锁），
+    // hunt 链节点从 node_enter 事件动态发现（描述符注释的既有口径）。
+    intake: "case",
+    parksOnEvents: true,
+    // planner 票面 = 只读查证面（spec：playbook_lookup/graph_query/kb 类；hunt 专属工具
+    // 未登记前用既有 L0 只读件占位——tools-manifest.test 咬「票面 ⊆ manifest」）。
+    // 预算走默认档（分档归票 77）；INV-3：无任何 L2。菜单与 orchestration/template.ts
+    // 的机制默认档取同一组能力名（票 79 模板登记面接管后收敛到单一来源）。
+    ticket: { sub: "agent:hunt_flow", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
+    makeGraph: (deps) => (run, ticket) =>
+      makeHuntFlow({
+        runId: run.id,
+        orch: requireOrchestration(deps),
+        audit: deps.audit,
+      }),
+  },
+  hunt_task: {
+    // 票 73（m14）：扇出子 run。本票票面 = 菜单级（menu 超集），逐任务 narrow-scope
+    // 两票制归票 76（子票 ⊆ 父菜单的 INV-11 结构保证不变）。
+    intake: "case",
+    ticket: { sub: "agent:hunt_task", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
+    makeGraph: (deps) => (run, ticket) =>
+      makeHuntTaskFlow({
+        runId: run.id,
+        orch: requireOrchestration(deps),
+        audit: deps.audit,
+      }),
   },
 };
 

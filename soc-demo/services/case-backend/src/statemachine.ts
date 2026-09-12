@@ -19,6 +19,18 @@ export const TRANSITIONS: Record<string, Record<string, string[]>> = {
     approved: [],
     rejected: [],
   },
+  // 票 73（m2 假设实体，流转表唯一来源 = CONTEXT.md 语义核心 hypothesis 行）：
+  // proposed→hunting（hunt_flow 首轮开始时前置，行为约定 1）；hunting 的三个出路
+  // concluded/refuted/cancelled 全由编排循环驱动；终态不可回退——表外变更一律 409
+  //（INV-10；取消四因 user_cancelled/planner_broken/spin/budget 是 cancelled 的
+  // 原因标注，不是独立状态）。
+  hypothesis: {
+    proposed: ["hunting"],
+    hunting: ["concluded", "refuted", "cancelled"],
+    concluded: [],
+    refuted: [],
+    cancelled: [],
+  },
 };
 
 export class InvalidTransitionError extends Error {
@@ -37,7 +49,11 @@ export class InvalidTransitionError extends Error {
   }
 }
 
-export function assertTransition(entity: "alert" | "case" | "kbentry", from: string, to: string): void {
+export function assertTransition(
+  entity: "alert" | "case" | "kbentry" | "hypothesis",
+  from: string,
+  to: string,
+): void {
   const legal = TRANSITIONS[entity]?.[from] ?? [];
   if (!legal.includes(to)) {
     throw new InvalidTransitionError(entity, from, to);

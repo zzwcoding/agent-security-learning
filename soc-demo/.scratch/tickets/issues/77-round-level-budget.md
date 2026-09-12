@@ -9,7 +9,7 @@
 **Belongs to spec:** specs/orchestration-loop.md（行号回填同上）
 
 
-**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T06/T09/T18（spec 已定稿 2026-09-12）
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T06/T09/T10/T18（spec 已定稿 2026-09-12；T10 user_cancel_children 原 73-77 无票认领，L0 2026-09-13 补绑本票——人取消与预算触发共用「取消信号节点包装层检查 + 子 run failed(parent_cancelled)」同一套停止机制，loop.test.ts 归本票）
 
 **Blocked by:** 73
 

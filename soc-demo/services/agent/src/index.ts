@@ -38,6 +38,16 @@ import { RealChromaClient, MemoryVectorStore } from "../workers/knowledge/vector
 import type { VectorStore } from "../workers/knowledge/vector-store.js";
 import { ChromaKb } from "../workers/knowledge/kb.js";
 import { makeFgaChecker } from "./fga-client.js";
+// 票 73（m14 编排循环）：机制件的真件装配——事件扇出（tap 单槽变扇出点）、父子 run 簿记、
+// m2 假设实体 REST adapter、run 机器标准入口壳、模板机制默认档、fake LLM 三件套、轮次接力。
+import { makeLoopEventBus } from "./orchestration/bus.js";
+import { SqliteHuntLedger } from "./orchestration/ledger.js";
+import { HttpHypothesisPort } from "./orchestration/hypothesis-port.js";
+import { startRoundRelay } from "./orchestration/relay.js";
+import { makeHuntLauncher } from "./orchestration/launcher.js";
+import { DefaultTemplateSource } from "./orchestration/template.js";
+import { makeFakeLoopLlm } from "./orchestration/llm-stubs.js";
+import type { OrchestrationDeps } from "./orchestration/flow.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
 // 编排侧自己的库（runs/run_events/checkpoints/approvals）落 soc-demo/data；
@@ -92,8 +102,21 @@ const m2Audit = new HttpAuditSink();
 // SECRET_KEY/HOST）齐了才镜像：事件经 setEventTap 挂旁路、审计经 TeeAuditSink 一弦两
 // sink（M2 真相源在前）。key 缺 = lfMirror 为 null，tap 不挂、audit 是原来的单 sink，
 // 与本票之前逐字节一致（默认链路零改动是硬验收；容器在不在不归这里管）。
+// 票 73：tap 单槽变扇出点——编排循环的事件件（await_children 唤醒 / 轮次接力）与
+// Langfuse 镜像同吃一份落盘事件流；没配 Langfuse 时扇出只剩 loop 总线（hunt run 不存在
+// 时零订阅者，默认链路行为不变）。
 const lfMirror = makeLangfuseMirror();
-if (lfMirror) setEventTap((e) => lfMirror.onEvent(e));
+const loopBus = makeLoopEventBus();
+setEventTap((e) => {
+  if (lfMirror) {
+    try {
+      lfMirror.onEvent(e);
+    } catch {
+      // 旁路崩了不许拖垮落库主链路（events.ts 同款纪律，随扇出点上移到这里）
+    }
+  }
+  loopBus.publish(e);
+});
 const audit = lfMirror ? new TeeAuditSink([m2Audit, lfMirror]) : m2Audit;
 // approval_demo 的接线在票 13 换 makeNodes 时掉线（只剩注释）——票 23 迁移 graph.ts
 // 时回补：演示图重新可达，curl 可走通「挂起 → 审批 → resume」全回路（票 11 验收）。
@@ -125,6 +148,39 @@ const makeNodes: RunGraphFactory | undefined = nodes
 // buildApp 缺省的 HttpTokenBurner（fire-and-forget POST 同一张 used_tokens 表）。
 // 票 40：同一份 db 也给消费循环的游标/防重查（event_cursors + runs 表，autorun.ts）。
 const db = openDb(dbPath);
+// 票 73（m14 编排循环）真件装配：簿记落 agent 自持 SQLite（hunt_run_links）；m2 假设
+// 实体走公开 REST（CASE_BACKEND_URL）；拉起子 run/下一轮 run 打 m3 标准入口正门
+//（app.inject POST /internal/runs——铸票/组图/执行全在正门内，R11 铸票唯一通道不动）。
+// planner/judge/gap 本票是确定性 fake 桩（AGENT_LLM 不影响），真 adapter 归票 74/75。
+const huntLedger = new SqliteHuntLedger(db);
+const ORCH_DEPS: OrchestrationDeps = {
+  port: new HttpHypothesisPort(),
+  ledger: huntLedger,
+  bus: loopBus,
+  door: {
+    post: async (payload) => {
+      const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
+      if (res.statusCode >= 300) {
+        throw new Error(`internal/runs HTTP ${res.statusCode} ${res.body}`);
+      }
+      return (res.json() as { run_id: string }).run_id;
+    },
+  },
+  templates: new DefaultTemplateSource(),
+  llm: makeFakeLoopLlm(),
+};
+RUN_KIND_DEPS.orchestration = ORCH_DEPS;
+// 票 73：hunt 拉起件（door 正门 + hunt_run_links 簿记锚落账）——autorun 的
+// hypothesis.created → hunt_flow 轮 1 拉起与 relay 的轮间接力共用同一 launcher。
+const huntLauncher = makeHuntLauncher(ORCH_DEPS.door, huntLedger);
+// 轮次接力（dispatcher 层）：round k outcome 的 round_relay 事件 → 拉起 round k+1 的
+// hunt_flow run（幂等锚在 huntLedger.findByRound；图内永远一轮一条串行链，ADR 0005）。
+const roundRelay = startRoundRelay({
+  bus: loopBus,
+  ledger: huntLedger,
+  door: ORCH_DEPS.door,
+  log: (e) => console.log(JSON.stringify(e)),
+});
 // 狗粮票 57/58（CONTEXT.md「狗粮接入」）：JIAOTU_GATEWAY_URL 设了 = 四件 seam 整体换
 // 椒图 adapter——任务票 mint/焚毁读/焚毁写三件（src/jiaotu/token-ports-jiaotu.ts，57）
 // + 审批外接 approvalGateway（src/jiaotu/approval-gateway.ts，58：挂起申报/批准中继/
@@ -148,6 +204,9 @@ const app = buildApp({
       }
     : {}),
 });
+app.addHook("onClose", async () => {
+  roundRelay.stop(); // 轮次接力订阅随手撤（进程退出前不再接力）
+});
 app
   .listen({ port: PORT, host: "0.0.0.0" })
   .then(() => {
@@ -168,6 +227,13 @@ app
       return;
     }
     const launch: Parameters<typeof startAutorun>[0]["launch"] = async (req) => {
+      // 票 73（L0 派发中裁决①）：hypothesis.created → hunt_flow 轮 1——经 launcher
+      //（door 正门 + 簿记锚落账，防重闸二的落账半边）；hypothesis_id 经 case_id 位承载
+      //（m14 卡备注口径）。autorun 只拉轮 1，轮间接力归 startRoundRelay。
+      if (req.kind === "hunt_flow") {
+        await huntLauncher.launchRound({ hypothesisId: req.caseId as string, roundNo: 1 });
+        return;
+      }
       // 拉起 payload 的实体字段按注册表 intake 定（票 44）：alert = alert_id，case = case_id
       // ——原来「kind === alert_flow 特判」的手抄口径收敛进注册表一格。
       const payload = runKindOf(req.kind)?.intake === "alert"
@@ -183,6 +249,8 @@ app
       cursor: dbCursorStore(db),
       launch,
       hasActiveRun: runsLookup(db),
+      // 票 73（L0 裁决①）：hunt 防重闸二 = m14 簿记锚（findByRound 在册即不重拉轮 1）
+      hasRoundRun: (hypothesisId, roundNo) => huntLedger.findByRound(hypothesisId, roundNo) !== null,
       hasKbEntryForCase: makeHttpKbEntryCheck(),
       log: (e) => console.log(JSON.stringify(e)),
     });

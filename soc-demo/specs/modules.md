@@ -146,6 +146,7 @@
 - 内部模块：`graph`（图定义）、`events`（SSE 总线 + offset 重放）、`envelope`（信封 hash）、`budget`（资源兜底计数）、`autorun`（票 40：M2 outbox 消费循环——alert.created/case.closed 事件自动拉起 run，EVENT_DRIVEN 开关）
 - 内部架构图见 `docs/architecture-m3-internal.html`
 - 过载卸载（票 68，2026-09-13 收口）：`src/under-pressure.ts`——`UNDER_PRESSURE=on` 才 register `@fastify/under-pressure`（env 缺省=零注册=默认形态逐字节不变）；阈值 `UNDER_PRESSURE_MAX_*` env 可覆盖；503 语义插件自带，setErrorHandler 仅放行 `FST_UNDER_PRESSURE`；on 时 `/status` 为插件自带指标口
+- 事件等待型 run 的分发放行（票 73，2026-09-13 L0 追认）：run-dispatcher 对注册表 `parksOnEvents` 标记的 kind（现仅 hunt_flow）的 start 任务「领了就放」——串行循环若被 await_children 挂起的 execute 顶住，扇出的子 run 永远领不到任务（生产死锁，probe 实证）；真完成句柄脱账自理（失败由执行件落 run failed+审计+error 事件，重启孤儿收口 `recoverDispatcherState` 照旧），dispatchOnce 契约与既有分发测试零改动。此即"循环拓扑落 dispatcher 层"的机制落点
 
 ## m4
 
@@ -439,6 +440,8 @@
 ### 备注
 
 - 拓扑约束（已定案）：循环性 = round k outcome 发 outbox 事件拉起 round k+1 run + 父子 run 簿记；图内永远是一轮一条串行链
+- 簿记口径（票 73 落地，L0 批 2026-09-13）：父子 run 关联**不扩共享 runs schema**——agent 自持 `hunt_run_links` 表（run_id 主键：role=hunt_flow 轮次/hunt_task 子 run、hypothesis_id、round_no、parent_run_id、task）承载 parent/round 簿记，与 m2 `hypothesis_rounds.children[{run_id,status}]` 双面同源（轮次 outcome 一并上报）；轮次接力幂等锚 = `findByRound(hypothesis_id, round_no)`（relay 重放不重复起轮，autorun 同闸）
+- 拉起实体承载（票 73 ③，L0 受控接受挂账 2026-09-13）：`POST /internal/runs {kind:"hunt_flow"|"hunt_task", case_id := hypothesis_id}`——hypothesis_id 经 runs.case_id 位承载（run 行无 hypothesis 列）；专用列/语义正名**列阶段 E 体检候选**
 - 预算约束：hunt_flow 预算按 kind 分档（PRD §13.5 ⑩），档位数字票 72 定并回测压测四天花板
 - 内容层位置：模板文件与 hunt prompt 归票 79，本卡只定义格式契约
 

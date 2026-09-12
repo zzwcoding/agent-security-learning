@@ -83,9 +83,10 @@ export function dbCursorStore(db: DB): CursorStore {
   };
 }
 
-/** 拉起请求（语义形，camelCase）：index.ts 折成 /internal/runs 的 snake wire。 */
+/** 拉起请求（语义形，camelCase）：index.ts 折成 /internal/runs 的 snake wire。
+ *  票 73（L0 派发中裁决①）：hunt_flow 走 caseId 位承载 hypothesis_id（m14 卡备注口径）。 */
 export interface LaunchReq {
-  kind: "alert_flow" | "knowledge_flow";
+  kind: "alert_flow" | "knowledge_flow" | "hunt_flow";
   alertId?: string;
   caseId?: string;
 }
@@ -99,6 +100,11 @@ export interface AutorunDeps {
   launch(req: LaunchReq): Promise<void>;
   /** 防重一（agent runs 表）：该对象已有非 failed 的同类 run → true。 */
   hasActiveRun(kind: string, refId: string): boolean;
+  /** 防重二（票 73·L0 裁决①，仅 hunt_flow 消费）：m14 簿记 hunt_run_links 里该假设
+   *  第 roundNo 轮已有在册锚 → true（与 hasActiveRun 缺一不可：runs 行挡「进行中/已完成」，
+   *  簿记锚挡「游标丢失重放 + 轮 1 执行失败后的自动重拉」——后者归 spec 行为约定 3 的
+   *  轮次机语义，不归 autorun 重试）。生产装配 = huntLedger.findByRound。 */
+  hasRoundRun(hypothesisId: string, roundNo: number): boolean;
   /** 防重二（M2 kb 账面，仅 knowledge_flow 用）：该 case 已有 proposed/approved 提案 → true。 */
   hasKbEntryForCase(caseId: string): Promise<boolean>;
   /** 结构化日志（缺省静默；生产打 console）。 */
@@ -135,7 +141,7 @@ export function makeHttpKbEntryCheck(
 export interface AutorunSkip {
   topic: string;
   refId: string;
-  reason: "ignored" | "malformed_payload" | "dup_batch" | "run_exists" | "kb_exists";
+  reason: "ignored" | "malformed_payload" | "dup_batch" | "run_exists" | "kb_exists" | "round_exists";
 }
 
 export interface AutorunPollResult {
@@ -198,6 +204,32 @@ async function decide(
     seen.add(caseId);
     batchSeen.set("knowledge_flow", seen);
     return { action: "launched", kind: "knowledge_flow", refId: caseId };
+  }
+  if (e.topic === "hypothesis.created") {
+    // 票 73（L0 派发中裁决①，autorun.ts 的唯一解禁分支）：hypothesis.created → hunt_flow
+    // 轮 1 拉起——spec 行为约定 1「假设提交即置 proposed 并拉起 hunt_flow」的消费半边，
+    // 照 alert.created 先例。防重两道闸缺一不可（hasActiveRun + hasRoundRun，见 deps 注释）；
+    // 拉起经 deps.launch（index.ts 装配 = HuntLauncher.launchRound：door 正门 + 簿记锚落账），
+    // hypothesis_id 经 case_id 位承载（票 73 ③ L0 口径，m14 卡备注）。拉起失败不动游标
+    //（at-least-once，此刻 ② 尚未落账，下轮重试会真重试——与 alert.created 同款语义）。
+    const hypId = typeof e.payload.hypothesisId === "string" ? e.payload.hypothesisId : "";
+    if (!hypId) return { action: "skipped", skip: { topic: e.topic, refId: "", reason: "malformed_payload" } };
+    const seen = batchSeen.get("hunt_flow") ?? new Set<string>();
+    if (seen.has(hypId)) return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "dup_batch" } };
+    if (deps.hasActiveRun("hunt_flow", hypId)) {
+      return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "run_exists" } };
+    }
+    if (deps.hasRoundRun(hypId, 1)) {
+      return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "round_exists" } };
+    }
+    try {
+      await deps.launch({ kind: "hunt_flow", caseId: hypId });
+    } catch (err) {
+      return { action: "failed", error: String(err) };
+    }
+    seen.add(hypId);
+    batchSeen.set("hunt_flow", seen);
+    return { action: "launched", kind: "hunt_flow", refId: hypId };
   }
   return { action: "skipped", skip: { topic: e.topic, refId: "", reason: "ignored" } };
 }
