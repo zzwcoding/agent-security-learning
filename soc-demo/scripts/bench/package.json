@@ -1,0 +1,15 @@
+{
+  "name": "soc-bench",
+  "private": true,
+  "version": "0.1.0",
+  "description": "m13 压测工具面：对公开 HTTP/SSE 面施压（非运行时件，不在 pnpm workspace 内，独立安装）",
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "b1": "node b1-endpoints.mjs"
+  },
+  "devDependencies": {
+    "autocannon": "^8.0.0",
+    "hdr-histogram-percentiles-obj": "^3.0.0"
+  }
+}
