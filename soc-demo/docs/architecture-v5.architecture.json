@@ -1,0 +1,945 @@
+{
+ "schema_version": 1,
+ "diagram_type": "architecture",
+ "meta": {
+  "title": "SOC 数字员工 · 架构图 v5 —— 增补：假设驱动编排循环（PRD §13）",
+  "output": "architecture-v5.html",
+  "quality_profile": "showcase",
+  "locale": "zh-CN",
+  "viewBox": [
+   1490,
+   1010
+  ]
+ },
+ "components": [
+  {
+   "id": "alert-src",
+   "type": "external",
+   "label": "告警源",
+   "sublabel": "Wazuh 格式 / fixture 回放",
+   "pos": [
+    20,
+    320
+   ],
+   "size": [
+    150,
+    64
+   ],
+   "tag": "真实数据"
+  },
+  {
+   "id": "ingest",
+   "type": "backend",
+   "label": "M1 告警接入",
+   "sublabel": "Fastify :3001",
+   "pos": [
+    220,
+    320
+   ],
+   "size": [
+    150,
+    64
+   ],
+   "tag": "去重+不可信标记"
+  },
+  {
+   "id": "case-backend",
+   "type": "database",
+   "label": "M2 案件后端",
+   "sublabel": "Fastify + SQLite :3002",
+   "pos": [
+    430,
+    320
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "六实体+审计"
+  },
+  {
+   "id": "m3-supervisor",
+   "type": "backend",
+   "label": "M3 supervisor 编排",
+   "sublabel": "LangGraph 主图 · 审批 interrupt",
+   "pos": [
+    650,
+    256
+   ],
+   "size": [
+    300,
+    50
+   ],
+   "tag": "不持工具·只调度"
+  },
+  {
+   "id": "m4-triage",
+   "type": "backend",
+   "label": "M4 分诊",
+   "sublabel": "六节点子图",
+   "pos": [
+    670,
+    348
+   ],
+   "size": [
+    92,
+    54
+   ],
+   "tag": "物理无 L2 票"
+  },
+  {
+   "id": "m5-investigation",
+   "type": "backend",
+   "label": "M5 调查",
+   "sublabel": "工具循环",
+   "pos": [
+    774,
+    348
+   ],
+   "size": [
+    92,
+    54
+   ],
+   "tag": "只建议不动手"
+  },
+  {
+   "id": "m6-enrichment",
+   "type": "backend",
+   "label": "M6 富化",
+   "sublabel": "一次性 microVM",
+   "pos": [
+    878,
+    348
+   ],
+   "size": [
+    92,
+    54
+   ],
+   "tag": "TLP/PAP 闸门"
+  },
+  {
+   "id": "m7-knowledge",
+   "type": "backend",
+   "label": "M7 知识沉淀",
+   "sublabel": "提炼→人审→入库",
+   "pos": [
+    641,
+    440
+   ],
+   "size": [
+    150,
+    54
+   ],
+   "tag": "案件关闭触发"
+  },
+  {
+   "id": "m8-copilot",
+   "type": "backend",
+   "label": "M8 对话 Copilot",
+   "sublabel": "chat_flow · SSE",
+   "pos": [
+    832,
+    440
+   ],
+   "size": [
+    138,
+    54
+   ],
+   "tag": "RBAC 可见工具"
+  },
+  {
+   "id": "web",
+   "type": "frontend",
+   "label": "M10 Web 演示窗",
+   "sublabel": "Vite+React :5173",
+   "pos": [
+    450,
+    80
+   ],
+   "size": [
+    170,
+    64
+   ],
+   "tag": "六页面薄客户端"
+  },
+  {
+   "id": "gateway",
+   "type": "security",
+   "label": "C5 网关三容器",
+   "sublabel": "ContextForge+OpenFGA+自写铸币/凭证代理",
+   "pos": [
+    1000,
+    180
+   ],
+   "size": [
+    224,
+    72
+   ],
+   "tag": "RBAC·FGA·铸票"
+  },
+  {
+   "id": "guards",
+   "type": "security",
+   "label": "C4 防护微服务",
+   "sublabel": "llm-guard + Presidio :8001",
+   "pos": [
+    1000,
+    460
+   ],
+   "size": [
+    210,
+    64
+   ],
+   "tag": "注入扫描·PII"
+  },
+  {
+   "id": "llm-provider",
+   "type": "cloud",
+   "label": "LLM Provider",
+   "sublabel": "MiniMax-M2",
+   "pos": [
+    1032,
+    40
+   ],
+   "size": [
+    150,
+    60
+   ],
+   "tag": "永不见真 key"
+  },
+  {
+   "id": "chroma",
+   "type": "database",
+   "label": "Chroma 知识库",
+   "sublabel": "向量检索 :8000",
+   "pos": [
+    450,
+    548
+   ],
+   "size": [
+    170,
+    60
+   ],
+   "tag": "人审后才入库"
+  },
+  {
+   "id": "sandbox",
+   "type": "security",
+   "label": "microsandbox",
+   "sublabel": "analyzer 一次性 microVM",
+   "pos": [
+    700,
+    548
+   ],
+   "size": [
+    180,
+    60
+   ],
+   "tag": "第四攻击面"
+  },
+  {
+   "id": "eval",
+   "type": "backend",
+   "label": "M11 Eval 体系",
+   "sublabel": "vitest fixture 驱动",
+   "pos": [
+    210,
+    548
+   ],
+   "size": [
+    160,
+    60
+   ],
+   "tag": "三维评估"
+  },
+  {
+   "id": "approver",
+   "type": "external",
+   "label": "审批人（值班长）",
+   "sublabel": "human-in-the-loop",
+   "pos": [
+    780,
+    40
+   ],
+   "size": [
+    170,
+    56
+   ],
+   "tag": "L2 · 人审"
+  },
+  {
+   "id": "m14-loop",
+   "type": "backend",
+   "label": "M14 编排循环（假设驱动）",
+   "sublabel": "planner→扇出→judge→gap 轮次机器",
+   "pos": [
+    660,
+    616
+   ],
+   "size": [
+    600,
+    44
+   ],
+   "tag": "机制层·不含业务分支"
+  },
+  {
+   "id": "intake",
+   "type": "backend",
+   "label": "intake 受理",
+   "sublabel": "假设入环",
+   "pos": [
+    552,
+    502
+   ],
+   "size": [
+    84,
+    38
+   ]
+  },
+  {
+   "id": "planner",
+   "type": "backend",
+   "label": "planner",
+   "sublabel": "LLM 从菜单选组合",
+   "pos": [
+    666,
+    502
+   ],
+   "size": [
+    84,
+    38
+   ],
+   "tag": "菜单外 fail-closed"
+  },
+  {
+   "id": "dispatch",
+   "type": "backend",
+   "label": "dispatch",
+   "sublabel": "扇出 N 子 run",
+   "pos": [
+    778,
+    502
+   ],
+   "size": [
+    84,
+    38
+   ],
+   "tag": "单轮 ≤2 子任务"
+  },
+  {
+   "id": "await-children",
+   "type": "backend",
+   "label": "await",
+   "sublabel": "事件唤醒 · 禁轮询",
+   "pos": [
+    886,
+    502
+   ],
+   "size": [
+    84,
+    38
+   ]
+  },
+  {
+   "id": "judge",
+   "type": "backend",
+   "label": "judge",
+   "sublabel": "LLM 证据充分性裁决",
+   "pos": [
+    996,
+    540
+   ],
+   "size": [
+    84,
+    38
+   ],
+   "tag": "命中/证伪分岔"
+  },
+  {
+   "id": "gap",
+   "type": "backend",
+   "label": "gap",
+   "sublabel": "LLM 缺口分析",
+   "pos": [
+    1106,
+    540
+   ],
+   "size": [
+    84,
+    38
+   ]
+  },
+  {
+   "id": "outcome",
+   "type": "backend",
+   "label": "outcome",
+   "sublabel": "收敛 / 续轮",
+   "pos": [
+    1216,
+    540
+   ],
+   "size": [
+    72,
+    38
+   ]
+  },
+  {
+   "id": "weknora",
+   "type": "external",
+   "label": "weknora 外部记忆",
+   "sublabel": "零安全闸 · 包层即闸门",
+   "pos": [
+    36,
+    820
+   ],
+   "size": [
+    148,
+    54
+   ],
+   "tag": "Memory stub → HTTP"
+  }
+ ],
+ "boundaries": [
+  {
+   "kind": "region",
+   "label": "单机 docker-compose（上云=同套 compose 搬 VPS）",
+   "wraps": [
+    "ingest",
+    "case-backend",
+    "web",
+    "m3-supervisor",
+    "m4-triage",
+    "m5-investigation",
+    "m6-enrichment",
+    "m7-knowledge",
+    "m8-copilot",
+    "gateway",
+    "guards",
+    "chroma"
+   ],
+   "pad": 10
+  },
+  {
+   "kind": "region",
+   "label": "agent 服务（LangGraph.js :3003 · M3-M8 同进程）",
+   "wraps": [
+    "m3-supervisor",
+    "m4-triage",
+    "m5-investigation",
+    "m6-enrichment",
+    "m7-knowledge",
+    "m8-copilot"
+   ],
+   "pad": 18
+  },
+  {
+   "kind": "security-group",
+   "label": "安全控制面 M9（全部 fail-closed）",
+   "wraps": [
+    "m3-supervisor",
+    "m4-triage",
+    "m5-investigation",
+    "m6-enrichment",
+    "m7-knowledge",
+    "m8-copilot",
+    "gateway",
+    "guards"
+   ]
+  }
+ ],
+ "connections": [
+  {
+   "id": "src-to-ingest",
+   "from": "alert-src",
+   "to": "ingest",
+   "label": "POST /webhooks/alerts",
+   "variant": "emphasis",
+   "labelAt": [
+    205,
+    298
+   ]
+  },
+  {
+   "id": "ingest-to-case",
+   "from": "ingest",
+   "to": "case-backend",
+   "label": "写 Alert（去重）",
+   "variant": "emphasis",
+   "labelAt": [
+    415,
+    298
+   ]
+  },
+  {
+   "id": "case-to-m3",
+   "from": "case-backend",
+   "to": "m3-supervisor",
+   "label": "alert.created 事件",
+   "variant": "emphasis",
+   "fromSide": "right",
+   "toSide": "bottom",
+   "labelAt": [
+    660,
+    330
+   ]
+  },
+  {
+   "id": "m3-to-case",
+   "from": "m3-supervisor",
+   "to": "case-backend",
+   "label": "读写案件 / 审计",
+   "fromSide": "left",
+   "toSide": "top",
+   "labelAt": [
+    595,
+    268
+   ]
+  },
+  {
+   "id": "m3-to-gateway",
+   "from": "m3-supervisor",
+   "to": "gateway",
+   "label": "任务票+LLM占位符",
+   "variant": "security",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    950,
+    248
+   ]
+  },
+  {
+   "id": "gateway-to-llm",
+   "from": "gateway",
+   "to": "llm-provider",
+   "label": "注入真 key 转发",
+   "variant": "security",
+   "labelDy": -14,
+   "fromSide": "top",
+   "toSide": "bottom"
+  },
+  {
+   "id": "m8-to-guards",
+   "from": "m8-copilot",
+   "to": "guards",
+   "label": "输入预检 · 注入扫描",
+   "variant": "security",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    1010,
+    538
+   ]
+  },
+  {
+   "id": "m7-to-chroma",
+   "from": "m7-knowledge",
+   "to": "chroma",
+   "label": "人审后入库 · 检索面只读（M4/M5）",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    648,
+    500
+   ],
+   "via": [
+    [
+     716,
+     510
+    ],
+    [
+     580,
+     510
+    ]
+   ]
+  },
+  {
+   "id": "m6-to-sandbox",
+   "from": "m6-enrichment",
+   "to": "sandbox",
+   "label": "analyzer 沙箱执行",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    860,
+    412
+   ],
+   "via": [
+    [
+     924,
+     421
+    ],
+    [
+     798,
+     421
+    ],
+    [
+     798,
+     532
+    ],
+    [
+     790,
+     532
+    ]
+   ]
+  },
+  {
+   "id": "web-to-m3",
+   "from": "web",
+   "to": "m3-supervisor",
+   "label": "REST + SSE 全量消费（对话 /chat 走 M8）",
+   "fromSide": "right",
+   "toSide": "top",
+   "labelAt": [
+    730,
+    156
+   ]
+  },
+  {
+   "id": "eval-to-m4",
+   "from": "eval",
+   "to": "m4-triage",
+   "label": "fixture 评测驱动",
+   "variant": "dashed",
+   "fromSide": "top",
+   "toSide": "left",
+   "labelAt": [
+    630,
+    418
+   ],
+   "via": [
+    [
+     290,
+     500
+    ],
+    [
+     630,
+     500
+    ],
+    [
+     630,
+     375
+    ]
+   ]
+  },
+  {
+   "id": "m3-to-m4",
+   "from": "m3-supervisor",
+   "to": "m4-triage",
+   "label": "按序拉起子图",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "m3-to-m5",
+   "from": "m3-supervisor",
+   "to": "m5-investigation",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "m3-to-m6",
+   "from": "m3-supervisor",
+   "to": "m6-enrichment",
+   "fromSide": "bottom",
+   "toSide": "top"
+  },
+  {
+   "id": "web-to-case",
+   "from": "web",
+   "to": "case-backend",
+   "label": "GET 只读查询",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    525,
+    230
+   ]
+  },
+  {
+   "id": "approver-to-m3",
+   "from": "approver",
+   "to": "m3-supervisor",
+   "label": "L2 批复 · resume",
+   "fromSide": "bottom",
+   "toSide": "top",
+   "labelAt": [
+    870,
+    176
+   ]
+  },
+  {
+   "id": "case-to-m4",
+   "from": "case-backend",
+   "to": "m4-triage",
+   "label": "读告警",
+   "fromSide": "right",
+   "toSide": "left",
+   "labelAt": [
+    605,
+    396
+   ]
+  },
+  {
+   "id": "m7-to-m4",
+   "from": "m7-knowledge",
+   "to": "m4-triage",
+   "label": "KB 检索注入",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "labelAt": [
+    690,
+    405
+   ]
+  },
+  {
+   "id": "m8-to-gateway",
+   "from": "m8-copilot",
+   "to": "gateway",
+   "label": "RBAC 可见性 + FGA 三态裁决",
+   "fromSide": "right",
+   "toSide": "bottom",
+   "via": [
+    [
+     990,
+     467
+    ],
+    [
+     990,
+     300
+    ],
+    [
+     1112,
+     300
+    ]
+   ],
+   "labelAt": [
+    1050,
+    300
+   ]
+  },
+  {
+   "id": "m14-to-case",
+   "from": "m14-loop",
+   "to": "case-backend",
+   "label": "假设 CRUD（第七实体·五态机）+ 轮次归集读面；judge 分岔：命中建 Case 挂 hypothesis_id / 未命中落 note 型 TimelineEntry",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "labelAt": [
+    520,
+    510
+   ],
+   "via": [
+    [
+     648,
+     638
+    ],
+    [
+     648,
+     392
+    ],
+    [
+     515,
+     392
+    ]
+   ]
+  },
+  {
+   "id": "m14-dispatch-to-m5",
+   "from": "dispatch",
+   "to": "m5-investigation",
+   "label": "子 run 经 m3 标准 run 机器拉起 · 复用 m5 plan/decide（hunt prompt · narrow-scope 票）",
+   "fromSide": "top",
+   "toSide": "bottom",
+   "labelAt": [
+    860,
+    525
+   ],
+   "route": "straight"
+  },
+  {
+   "id": "m14-dispatch-to-gateway",
+   "from": "dispatch",
+   "to": "gateway",
+   "label": "两票票务：父票挂 planner 面 + dispatch 铸 narrow-scope 子票（INV-11 子票 ⊆ 父菜单）",
+   "variant": "security",
+   "fromSide": "bottom",
+   "toSide": "right",
+   "labelAt": [
+    1090,
+    590
+   ],
+   "via": [
+    [
+     820,
+     600
+    ],
+    [
+     1360,
+     600
+    ],
+    [
+     1360,
+     216
+    ],
+    [
+     1224,
+     216
+    ]
+   ]
+  },
+  {
+   "id": "m14-intake-planner",
+   "from": "intake",
+   "to": "planner"
+  },
+  {
+   "id": "m14-planner-dispatch",
+   "from": "planner",
+   "to": "dispatch"
+  },
+  {
+   "id": "m14-dispatch-await",
+   "from": "dispatch",
+   "to": "await-children"
+  },
+  {
+   "id": "m14-await-judge",
+   "from": "await-children",
+   "to": "judge"
+  },
+  {
+   "id": "m14-judge-gap",
+   "from": "judge",
+   "to": "gap"
+  },
+  {
+   "id": "m14-gap-outcome",
+   "from": "gap",
+   "to": "outcome"
+  },
+  {
+   "id": "m14-loopback",
+   "from": "outcome",
+   "to": "intake",
+   "label": "round k → outbox → m3 分发拉起 round k+1（图内永远串行链）",
+   "variant": "dashed",
+   "fromSide": "right",
+   "toSide": "bottom",
+   "labelAt": [
+    950,
+    950
+   ],
+   "via": [
+    [
+     1300,
+     559
+    ],
+    [
+     1300,
+     608
+    ],
+    [
+     594,
+     608
+    ],
+    [
+     594,
+     548
+    ]
+   ]
+  },
+  {
+   "id": "m8-to-m14",
+   "from": "m8-copilot",
+   "to": "m14-loop",
+   "label": "分析师发起（狩猎页第七页）：POST /hypotheses → m2 → outbox 拉起 hunt_flow",
+   "fromSide": "bottom",
+   "toSide": "bottom",
+   "labelAt": [
+    950,
+    505
+   ],
+   "via": [
+    [
+     901,
+     540
+    ],
+    [
+     960,
+     540
+    ],
+    [
+     960,
+     600
+    ]
+   ]
+  },
+  {
+   "id": "m14-loop-to-weknora",
+   "from": "m14-loop",
+   "to": "weknora",
+   "label": "playbook_lookup · graph_query · hypothesis_register（WEKNORA_URL 开关）",
+   "variant": "dashed",
+   "fromSide": "left",
+   "toSide": "bottom",
+   "labelAt": [
+    275,
+    874
+   ],
+   "via": [
+    [
+     960,
+     985
+    ],
+    [
+     110,
+     985
+    ],
+    [
+     110,
+     884
+    ]
+   ]
+  }
+ ],
+ "cards": [
+  {
+   "dot": "cyan",
+   "title": "告警主流水线",
+   "items": [
+    "M1 接入去重 → M2 落库发事件 → M3 编排拉起 M4 分诊 → M5 调查 → M6 富化 → 响应建议",
+    "L2 高危动作永远 interrupt 等人点头：审批通过铸一次性 ApprovalToken，用后焚毁",
+    "M7 知识沉淀：案件关闭 → 提炼草稿 → 人审入库 → 下次分诊提速"
+   ]
+  },
+  {
+   "dot": "rose",
+   "title": "安全控制面（差异化主体）",
+   "items": [
+    "LLM 永不见真实凭证：凭证代理在执行侧注入，全链路金丝雀断言",
+    "验票闸强制执行：L0 免验 / L1 任务票 / L2 审批铸票，越权一律 403 + DENIED 审计",
+    "子 agent 权限收窄：分诊 agent 物理上没有遏制工具的票",
+    "注入双通道防护：llm-guard 文本扫描 + 验票行为兜底，纵深两层"
+   ]
+  },
+  {
+   "dot": "emerald",
+   "title": "演示与评测",
+   "items": [
+    "M10 六页面薄客户端，全部功能 curl 可演（Web 消费 M2/M3/M8/M9 公开 API）",
+    "M11 三维评估：分诊准确率 / 防线拦截率（四攻击面）/ 成本口径",
+    "M12 MCP 体检 CLI 独立分发（不在本图 compose 内）"
+   ]
+  },
+  {
+   "dot": "violet",
+   "title": "假设驱动狩猎（v5 新增）",
+   "items": [
+    "分析师假设 → 循环验证/证伪：planner 选组合 → 扇出子 run → judge 裁决 → gap 续轮，轮次视图看 C₂≠C₁",
+    "权限按任务收窄：父票挂 planner 面，dispatch 逐任务铸 narrow-scope 子票（INV-11 子票 ⊆ 父菜单）",
+    "一套循环五业务：威胁狩猎/应急取证首发，模板即业务（内容层零机制增量）"
+   ]
+  }
+ ]
+}

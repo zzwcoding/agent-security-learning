@@ -10,6 +10,7 @@
 12 个 PRD 模块 → 7 个可部署单元（compose 服务）+ 2 个非运行时件：
 
 > 2026-09-12 增补第 13 卡 **m13 压测工具面**——非运行时件（宿主侧 scripts/bench），不在下图 compose 拓扑内，只走各服务公开 HTTP/SSE 面（PRD 变更记录 #7）。
+> 2026-09-12 增补第 14 卡 **m14 编排循环**——agent 服务内子模块（与 m4-m7 同层，无独立 HTTP 面），假设驱动的轮次机器（PRD §13，票 70 定稿、票 71 落卡）。
 
 ```
                         ┌─────────────┐
@@ -407,6 +408,37 @@
 - Adapter: autocannon 编程 API；无服务端改动（B1-B4 零生产代码，under-pressure 归票 68 单独走）
 - 测试计划: harness 单测（stub 服务 200/422/超时三态断言 + sourceRef 唯一化生成器）；中立层边界由 check_boundary.py 既有"scripts/ 禁 import services 内部"规则覆盖
 
+## m14
+
+**M14 编排循环（假设驱动）** → services/agent 内子模块（m3 领地新目录，无独立 HTTP 面；PRD §13）
+
+职责: 假设进、轮次机器跑、结论出——planner 从能力菜单选组合 → 扇出子 run 并行取证 → judge 裁决 → gap 缺口 → 再组合，直到证据收敛；**本卡不含任何业务分支**（狩猎/应急取证等只是内容层模板）
+目录: services/agent
+
+### 公开接口
+
+- `POST /internal/runs {kind:"hunt_flow", hypothesis_id}` → 拉起循环 run（m3 run 机器标准入口，与其他 kind 同权）
+- `run_hypothesis(template_id, hypothesis_text, actor)` → run_id（m14 组图入口：m3 makeNodes 对 hunt_flow 调它；交接态按 m3 信封口径装 hypothesis_id/模板菜单）
+- 模板登记面：模板 = `template_id + 假设句式族 + 菜单子集 + max_rounds/单轮任务数改写`（格式契约归本卡，模板文件归内容层票 79）
+- 子 run 契约：kind=`hunt_task`，标准 run 机器拉起（m3 公开面），m14 只在 dispatch 节点经 m3 调用，子 run 复用 m5 plan/decide 循环（hunt 版 prompt 为内容层）
+- 轮次/子 run 归集读面 + 假设 CRUD（发起/取消/列表/详情）→ **m2 卡面新增**（PRD §13.7 页面映射的两条新查询面）
+
+### 依赖
+
+- 模块: `m3`（run 机器/事件/分发/组图——循环拓扑落 dispatcher 层，**禁改 compileFlowGraph 串行链模型**）、`m9`（两票票务只走公开铸票面）、`m5`（子 run plan/decide 循环与 SIEM/KB adapter，经公开接口）、`m2`（假设实体经 REST）
+- 外部: @langchain/langgraph（框架红线：走 m3 现有 compileFlowGraph 节点包装机制）
+
+### Seam 与测试
+
+- Seam: planner/judge/gap_analyzer 各 LLM adapter（fake/real 双件，走 m3 llm-client 口径）；票务口注入（父票 planner 面 + dispatch 子票）；事件唤醒口（子 run 终态→父 run，禁轮询）；playbook/graph 查询 adapter（Memory stub → weknora HTTP，票 79/83）
+- 测试计划: fake LLM 全轮次轨迹契约测试（C₂≠C₁ 或单轮收敛）；INV-11 子票 ⊆ 父菜单遍历断言；相邻轮同组合防转掐断；预算双闸四触发（详表归票 72 spec 定稿时逐条落）
+
+### 备注
+
+- 拓扑约束（已定案）：循环性 = round k outcome 发 outbox 事件拉起 round k+1 run + 父子 run 簿记；图内永远是一轮一条串行链
+- 预算约束：hunt_flow 预算按 kind 分档（PRD §13.5 ⑩），档位数字票 72 定并回测压测四天花板
+- 内容层位置：模板文件与 hunt prompt 归票 79，本卡只定义格式契约
+
 ## 2. 新增 compose 服务（相对阶段 0.2 骨架）
 
 - `openfga`（官方镜像，M9-S6/M8 FGA 裁决）——setup 脚本按 ADR 0001 思路幂等重建授权模型
@@ -419,6 +451,19 @@
 
 - Redis/Kafka：不引入；EventBus seam 用 SQLite outbox adapter 首版（将来换实现不换接口）
 - M2 多租户/认证、M10 配置管理、M7 自动入库：照 PRD §11 边界声明
+
+## 页面映射
+
+> 票 71 落（2026-09-12）。逐行把 PRD §13.7 页面数据需求追到公开接口；追不到 = 接口有洞当场补卡。两条"新查询面"即 m2/m14 卡面新增行的来源。
+
+| 页面·数据需求 | 类型 | 追到接口 | 状态 |
+|---|---|---|---|
+| 狩猎页·假设列表（五态 Tag） | 读 | m2 `GET /api/v1/hypotheses`（卡面新增） | 需要新查询面（票 73 随假设实体建） |
+| 狩猎页·发起假设（选模板+填假设句） | 写 | m2 `POST /api/v1/hypotheses` → outbox 拉起 m3 hunt_flow | 需要新接口（票 73） |
+| 狩猎页·取消假设（hunting 态） | 写 | m2 取消端点（状态机 hunting→cancelled，INV-10） | 需要新接口（票 73） |
+| 狩猎页·轮次视图（每轮组合/子 run 状态） | 读+SSE | m3 run 公开读面 + SSE（流水线页同款，既有）＋ m2 假设详情读面的轮次归集段 | 部分既有；归集段为新查询面（票 73） |
+| 狩猎页·judge 裁决 + gap 缺口 | 读+SSE | m2 假设详情读面内嵌（轮次归集段） | 同上 |
+| 狩猎页·收敛结论（Case 链接/证伪摘要） | 读 | m2 假设详情读面内嵌 + 既有案件查询面（Case 挂 hypothesis_id） | 详情段新、案件面既有 |
 
 ## 边界规则
 
@@ -435,3 +480,6 @@
 | `services/guards` 与 `services/gateway` 互不 import（py 侧经 REST） | （无） | C4/C5 分工（PRD §4.1） |
 | 依赖方向单向：fixtures→ingest→case-backend→agent→{guards,gateway,chroma,openfga}；反向/环状引用 | （无） | 依赖无环（check_specs 卡级锁的代码级延伸） |
 | 服务级 `/healthz` 等基础设施端点计入卡面公开接口对账 | 全体服务 `/healthz` | 体检对账三-12 统一豁免 |
+| m14 机制目录（services/agent 编排循环件）引用内容层模板实现或含业务分支常量（hunting/ir 等模板名出现在机制层源码/常量） | 模板**格式类型定义**（纯类型无行为，单文件） | PRD §13.1 分层铁律：机制/内容分离，票 80 零增量断言的机器半边（check_boundary 需加内容型检查器） |
+| m14 自签/改面任务票（铸票只许经 m9 公开铸票面，票面 scope 生成后不可再改） | （无） | INV-11 执行缝：子票 ⊆ 父菜单靠"铸票唯一通道"结构保证，票 76 遍历断言的静态半边 |
+| m14 与 m5 子 run 流程 import `src/approvals.ts` 的审批内部（开卡/ApprovalToken 通道） | （无） | M9-S6 沿用：worker 物理无 L2 通道，L2 只经 graph.ts NodeCtx 的 executeApproved 正门（m3 卡面） |

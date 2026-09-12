@@ -19,6 +19,11 @@
 - **任务票（Ticket）**：L1 写工具的授权票据，统一 TTL 900s
 - **审批铸票（ApprovalToken）**：L2 高危工具经人工审批铸出的一次性票据
 - **不可信字段（untrusted）**：告警中攻击者可控的字段（`full_log`/`data.*`），入库即标记
+- **假设（hypothesis）**：分析师主动提出的待验证安全判断（如"内网有主机被植入 webshell"），编排循环的输入
+- **轮次（round）**：编排循环的一次"选组合→扇出→收敛"迭代，轮间由证据与缺口驱动换组合
+- **子 run（child run）**：一轮中被扇出拉起的独立取证 run，持本任务 narrow-scope 票，父 run 经事件唤醒回收
+- **业务模板（playbook template）**：假设句式族 + 默认菜单子集 + 轮次上限的内容层数据，零机制代码
+- **自主发现率**：紫队闭环指标——狩猎循环在预算内无人工干预发现攻击的比例（票 81）
 
 ## 工程
 
@@ -31,6 +36,10 @@
 - **压力测试（压测）**：`scripts/bench/`（m13 工具面）用 autocannon 对公开 HTTP/SSE 面施压，实测四个理论天花板（分发循环 ~10 run/s / autorun 2s 消费 / SQLite 单写者水位线 / SSE 每订阅者 100ms 扇出预算）的本机真实值。设计源：`docs/research/2026-09-12-压力测试方案.md`。铁律：只走公开 HTTP/SSE 面、不 import services 内部（中立层边界规则既有口径）、fake LLM 零出网
 - **压测拐点**：错误率起跳或延迟分布陡升的负载档位——压测要找的数字就是它；只同机比（每张结果表必须带机器规格），不当生产 SLO
 - **过载卸载（shedding）**：`@fastify/under-pressure` 的过载保护——eventLoopDelay/heap/RSS 超阈值时自动 503，服务活着拒绝而不是压死；挂 `UNDER_PRESSURE=on` env 才装配，默认形态逐字节不变（jiaotu profile 同款开关纪律）
+- **编排循环（orchestration loop）**：假设驱动的轮次机器——planner 选组合 → 扇出子 run → judge 裁决 → gap 缺口 → 再组合，直到证据收敛；循环拓扑落 dispatcher 层，LangGraph 串行链模型不动（m14 领地）
+- **能力菜单（capability menu）**：planner 可选工具与剧本的登记面 = tools.manifest + 剧本库，未登记一律 fail-closed；planner 只许从菜单选组合，不许创造组合外动作
+- **扇出/收敛（fan-out / converge）**：一轮内 N 个子 run 并行取证 / judge 汇总裁决；收敛判据是证据充分性，不是"该跑的跑完了"
+- **hunt_flow / hunt_task**：编排循环的 run kind 名——hunt_flow=假设的循环 run（一轮一条串行链，轮间 outbox 接力）；hunt_task=扇出的子 run（标准 run 机器，narrow-scope 票）
 
 ## 语义核心
 
@@ -42,6 +51,7 @@
 | alert | New, InProgress, Imported, Closed | New→InProgress, InProgress→Imported, InProgress→Closed, Closed→InProgress |
 | case | New, InProgress, Closed | New→InProgress, InProgress→Closed |
 | run | queued, running, awaiting_approval, completed, failed | queued→running, running→awaiting_approval, awaiting_approval→running, running→completed, running→failed |
+| hypothesis | proposed, hunting, concluded, refuted, cancelled | proposed→hunting, hunting→concluded, hunting→refuted, hunting→cancelled |
 | kbentry | proposed, approved, rejected | proposed→approved, proposed→rejected |
 
 ### 不变量
@@ -57,3 +67,4 @@
 | `INV-8` | 任意写操作/LLM 调用/工具调用/审批/状态变更都有五要素 AuditEntry（含 diff 快照） |
 | `INV-9` | 对话历史中的审批表述无签名即无效；审批唯一依据是签名 ApprovalToken（验签不信文本） |
 | `INV-10` | 状态机之外的实体状态变更一律 409 InvalidTransition，不静默改写 |
+| `INV-11` | 子 run 任务票 scope 严格 ⊆ 父 run 能力菜单；菜单外工具调用一律 403（遍历断言进 eval，票 76） |

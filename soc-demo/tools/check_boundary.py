@@ -44,6 +44,9 @@ KEYS = [
     ("R7", "互不 import"),
     ("R8", "依赖方向单向"),
     ("R9", "healthz"),
+    ("R10", "m14 机制目录"),
+    ("R11", "自签/改面任务票"),
+    ("R12", "审批内部"),
 ]
 
 H2 = re.compile(r"^##\s+(.+?)\s*$")
@@ -297,6 +300,60 @@ def check_r9(root, v):
                       "服务入口未挂 /healthz（基础设施端点计入对账的前提）"))
 
 
+# m14 领地常量（票 71）：机制目录票 73 才建——目录缺席时 R10-R12 自然绿（机制先于内容）
+ORCH_DIR = "services/agent/src/orchestration"
+MINT_MODULES = ("services/agent/src/token-ports.ts", "services/agent/src/jiaotu/token-ports-jiaotu.ts")
+# 业务模板名黑名单（PRD §13.3/13.4 句式族 id 前缀）：机制层源码（非测试）出现即违界
+BIZ_RE = re.compile(r"\b(webshell|ir_host_compromise|phishing|credential_leak)\b", re.I)
+PLAYBOOKS_RE = re.compile(r"[\"']([^\"']*playbooks[^\"']*)[\"']")
+
+
+def check_r10(root, v):
+    """m14 机制目录不含业务分支：业务模板名常量/内容层 playbooks import 禁止（PRD §13.1 分层铁律）。
+
+    机制目录（src/orchestration/）票 73 才建——缺席即绿；测试文件可引用业务 fixture
+    （行为断言在内容层），故只扫非测试件。注释同样受限：想提业务名，写到内容层去。"""
+    bd = root / ORCH_DIR
+    if not bd.is_dir():
+        return
+    for f in sorted(bd.rglob("*.ts")):
+        if f.name.endswith(".test.ts"):
+            continue
+        rel = f.relative_to(root).as_posix()
+        text = f.read_text(encoding="utf-8", errors="ignore")
+        for m in BIZ_RE.finditer(text):
+            line = text.count("\n", 0, m.start()) + 1
+            v.append(("R10", rel, line, f"机制层出现业务模板名 `{m.group(1)}`；业务分支属内容层"))
+        for m in PLAYBOOKS_RE.finditer(text):
+            line = text.count("\n", 0, m.start()) + 1
+            v.append(("R10", rel, line, f"机制层 import 内容层模板目录（{m.group(1)}）"))
+
+
+def _m14_consumer(f):
+    """R11/R12 的受限消费方：worker 子图 + m14 机制目录（src_root 同为 services/agent）。"""
+    return f.startswith("services/agent/workers/") or f.startswith(ORCH_DIR + "/")
+
+
+def check_r11(edges, v):
+    """worker/m14 禁 import 铸票客户端 → 铸票只许 m3 装配（app.ts/index.ts）经 m9 公开铸票面。
+
+    INV-11 执行缝的静态半边：子票 ⊆ 父菜单靠"铸票唯一通道"结构保证；票面生成后
+    不可再改是运行时契约（票 76 遍历断言），本条锁的是获取通道。"""
+    for src, dst_rel, dst, f, line, spec in edges:
+        if _m14_consumer(f) and dst_rel in MINT_MODULES:
+            v.append(("R11", f, line, f"worker/机制层 import 铸票客户端（{spec}）；铸票只许 m3 装配经 m9 公开面"))
+
+
+def check_r12(edges, v):
+    """worker/m14 禁 import 审批内部（src/approvals.ts）→ L2 只经 m3 graph.ts executeApproved 正门。
+
+    M9-S6 沿用：worker 物理无 L2 通道；NodeCtx 注入的 executeApproved 是 m3 卡面正门，
+    直引 approvals 内部（开卡/ApprovalToken 字段）即绕正门。"""
+    for src, dst_rel, dst, f, line, spec in edges:
+        if _m14_consumer(f) and dst_rel == "services/agent/src/approvals.ts":
+            v.append(("R12", f, line, f"worker/机制层 import 审批内部（{spec}）；L2 只经 m3 executeApproved 正门（M9-S6）"))
+
+
 def run_gate(root):
     """跑全部检查器 + 表与闸两向锁 → [(规则, 文件, 行, 消息)]（表失配以规则位「表」并入）。"""
     violations = []
@@ -328,6 +385,9 @@ def run_gate(root):
     check_r7(root, violations)
     check_r8(edges, violations)
     check_r9(root, violations)
+    check_r10(root, violations)
+    check_r11(edges, violations)
+    check_r12(edges, violations)
     return violations + table_fails
 
 
@@ -370,6 +430,17 @@ def write_samples(root, bad):
         w("packages/mcp-audit/src/bad.ts", 'import { x } from "../../../services/agent/src/app.js";\n')
         w("services/web/src/bad.ts", 'import { runner } from "../../../evals/src/runner.js";\n')
         w("services/gateway/plugins/p.py", "import guards\n")
+        # R10：机制层业务名常量 / 内容层 playbooks import
+        w("services/agent/src/orchestration/flow.ts",
+          'export const x = "webshell hunt";\n')
+        w("services/agent/src/orchestration/dispatch.ts",
+          'import { tpl } from "../../playbooks/webshell.js";\nexport const y = tpl;\n')
+        # R11：机制层 import 铸票客户端
+        w("services/agent/src/orchestration/mint.ts",
+          'import { HttpMintClient } from "../token-ports.js";\nexport const m = HttpMintClient;\n')
+        # R12：worker import 审批内部
+        w("services/agent/workers/hunt/flow.ts",
+          'import { openApprovalCard } from "../../src/approvals.js";\nexport const c = openApprovalCard;\n')
     else:
         w("services/agent/src/util.ts", "export const helper = 1;\n")
         w("services/agent/src/a.ts", 'import { helper } from "./util.js";\nexport const x = helper;\n')
@@ -403,6 +474,10 @@ def self_test():
         ("evals/src/scenarios.ts", "R2"), ("scripts/bad.ts", "R3"),
         ("packages/mcp-audit/src/bad.ts", "R5"), ("services/web/src/bad.ts", "R6"),
         ("services/gateway/plugins/p.py", "R7"), ("services/ingest/src/app.ts", "R9"),
+        ("services/agent/src/orchestration/flow.ts", "R10"),
+        ("services/agent/src/orchestration/dispatch.ts", "R10"),
+        ("services/agent/src/orchestration/mint.ts", "R11"),
+        ("services/agent/workers/hunt/flow.ts", "R12"),
     ]:
         check(f"红样本必抓 {rid} {f}", (f, rid) in got, f"实得={sorted(got)}")
     # ② 豁免样本必绿：组装件 / .test.ts 伴侣 / 纯 type / 同包导入不报
