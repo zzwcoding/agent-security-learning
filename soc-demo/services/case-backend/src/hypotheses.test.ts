@@ -254,4 +254,22 @@ describe("Case.hypothesis_id 可空列（命中建案回填的锚）", () => {
     expect(created.statusCode).toBe(201);
     expect((created.json() as Record<string, unknown>).hypothesisId ?? null).toBeNull();
   });
+
+  test("票 75（spec 授权的接口细化）：POST /cases 接受可空 hypothesis_id 入参并落列", async () => {
+    const { app } = appAndDb();
+    const created = await app.inject({
+      method: "POST",
+      url: "/api/v1/cases",
+      payload: { title: "狩猎命中案", hypothesis_id: "hyp_abc" },
+    });
+    expect(created.statusCode).toBe(201);
+    expect((created.json() as Record<string, unknown>).hypothesisId).toBe("hyp_abc");
+    // 读面同源可查（GET /cases/:id 的 detail 沿 mapCase 出线）
+    const id = (created.json() as { id: string }).id;
+    const detail = await app.inject({ method: "GET", url: `/api/v1/cases/${id}` });
+    expect((detail.json() as Record<string, unknown>).hypothesisId).toBe("hyp_abc");
+    // 不带该字段的建案行为不变（缺省 null，既有消费者零扰动）
+    const plain = await app.inject({ method: "POST", url: "/api/v1/cases", payload: { title: "普通案" } });
+    expect((plain.json() as Record<string, unknown>).hypothesisId ?? null).toBeNull();
+  });
 });

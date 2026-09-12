@@ -1,8 +1,8 @@
-// m14 编排循环 · planner/judge/gap 的确定性最小桩（票 73）。
+// m14 编排循环 · planner/judge/gap 的确定性最小桩（票 73 建，票 74/75 补真件）。
 //
-// m14 卡 Seam：三处 LLM adapter fake/real 双件——本票只有 fake（确定性，测试可复算）；
-// 真 adapter（经凭证代理，m3 llm-client 口径）归票 74/75。桩的判定规则写在注释里，
-// 与 FakeInvestigationLlm 同款纪律：只吃输入结构，不偷看 fixture。
+// m14 卡 Seam：三处 LLM adapter fake/real 双件——本件是 fake（确定性，测试可复算）；
+// 真 adapter（经凭证代理，m3 llm-client 口径）在 llm-real.ts，两档经 makeLoopLlm 切换。
+// 桩的判定规则写在注释里，与 FakeInvestigationLlm 同款纪律：只吃输入结构，不偷看 fixture。
 //   planner：无 gap → 菜单首选工具组合；有 gap → 换下一件菜单工具 + 带缺口焦点参数
 //     （相邻轮组合必不同，即 fake LLM 两轮 C₂≠C₁ 的机制保证）。
 //   judge：本轮子报告全 ok 且已有既往轮 → sufficient + hit；否则不充分（第一轮必不充分
@@ -10,7 +10,7 @@
 //   gap：从 judge 的 gap_description 直翻缺口（unknown/suggested_focus 是机制壳）。
 import { paramsHash } from "../verify-ticket.js";
 import { GatewayLlmClient } from "../llm-client.js";
-import { RealLoopPlanner } from "./llm-real.js";
+import { RealLoopGap, RealLoopJudge, RealLoopPlanner } from "./llm-real.js";
 import type {
   GapInput,
   GapOutput,
@@ -90,17 +90,20 @@ export function makeFakeLoopLlm(): LoopLlm {
   };
 }
 
-/** loop LLM 装配总口（票 74）：出网开关与四 worker 同一口径——AGENT_LLM=fake →
- *  确定性桩；其余值 → planner 走 llm-client seam + 凭证代理（RealLoopPlanner）。
- *  judge/gap 真件归票 75（本票只定稿 planner 半边）。默认不显式传 mode 时读
- *  AGENT_LLM env（缺省 fake——与 index.ts LLM_MODE 的 env 链同源）。 */
+/** loop LLM 装配总口（票 74 建口，票 75 三件齐）：出网开关与四 worker 同一口径——
+ *  AGENT_LLM=fake → 确定性桩（测试可复算）；其余值 → planner/judge/gap 全走 llm-client
+ *  seam + 凭证代理（RealLoopPlanner/RealLoopJudge/RealLoopGap）。默认不显式传 mode 时
+ *  读 AGENT_LLM env（缺省 fake——与 index.ts LLM_MODE 的 env 链同源，生产装配显式传）。 */
 export function makeLoopLlm(mode: string = process.env.AGENT_LLM ?? "fake"): LoopLlm {
   if (mode === "fake") return makeFakeLoopLlm();
-  const planner = new RealLoopPlanner(new GatewayLlmClient({ actor: "agent:hunt_flow" }));
+  const seam = new GatewayLlmClient({ actor: "agent:hunt_flow" });
+  const planner = new RealLoopPlanner(seam);
+  const judge = new RealLoopJudge(seam);
+  const gap = new RealLoopGap(seam);
   return {
     planner: (i) => planner.plan(i),
-    judge: (i) => new FakeLoopJudge().judge(i),
-    gap: (i) => new FakeLoopGap().gap(i),
+    judge: (i) => judge.judge(i),
+    gap: (i) => gap.gap(i),
   };
 }
 

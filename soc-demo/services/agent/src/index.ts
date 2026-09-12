@@ -46,7 +46,7 @@ import { HttpHypothesisPort } from "./orchestration/hypothesis-port.js";
 import { startRoundRelay } from "./orchestration/relay.js";
 import { makeHuntLauncher } from "./orchestration/launcher.js";
 import { DefaultTemplateSource } from "./orchestration/template.js";
-import { makeFakeLoopLlm } from "./orchestration/llm-stubs.js";
+import { makeLoopLlm } from "./orchestration/llm-stubs.js";
 import type { OrchestrationDeps } from "./orchestration/flow.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
@@ -151,7 +151,9 @@ const db = openDb(dbPath);
 // 票 73（m14 编排循环）真件装配：簿记落 agent 自持 SQLite（hunt_run_links）；m2 假设
 // 实体走公开 REST（CASE_BACKEND_URL）；拉起子 run/下一轮 run 打 m3 标准入口正门
 //（app.inject POST /internal/runs——铸票/组图/执行全在正门内，R11 铸票唯一通道不动）。
-// planner/judge/gap 本票是确定性 fake 桩（AGENT_LLM 不影响），真 adapter 归票 74/75。
+// planner/judge/gap 走 makeLoopLlm 出网开关总口（票 74 建口、票 75 三件齐：AGENT_LLM=
+// fake → 确定性桩，其余 → ChatSeam 凭证代理真件）；cases/register 缝用缺省件（HttpCasePort
+// /MemoryHypothesisRegister，register 真工具归票 79），生产装配零格补。
 const huntLedger = new SqliteHuntLedger(db);
 const ORCH_DEPS: OrchestrationDeps = {
   port: new HttpHypothesisPort(),
@@ -167,7 +169,7 @@ const ORCH_DEPS: OrchestrationDeps = {
     },
   },
   templates: new DefaultTemplateSource(),
-  llm: makeFakeLoopLlm(),
+  llm: makeLoopLlm(LLM_MODE), // 票 75 生产切换（74 移交）：AGENT_LLM 口径与四 worker 同一总口
 };
 RUN_KIND_DEPS.orchestration = ORCH_DEPS;
 // 票 73：hunt 拉起件（door 正门 + hunt_run_links 簿记锚落账）——autorun 的

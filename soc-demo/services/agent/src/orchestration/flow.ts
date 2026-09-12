@@ -6,12 +6,12 @@
 // 的 outcome 发 round_relay 事件（本 run 的 audit 事件流，SSE 可回放），relay（relay.ts，
 // dispatcher 层）拉起 round k+1 的 hunt_flow run——图内永远一轮一条串行链（ADR 0005）。
 //
-// planner 节点自票 74 起是真节点（planner.ts planRound：防注入消毒 → schema 校验降级 →
-// 菜单 fail-closed → 截断 → 建议/拒绝审计）；judge/gap 仍是确定性桩（llm-stubs.ts，
-// 真件归票 75）。行为约定里的防转（T06）、预算双闸（T18）、取消停止语义（T10）由后续票
-// 在 outcome/dispatch 的既有缝上落。
+// planner/judge 节点自票 74/75 起是真节点（planner.ts planRound：防注入消毒 → schema
+// 降级 → 菜单 fail-closed → 截断 → 建议/拒绝审计；judge.ts judgeRound：判据 schema 化 →
+// 防改写留底 → 低置信 fail-closed → 收敛分岔 converge：hit 建案 / miss 归档+register；
+// gap.ts analyzeGap：缺口翻译 → 结构化缺口）。行为约定里的防转（T06）、预算双闸（T18）、
+// 取消停止语义（T10）由后续票在 outcome/dispatch 的既有缝上落。
 import type { FlowNode } from "../graph.js";
-import { paramsHash } from "../verify-ticket.js";
 import type { AuditSink } from "../audit.js";
 import type {
   ChildOutcome,
@@ -19,7 +19,6 @@ import type {
   HypothesisDetail,
   OrchestrationDeps,
   PlannedTask,
-  RoundReport,
   RoundRecord,
 } from "./ports.js";
 import { recordAudit } from "./audit-log.js";
@@ -27,6 +26,8 @@ import { makeChildWaiter } from "./await-children.js";
 import { makeHuntLauncher } from "./launcher.js";
 import { taskFingerprint } from "./llm-stubs.js";
 import { planRound } from "./planner.js";
+import { converge, judgeRound } from "./judge.js";
+import { analyzeGap } from "./gap.js";
 
 // 注入总面接口本体上移 ports.ts（票 74）；此处保留再出口——既有消费方
 //（run-kinds.ts/index.ts/task-flow.ts/测试）的 import 路径不动。
@@ -149,33 +150,12 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         });
       },
     },
-    // ---- 5. judge：裁证据充分性（只引用子报告，params_hash 引用痕）----
+    // ---- 5. judge：裁证据充分性（票 75 真节点：judge.ts 判据 schema 化 + 防改写 + 低置信
+    //         fail-closed；引用痕/消毒/降级审计全在节点体）----
     {
       name: "judge",
       run: async (ctx) => {
-        if (ctx.state.planner_failed === true) {
-          // 本轮终止：无组合即无子报告可裁——judge 缺席由 outcome 归集（judge=null 记为
-          // 失败轮标记，下一轮 intake 据此识别连续失败）
-          return;
-        }
-        const tasks = (ctx.state.tasks as PlannedTask[]) ?? [];
-        const joined = (ctx.state.children as { run_id: string; status: string; result_summary: string; params_hash: string }[]) ?? [];
-        const roundReports: RoundReport[] = tasks.map((task, i) => ({
-          task,
-          result_summary: joined[i]?.result_summary ?? "",
-          params_hash: joined[i]?.params_hash ?? paramsHash(task.params),
-        }));
-        const started = Date.now();
-        const verdict = await orch.llm.judge({
-          hypothesis_text: String(ctx.state.hypothesis_text ?? ""),
-          round_reports: roundReports,
-          prior_rounds: Number(ctx.state.round_no) - 1,
-        });
-        ctx.charge(verdict.tokens);
-        ctx.checkLlm(started, Date.now());
-        ctx.state.judge = { sufficient: verdict.sufficient, verdict: verdict.verdict, confidence: verdict.confidence, gap_description: verdict.gap_description };
-        ctx.state.round_reports = roundReports;
-        ctx.emit("audit", { action: "hunt_judge", round_no: ctx.state.round_no, judge: ctx.state.judge });
+        await judgeRound({ orch, audit, runId }, ctx);
       },
     },
     // ---- 6. outcome：轮次归集落账 + 收敛分岔 / 轮间接力 ----
@@ -187,7 +167,6 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         const tasks = (ctx.state.tasks as PlannedTask[]) ?? [];
         const joined = (ctx.state.children as RoundRecord["children"]) ?? [];
         const judge = ctx.state.judge as RoundRecord["judge"];
-        const evidence = (ctx.state.evidence_so_far as string[]) ?? [];
 
         // planner 失败轮（行为 3 后半）：空轮归集 → 连续两轮失败 cancelled(planner_broken)，
         // 否则接力下一轮换输入再试；无 gap 翻译（judge 缺席）。DENIED 已由 planner 落账。
@@ -221,14 +200,10 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
           return;
         }
 
-        // 不充分 → gap 翻译缺口（下一轮 planner 的换组合输入）
+        // 不充分 → gap 翻译缺口（票 75 真节点：gap.ts 消毒 + 结构化缺口 schema 降级）
         let gap: RoundRecord["gap"] = null;
         if (judge && !judge.sufficient) {
-          const started = Date.now();
-          const g = await orch.llm.gap({ judge_output: judge, evidence_so_far: evidence });
-          ctx.charge(g.tokens);
-          ctx.checkLlm(started, Date.now());
-          gap = { gap_description: g.gap_description, unknown: g.unknown, suggested_focus: g.suggested_focus };
+          gap = await analyzeGap({ orch, audit, runId }, ctx);
         }
 
         // 轮次归集：m2 假设详情轮次段（children[{run_id,status}] 即父子 run 簿记的假设侧视图）
@@ -241,10 +216,11 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         });
         ctx.state.gap = gap;
 
-        // 收敛分岔（行为约定 9）：hit → concluded（建 Case 挂 hypothesis_id 归票 74/75，
-        // 复用建案路径）；miss → refuted（note TimelineEntry + hypothesis_register 同票）。
+        // 收敛分岔（行为约定 9，票 75 converge）：hit → concluded + 建 Case 挂
+        // hypothesis_id（复用 m2 建案公开路径）；miss → refuted + note 结论条目 +
+        // hypothesis_register（proposed）。收敛落账与审计在 judge.ts converge。
         if (judge?.sufficient) {
-          await orch.port.transition(hypothesisId, judge.verdict === "miss" ? "refuted" : "concluded");
+          await converge({ orch, audit, runId }, ctx);
         } else if (roundNo < Number(ctx.state.max_rounds)) {
           // 轮间接力：dispatcher 层 relay 消费本事件拉起 round k+1（ADR 0005 拓扑约束）
           ctx.emit("audit", {

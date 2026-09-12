@@ -183,6 +183,7 @@ export function buildApp(opts: { db?: DB } = {}) {
   app.post("/api/v1/cases", (req, reply) => {
     const body = (req.body ?? {}) as {
       title?: string; description?: string; severity?: number; assignee?: string; tags?: string[];
+      hypothesis_id?: string; // 票 75（spec 授权细化）：命中建案回填假设锚（可空）
     };
     if (!body.title) return reply.status(400).send({ error: "title_required" });
     return reply.status(201).send(createCaseManual(db, { ...body, title: body.title }, ctxOf(req.headers)));

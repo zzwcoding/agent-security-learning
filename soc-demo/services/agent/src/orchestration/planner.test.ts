@@ -14,10 +14,11 @@ import { MemoryHuntLedger } from "./ledger.js";
 import { makeLoopEventBus } from "./bus.js";
 import { startRoundRelay } from "./relay.js";
 import { FakeLoopGap, FakeLoopJudge } from "./llm-stubs.js";
+import { MemoryHypothesisRegister } from "./register.js";
 import { DefaultTemplateSource } from "./template.js";
 import { makeHuntFlow, type OrchestrationDeps } from "./flow.js";
 import { makeHuntTaskFlow } from "./task-flow.js";
-import type { ScanSeam } from "./ports.js";
+import type { CaseCreateInput, CasePort, ScanSeam } from "./ports.js";
 import type { HypothesisDetail, HypothesisPort, LoopLlm, PlannedTask, RoundRecord } from "./ports.js";
 
 const HYP = "hyp-t74";
@@ -27,6 +28,18 @@ const taskOf = (tool: string): PlannedTask => ({ tool, params: { q: "x" }, ratio
 
 /** guards 扫描假件：全放行（prompt-guard.test.ts 才咬扫描语义）。 */
 const scanAllow: ScanSeam = async (text) => ({ blocked: false, action: "allow", text });
+
+/** m2 案件实体假件（票 75 收敛分岔缝）：「仅一轮失败恢复」测试的轮 2 会走 hit 收敛——
+ *  建案不出网（收敛细节断言在 judge.test.ts）。 */
+class FakeCasePort implements CasePort {
+  created: CaseCreateInput[] = [];
+  private n = 0;
+  async create(input: CaseCreateInput): Promise<string> {
+    this.created.push({ ...input });
+    return `case_${String(++this.n).padStart(6, "0")}`;
+  }
+  async addNote(): Promise<void> {}
+}
 
 /** 脚本化 planner：按序吐返回值；坏形输出以类型谎言注入 seam（真实 real adapter 会在
  *  adapter 内抛 bad_shape，节点对两条路同态——都走 schema 降级半边）。 */
@@ -105,6 +118,8 @@ function rig(llm: LoopLlm, scan: ScanSeam = scanAllow): Rig {
     templates: new DefaultTemplateSource(),
     llm,
     scan,
+    cases: new FakeCasePort(), // 票 75 收敛缝：假件不出网
+    register: (call) => new MemoryHypothesisRegister().register(call),
   };
   setEventTap((e) => bus.publish(e));
 

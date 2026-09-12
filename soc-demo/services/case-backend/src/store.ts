@@ -341,18 +341,19 @@ function insertCase(
   fields: {
     title: string; description?: string; severity?: number; tlp?: number; pap?: number;
     tags?: string[]; linkedAlerts?: string[]; intakeSource?: string; assignee?: string;
+    hypothesisId?: string;
   },
 ): Record<string, unknown> {
   const { id, number } = nextCaseIdentity(db);
   db.prepare(
     `INSERT INTO cases (id, number, title, description, severity, tlp, pap, status, tags,
-                        linked_alerts, start_date, intake_source, assignee)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?, ?, ?)`,
+                        linked_alerts, start_date, intake_source, assignee, hypothesis_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'New', ?, ?, ?, ?, ?, ?)`,
   ).run(
     id, number, fields.title, fields.description ?? "",
     fields.severity ?? 2, fields.tlp ?? 2, fields.pap ?? 2,
     j(fields.tags ?? []), j(fields.linkedAlerts ?? []),
-    nowMs(), fields.intakeSource ?? "manual", fields.assignee ?? null,
+    nowMs(), fields.intakeSource ?? "manual", fields.assignee ?? null, fields.hypothesisId ?? null,
   );
   return getCase(db, id) as Record<string, unknown>;
 }
@@ -720,13 +721,15 @@ export function addCaseObservable(
 // 手工建案（intake_source=manual）：POST /api/v1/cases 用，不经 alert
 export function createCaseManual(
   db: DB,
-  fields: { title: string; description?: string; severity?: number; assignee?: string; tags?: string[] },
+  fields: { title: string; description?: string; severity?: number; assignee?: string; tags?: string[]; hypothesis_id?: string },
   ctx: Ctx,
 ): Record<string, unknown> {
   return db.transaction(() => {
-    const kase = insertCase(db, { ...fields, intakeSource: "manual" });
+    // 票 75（spec 授权的 m2 接口细化）：建案接受可空 hypothesis_id——编排循环命中建案
+    // 挂假设锚（cases.hypothesis_id 列票 73 已建，本票补 wire 入参）。
+    const kase = insertCase(db, { ...fields, hypothesisId: fields.hypothesis_id, intakeSource: "manual" });
     recordAudit(db, ctx, "create", kase.id as string, "case", {
-      created: { title: fields.title, intakeSource: "manual" },
+      created: { title: fields.title, intakeSource: "manual", ...(fields.hypothesis_id ? { hypothesisId: fields.hypothesis_id } : {}) },
     });
     return kase;
   })();

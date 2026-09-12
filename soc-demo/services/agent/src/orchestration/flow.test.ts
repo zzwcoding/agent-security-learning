@@ -21,16 +21,29 @@ import { MemoryHuntLedger } from "./ledger.js";
 import { makeLoopEventBus } from "./bus.js";
 import { startRoundRelay } from "./relay.js";
 import { makeFakeLoopLlm } from "./llm-stubs.js";
+import { MemoryHypothesisRegister } from "./register.js";
 import { DefaultTemplateSource } from "./template.js";
 import { makeHuntFlow, type OrchestrationDeps } from "./flow.js";
 import { makeHuntTaskFlow } from "./task-flow.js";
-import type { HypothesisDetail, HypothesisPort, RoundRecord, ScanSeam } from "./ports.js";
+import type { CaseCreateInput, CasePort, HypothesisDetail, HypothesisPort, RoundRecord, ScanSeam } from "./ports.js";
 
 const HYP = "hyp-t02";
 
 /** guards 扫描假件（票 74 planner 消毒缝）：全放行——本文件只咬轮次链轨迹，
  *  扫描/占位语义在 prompt-guard.test.ts。 */
 const scanAllow: ScanSeam = async (text) => ({ blocked: false, action: "allow", text });
+
+/** m2 案件实体假件（票 75 收敛分岔缝）：记账式 port——轨迹测试不覆盖建案细节
+ * （T07/T08 断言面在 judge.test.ts），这里只保证收敛路径不出网。 */
+class FakeCasePort implements CasePort {
+  created: CaseCreateInput[] = [];
+  private n = 0;
+  async create(input: CaseCreateInput): Promise<string> {
+    this.created.push({ ...input });
+    return `case_${String(++this.n).padStart(6, "0")}`;
+  }
+  async addNote(): Promise<void> {}
+}
 
 /** m2 假设实体假件：记账式 port（迁移/轮次归集全落内存，非法迁移抛 409 语义错误）。 */
 class FakeHypothesisPort implements HypothesisPort {
@@ -91,6 +104,8 @@ function rig(): Rig {
     templates: new DefaultTemplateSource(),
     llm: makeFakeLoopLlm(),
     scan: scanAllow, // 票 74 消毒缝：假件全放行（轨迹不受消毒影响）
+    cases: new FakeCasePort(), // 票 75 收敛缝：假件不出网（收敛断言在 judge.test.ts）
+    register: (call) => new MemoryHypothesisRegister().register(call),
   };
   // emitEvent → tap → bus：与 index.ts 生产装配同一个槽位（emitEvent 落盘真相 + 进程内扇出）
   setEventTap((e) => bus.publish(e));

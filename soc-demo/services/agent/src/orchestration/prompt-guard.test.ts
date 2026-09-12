@@ -17,8 +17,11 @@ import { DefaultTemplateSource } from "./template.js";
 import { FakeLoopGap, FakeLoopJudge, makeLoopLlm } from "./llm-stubs.js";
 import { RealLoopPlanner } from "./llm-real.js";
 import { planRound, sanitizePlannerInput } from "./planner.js";
+import { judgeRound } from "./judge.js";
+import { analyzeGap } from "./gap.js";
+import { RealLoopGap, RealLoopJudge } from "./llm-real.js";
 import type { OrchestrationDeps, ScanSeam } from "./ports.js";
-import type { GapOutput, LoopLlm, PlannerInput } from "./ports.js";
+import type { GapOutput, JudgeInput, LoopLlm, PlannerInput, RoundReport } from "./ports.js";
 
 // 攻击 fixture 复用（票 04 布景纪律）：previous_output = 工具返回通道的注入变体，
 // 契约期望 is_injection=true（authority_escalation/prompt_exfiltration 家族）。
@@ -242,5 +245,200 @@ describe("makeLoopLlm 出网开关（AGENT_LLM 口径与四 worker 一致）", (
     );
     expect(err).toBeInstanceOf(LlmUpstreamError);
     expect((err as LlmUpstreamError).code).toBe("unreachable");
+  });
+});
+
+// ---------- 票 75 · T16 judge/gap 半边 ----------
+//
+// 子报告/gap = 上游 LLM 产物，进 judge/gap prompt 前过 ScanSeam（与 planner 半边同语义：
+// 决策面 flag 也占位——judge/gap 的 prompt 是裁决面不是证据面）。布景同款：攻击 fixture
+// 的毒负载混进子报告（tool_output 通道），LLM 半边用真 RealLoopJudge/RealLoopGap +
+// 捕获型 ChatSeam，prompt 原文可断言；原文与金丝雀在 prompt/事件/审计三面零残留。
+
+/** judge 节点体的最小驱动（drivePlanner 同款）：state 手工装交接态。 */
+async function driveJudge(llm: LoopLlm, scan: ScanSeam, state: Record<string, unknown>) {
+  const audit = new MemoryAuditSink();
+  const events: { type: string; payload: Record<string, unknown> }[] = [];
+  const orch = {
+    port: null, ledger: new MemoryHuntLedger(), bus: makeLoopEventBus(), door: null,
+    templates: new DefaultTemplateSource(), llm, scan,
+  } as unknown as OrchestrationDeps;
+  const ctx = {
+    runId: "run-75",
+    state,
+    emit: (type: string, payload: Record<string, unknown>) => events.push({ type, payload }),
+    charge: () => {},
+    checkLlm: () => {},
+  };
+  await judgeRound({ orch, audit, runId: "run-75" }, ctx as unknown as Parameters<typeof judgeRound>[1]);
+  return { audit, events, state };
+}
+
+/** gap 节点体的最小驱动：返回 gap 产物。 */
+async function driveGap(llm: LoopLlm, scan: ScanSeam, state: Record<string, unknown>) {
+  const audit = new MemoryAuditSink();
+  const events: { type: string; payload: Record<string, unknown> }[] = [];
+  const orch = {
+    port: null, ledger: new MemoryHuntLedger(), bus: makeLoopEventBus(), door: null,
+    templates: new DefaultTemplateSource(), llm, scan,
+  } as unknown as OrchestrationDeps;
+  const ctx = {
+    runId: "run-75",
+    state,
+    emit: (type: string, payload: Record<string, unknown>) => events.push({ type, payload }),
+    charge: () => {},
+    checkLlm: () => {},
+  };
+  const gap = await analyzeGap({ orch, audit, runId: "run-75" }, ctx as unknown as Parameters<typeof analyzeGap>[1]);
+  return { audit, events, gap };
+}
+
+const JUDGE_JSON = JSON.stringify({
+  sufficient: true, verdict: "hit", confidence: 0.9, gap_description: null,
+});
+const GAP_JSON = JSON.stringify({
+  gap_description: "外联目标未查明", unknown: "外联目标", suggested_focus: ["outbound"],
+});
+
+/** 捕获型 ChatSeam（judge/gap 回合法 JSON）。 */
+function capturingVerdictSeam(captured: string[], reply: string): ChatSeam {
+  return {
+    chat: async (content) => {
+      captured.push(content);
+      return { text: reply, tokens: 17 };
+    },
+  };
+}
+
+function judgeLlm(seam: ChatSeam): LoopLlm {
+  const planner = new RealLoopPlanner(seam);
+  const judge = new RealLoopJudge(seam);
+  const gap = new RealLoopGap(seam);
+  return {
+    planner: (i) => planner.plan(i),
+    judge: (i) => judge.judge(i),
+    gap: (i) => gap.gap(i),
+  };
+}
+
+const reportWith = (summary: string): RoundReport => ({
+  task: { tool: "siem_query", params: { q: "x" }, rationale: "机制档依据" },
+  result_summary: summary,
+  params_hash: "hash-abc123",
+});
+
+describe("T16 poisoned_report_scanned · judge 半边（毒子报告进 prompt 前被拦截）", () => {
+  test("毒子报告 → flag 占位进 prompt：原文零进、金丝雀零泄漏、裁决照常产出", async () => {
+    setEnv("SECRETS_CANARY_KEY", CANARY);
+    const captured: string[] = [];
+    const llm = judgeLlm(capturingVerdictSeam(captured, JUDGE_JSON));
+    const { audit, events, state } = await driveJudge(llm, policyScan, {
+      hypothesis_text: "机制档假设句（非业务内容）",
+      round_no: 2,
+      hypothesis_id: "hyp-75",
+      tasks: [reportWith(`正常报告。${POISON}`).task],
+      children: [{ run_id: "c1", status: "completed", result_summary: `正常报告。${POISON}`, params_hash: "hash-abc123" }],
+    });
+
+    // prompt 原文零残留：毒文本与其特征片段、金丝雀都不可见；占位符在位
+    expect(captured).toHaveLength(1);
+    const prompt = captured[0];
+    expect(prompt).not.toContain(POISON);
+    expect(prompt).not.toContain(POISON_MARK);
+    expect(prompt).not.toContain(CANARY);
+    expect(prompt).toContain("[blocked:round_reports:0.result_summary]");
+    // 判据契约要素：四字段 JSON 纪律 + hash 引用痕（judge 引用子报告的凭据在 prompt 可见）
+    expect(prompt).toContain("sufficient");
+    expect(prompt).toContain("hash-abc123");
+    // 状态里的子报告是原件（占位符只进 prompt，不污染轮次归集）
+    expect((state.children as { result_summary: string }[])[0]!.result_summary).toContain(POISON);
+    // 事件/审计三面零原文零金丝雀；消毒事实可查（node=judge）
+    for (const e of events) {
+      expect(JSON.stringify(e)).not.toContain(POISON);
+      expect(JSON.stringify(e)).not.toContain(CANARY);
+    }
+    for (const entry of audit.entries) {
+      expect(JSON.stringify(entry)).not.toContain(POISON);
+      expect(JSON.stringify(entry)).not.toContain(CANARY);
+    }
+    expect(events.some((e) => e.type === "audit" && e.payload.action === "hunt_prompt_sanitized")).toBe(true);
+    // 裁决照常产出（占位 ≠ 停摆）
+    expect((state.judge as { sufficient: boolean }).sufficient).toBe(true);
+  });
+
+  test("毒假设 + guards 不可达（fail_closed）→ judge prompt 全占位，按不充分处理（INV-1）", async () => {
+    const downScan: ScanSeam = async () => ({ blocked: true, action: "fail_closed", reason: "guards_unreachable" });
+    const captured: string[] = [];
+    const llm = judgeLlm(capturingVerdictSeam(captured, JUDGE_JSON));
+    const { state } = await driveJudge(llm, downScan, {
+      hypothesis_text: "普通假设句",
+      round_no: 1,
+      tasks: [reportWith("普通报告").task],
+      children: [{ run_id: "c1", status: "completed", result_summary: "普通报告", params_hash: "hash-x" }],
+    });
+    expect(captured[0]).toContain("[blocked:hypothesis_text]");
+    expect(captured[0]).toContain("[blocked:round_reports:0.result_summary]");
+    expect(captured[0]).not.toContain("普通假设句");
+    expect(captured[0]).not.toContain("普通报告");
+  });
+});
+
+describe("T16 poisoned_report_scanned · gap 半边（毒缺口进 prompt 前被拦截）", () => {
+  test("judge 裁决里的毒缺口描述 → 占位进 gap prompt；产出结构化缺口（下一轮 planner 输入）", async () => {
+    setEnv("SECRETS_CANARY_KEY", CANARY);
+    const captured: string[] = [];
+    const llm = judgeLlm(capturingVerdictSeam(captured, GAP_JSON));
+    const { audit, events, gap } = await driveGap(llm, policyScan, {
+      round_no: 1,
+      hypothesis_id: "hyp-75",
+      judge: {
+        sufficient: false, verdict: null, confidence: 0.4,
+        gap_description: `缺口描述。${POISON}`,
+      },
+      evidence_so_far: [`round1 报告：${POISON}`],
+    });
+
+    expect(captured).toHaveLength(1);
+    const prompt = captured[0];
+    expect(prompt).not.toContain(POISON);
+    expect(prompt).not.toContain(POISON_MARK);
+    expect(prompt).not.toContain(CANARY);
+    expect(prompt).toContain("[blocked:judge_output.gap_description]");
+    expect(prompt).toContain("[blocked:evidence_so_far:0]");
+    // 结构化缺口照常产出（占位 ≠ 停摆）；事件/审计零原文
+    expect(gap.gap_description).toBe("外联目标未查明");
+    expect(gap.suggested_focus).toEqual(["outbound"]);
+    for (const e of events) expect(JSON.stringify(e)).not.toContain(POISON);
+    for (const entry of audit.entries) expect(JSON.stringify(entry)).not.toContain(POISON);
+  });
+});
+
+describe("makeLoopLlm real 档 judge/gap 半边（票 75 生产切换：ChatSeam 出站）", () => {
+  const judgeInput: JudgeInput = {
+    hypothesis_text: "机制档假设句",
+    round_reports: [reportWith("正常报告")],
+    prior_rounds: 1,
+  };
+
+  test("真 adapter 回包坏形 → LlmUpstreamError(bad_shape)（节点重试半边接管，与 planner 同款）", async () => {
+    const llm = judgeLlm(capturingVerdictSeam([], "这不是JSON"));
+    const err = await llm.judge(judgeInput).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(LlmUpstreamError);
+    expect((err as LlmUpstreamError).code).toBe("bad_shape");
+  });
+
+  test("AGENT_LLM=real → makeLoopLlm().judge 走真 adapter（seam 不可达即 LlmUpstreamError(unreachable)）", async () => {
+    setEnv("AGENT_LLM", "real");
+    setEnv("SOC_LLM_PROXY_URL", "http://127.0.0.1:1/proxy/llm"); // 无监听端口：立即拒连，零出网
+    const err = await makeLoopLlm("real").judge(judgeInput).then(() => null, (e: unknown) => e);
+    expect(err).toBeInstanceOf(LlmUpstreamError);
+    expect((err as LlmUpstreamError).code).toBe("unreachable");
+  });
+
+  test("fake 档 judge 确定性可断言（测试默认件不因切换漂移）", async () => {
+    setEnv("AGENT_LLM", "fake");
+    const out = await makeLoopLlm().judge({ ...judgeInput, prior_rounds: 2 });
+    expect(out.sufficient).toBe(true);
+    expect(out.verdict).toBe("hit");
   });
 });

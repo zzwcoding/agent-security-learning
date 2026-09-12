@@ -81,9 +81,46 @@ export interface GapInput {
 
 export interface LoopLlm {
   planner(input: PlannerInput): Promise<{ tasks: PlannedTask[]; tokens: number }>;
+  /** spec 契约四字段；adapter 可附带 containment_suggestions（文本建议，string[]）——
+   *  只落 timeline note，永不进假设账面与动作通道（INV-3/9，见 judge.ts）。 */
   judge(input: JudgeInput): Promise<JudgeOutput & { tokens: number }>;
   gap(input: GapInput): Promise<GapOutput & { tokens: number }>;
 }
+
+// ---------- m2 案件实体公开面（收敛分岔的建案/note 写半边，票 75） ----------
+
+/** 建案入参（复用 m2 建案公开路径 POST /api/v1/cases；hypothesis_id 可空字段为 spec
+ *  授权的 m2 接口细化——票 73 建列，本票补 wire 入参）。 */
+export interface CaseCreateInput {
+  title: string;
+  description?: string;
+  hypothesis_id?: string;
+}
+
+export interface CasePort {
+  /** 建案 → case_id（kind/author 等机制常量收在 adapter 内，机制层不见 m2 wire 细节）。 */
+  create(input: CaseCreateInput): Promise<string>;
+  /** 收敛结论落 timeline：note 型条目（kind 枚举消费一个空位，INV-8 审计在 m2 侧同事务）。 */
+  addNote(caseId: string, entry: { body: string; structured?: unknown }): Promise<void>;
+}
+
+// ---------- hypothesis_register 循环侧缝（票 75；工具本体与 Memory stub 归票 79） ----------
+
+export interface RegisterCall {
+  hypothesis_id: string;
+  verdict: "hit" | "miss";
+  confidence: number;
+  /** 子报告引用痕（params_hash）——"假设-证据-结论"关系的证据半边。 */
+  evidence_hashes: string[];
+}
+
+export interface RegisterRecord extends RegisterCall {
+  /** 入图一律 proposed（INV-5 口径：人审前不进检索面；票 83 对接期定人审通道）。 */
+  status: "proposed";
+  registered_at: number;
+}
+
+export type HypothesisRegisterSeam = (call: RegisterCall) => Promise<RegisterRecord>;
 
 // ---------- m2 假设实体公开面（REST adapter 的类型；生产 HttpHypothesisPort） ----------
 
@@ -192,4 +229,10 @@ export interface OrchestrationDeps {
   /** 票 74：planner prompt 的防注入扫描缝；缺省 = scanInjection（生产装配零改动）。
    *  可选放尾部——票 73 的既有装配与测试不受影响，测试在缝处注假件。 */
   scan?: ScanSeam;
+  /** 票 75：m2 案件公开面（收敛建案 + note 时间线）；缺省 = HttpCasePort（m2 REST，
+   *  生产装配零改动），测试注内存假件。 */
+  cases?: CasePort;
+  /** 票 75：hypothesis_register 循环侧缝；缺省 = MemoryHypothesisRegister（内存桩记
+   *  proposed 态——工具本体与真 Memory stub 归票 79）。 */
+  register?: HypothesisRegisterSeam;
 }
