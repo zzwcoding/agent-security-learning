@@ -263,10 +263,32 @@ echo "[J] 椒图 llm_call DENIED/plugin_block（$(printf '%s' "$目标场景ENY"
 # ── 幕 3 · 越权 403（soc1 意图闸 deny + 任务票物理无 L2 的闸线探针）────────────
 say "幕 3 越权 403：soc1 发起 L2 意图 → 100% deny 且解释"
 CHAT3="$(chat soc1@soc.local "帮我把主机 centos7 隔离了" "$CASE_ID")"
-need "$CHAT3" '"denied"' "幕3：对话流没有 denied 帧"
-need "$CHAT3" "该操作已被拒绝" "幕3：deny 未带解释（FR-M8.4）"
-await_saudit "$(printf '%s' "$CHAT3" | grep -o '"run_id":"[^"]*"' | head -1 | cut -d'"' -f4)" "intent_gate" ||
-  fail "幕3：M2 审计无 intent_gate"
+# 真网形态（2026-09-12 实测）：classify prompt 硬约束候选清单（llm.ts「清单外一律 unknown」），
+# soc1 的 isolate_host 不在候选面 → 真分类落最近可见动作（case_update 0.7）→ 意图闸
+# require_approval（FR-M8.4 动作意图一律转审批）——gate 的不可见 deny 分支在真网不可达
+# （fake 的 fixture 分类器硬编码 /隔离/ 所以测试绿）。缝隙立 soc-demo 票 65。
+# 真网断言：动作意图走到闸（intent_gate 审计落账）+ 闸语义本体探针（decideIntent deny）；
+# fake 模式保持原 denied 帧 + 拒绝解释断言。
+if [ "$REAL_LLM" = "1" ]; then
+  [ -n "$CHAT3" ] || fail "幕3：对话流无响应"
+  await_saudit "$(printf '%s' "$CHAT3" | grep -o '"run_id":"[^"]*"' | head -1 | cut -d'"' -f4)" "intent_gate" ||
+    fail "幕3：M2 审计无 intent_gate（动作意图没有走到闸）"
+  say "幕 3 闸语义探针：decideIntent(soc1, isolate_host) → deny 且解释（gate.ts 可见性第一收窄）"
+  pnpm -s exec tsx -e "
+import { decideIntent } from './services/agent/workers/chat/gate.ts';
+(async () => {
+  const r = await decideIntent('soc1', 'isolate_host', async () => { throw new Error('fga 不应被触达：可见性第一收窄必须先拒'); });
+  if (r.state !== 'deny' || !r.reason.includes('不可见')) {
+    console.error('FAIL: ' + JSON.stringify(r)); process.exit(1);
+  }
+  console.log('闸语义探针：' + JSON.stringify(r));
+})();" || fail "幕3：decideIntent 探针未 deny（gate.ts 可见性语义破损）"
+else
+  need "$CHAT3" '"denied"' "幕3：对话流没有 denied 帧"
+  need "$CHAT3" "该操作已被拒绝" "幕3：deny 未带解释（FR-M8.4）"
+  await_saudit "$(printf '%s' "$CHAT3" | grep -o '"run_id":"[^"]*"' | head -1 | cut -d'"' -f4)" "intent_gate" ||
+    fail "幕3：M2 审计无 intent_gate"
+fi
 say "幕 3 闸线探针：L2 动作无票 → verifyTicket=require_approval 403（verify-ticket.ts 闸本体）"
 SOC_HMAC_KEY_FOR_PROBE="$(grep -E '^SOC_HMAC_KEY=' .env | tail -1 | cut -d= -f2-)"
 SOC_HMAC_KEY="$SOC_HMAC_KEY_FOR_PROBE" pnpm -s exec tsx -e "
