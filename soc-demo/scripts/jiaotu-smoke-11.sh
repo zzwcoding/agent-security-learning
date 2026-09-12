@@ -189,7 +189,15 @@ say "幕 1 正常分诊：回放 ssh-5712 → alert_flow（铸票/LLM/建案/调
 V1=""
 ATTEMPTS=1; [ "$REAL_LLM" = "1" ] && ATTEMPTS=3
 for ATTEMPT in $(seq 1 "$ATTEMPTS"); do
-  A1="$(replay fixtures/alerts/ssh-5712-real.json)"
+  # 重放必须变体 id：ingest 按 (source, source_ref) 去重（case-backend idx_alerts_dedup），
+  # 同 id 重放=triage_skip 继承旧 verdict（第六次点火实测三次 uncertain 全是这么来的）。
+  MUT="/tmp/jiaotu-a1-${ATTEMPT}.json"
+  python3 -c "
+import json
+d = json.load(open('fixtures/alerts/ssh-5712-real.json'))
+d['id'] = str(d.get('id')) + '-a${ATTEMPT}'
+json.dump(d, open('${MUT}', 'w'), ensure_ascii=False)"
+  A1="$(replay "$MUT")"
   R1="$(launch "$A1")"
   echo "alert_id=$A1 run_id=${R1}（第 ${ATTEMPT}/${ATTEMPTS} 次回放）"
   SSE1="$(sse_done "$R1" "$SSE_WAIT")"
