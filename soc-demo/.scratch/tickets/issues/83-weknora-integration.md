@@ -8,6 +8,9 @@
 
 **Belongs to spec:** specs/orchestration-loop.md（行号回填同上）；weknora 仓改线版 PLAN（外仓产物，另票跟踪）
 
+
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T22（真实现契约同）（spec 已定稿 2026-09-12）
+
 **Blocked by:** 79 + weknora 外仓 1.5 幕与第二幕完成（外仓条件，非本仓票可解）+ **weknora 改线版 PLAN.md**（用户拍板 2026-09-12：等本仓票 72 spec 定稿后动，两边先对实体模型接口）
 
 **Status:** blocked

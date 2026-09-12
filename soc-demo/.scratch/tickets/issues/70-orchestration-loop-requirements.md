@@ -10,7 +10,7 @@
 
 **Blocked by:** 69
 
-**Status:** blocked
+**Status:** done
 
 **验收：**
 - [x] 11 维逼问逐维关闭（仅受影响维度，标注变更触发），PRD 无残留 `[待确认]`

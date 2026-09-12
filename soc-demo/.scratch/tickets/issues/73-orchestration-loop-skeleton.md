@@ -8,6 +8,9 @@
 
 **Belongs to spec:** specs/orchestration-loop.md（验收条目行号票 72 收口时回填）
 
+
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T01/T02/T19（spec 已定稿 2026-09-12）
+
 **Blocked by:** 72
 
 **Status:** blocked

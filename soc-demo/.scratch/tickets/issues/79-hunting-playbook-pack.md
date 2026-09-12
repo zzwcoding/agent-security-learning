@@ -8,6 +8,9 @@
 
 **Belongs to spec:** specs/orchestration-loop.md（行号回填同上）
 
+
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T01/T07/T08/T22（spec 已定稿 2026-09-12）
+
 **Blocked by:** 74, 78
 
 **Status:** blocked

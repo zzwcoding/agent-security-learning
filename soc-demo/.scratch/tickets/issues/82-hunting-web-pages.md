@@ -8,6 +8,9 @@
 
 **Belongs to spec:** specs/modules.md 页面映射节（票 71 落卡行）
 
+
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 PRD §13.7 + modules.md 页面映射节（非本 spec 验收表）（spec 已定稿 2026-09-12）
+
 **Blocked by:** 73
 
 **Status:** blocked

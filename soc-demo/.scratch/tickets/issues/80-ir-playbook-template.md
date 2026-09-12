@@ -8,6 +8,9 @@
 
 **Belongs to spec:** specs/orchestration-loop.md「应急取证零 m14 增量」验收条（票 72 定稿的那条杀手验收）
 
+
+**Spec 绑定:** specs/orchestration-loop.md 验收测试表 T20（spec 已定稿 2026-09-12）
+
 **Blocked by:** 79
 
 **Status:** blocked
