@@ -6,9 +6,10 @@ import {
   type JiaoTuClientOpts,
 } from "./token-ports-jiaotu.js";
 
-// 狗粮票 57：椒图三 adapter 的出站 wire 形契约锁。这两个请求是跨系统契约：椒图
+// 狗粮票 57/17：椒图三 adapter 的出站 wire 形契约锁。这两个请求是跨系统契约：椒图
 // identity/index.ts 按 body["agent_identity"] / params["jti"] 这些键取值（TS 接口是
-// camelCase，映射错一个键名 = 运行时 400/404）；焚毁口只认路径 jti + Bearer 头。
+// camelCase，映射错一个键名 = 运行时 400/404）；票 17 起椒图 internal 口统一认证，
+// mint/lookup/burn 三口出站全带 authorization: Bearer <agent api_key>（逐字段断言）。
 // 锁法照 token-ports.test.ts 的出站捕获先例；三 adapter 的 fetchImpl 构造注入
 // （GatewayLlmClient idiom），测试绝不真出网。fail-closed 分支：usedReader 非 200
 // 一律抛（椒图未登记 jti 也回 200 false，非 200 = 病）；burner 失败不抛、落结构化日志。
@@ -47,9 +48,9 @@ const jsonResponse = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 const makeMint = (impl: typeof fetch, over: Partial<JiaoTuClientOpts> = {}): JiaoTuMintClient =>
-  new JiaoTuMintClient({ baseUrl: JT_BASE, fetchImpl: impl, ...over });
+  new JiaoTuMintClient({ baseUrl: JT_BASE, apiKey: "jt-key-57", fetchImpl: impl, ...over });
 const makeReader = (impl: typeof fetch, over: Partial<JiaoTuClientOpts> = {}): JiaoTuUsedTokenReader =>
-  new JiaoTuUsedTokenReader({ baseUrl: JT_BASE, fetchImpl: impl, ...over });
+  new JiaoTuUsedTokenReader({ baseUrl: JT_BASE, apiKey: "jt-key-57", fetchImpl: impl, ...over });
 const makeBurner = (impl: typeof fetch, over: Partial<JiaoTuClientOpts> = {}): JiaoTuTokenBurner =>
   new JiaoTuTokenBurner({ baseUrl: JT_BASE, apiKey: "jt-key-57", fetchImpl: impl, ...over });
 
@@ -84,6 +85,8 @@ describe("JiaoTuMintClient 出站 wire 形（对齐椒图 MintTicketInput 的 bo
     expect(req.method).toBe("POST");
     expect(req.url).toBe(`${JT_BASE}/internal/tickets/mint`);
     expect(req.headers["content-type"]).toBe("application/json");
+    // 票 17：椒图 internal 口统一认证，出站头逐字段断言
+    expect(req.headers["authorization"]).toBe("Bearer jt-key-57");
     // 椒图端点即票型：无 type 判别字段；sub→agent_identity 是唯一非平凡映射（§4.1）；
     // jti 由 soc-demo 侧生成（同 HttpMintClient 现口径）
     expect(req.body).toEqual({
@@ -137,6 +140,15 @@ describe("JiaoTuMintClient 出站 wire 形（对齐椒图 MintTicketInput 的 bo
     });
     expect(seen[0].url).toBe("http://env-jt:8080/internal/tickets/mint");
   });
+
+  test("未传 apiKey → env JIAOTU_API_KEY 决定 Bearer 值（票 17：mint 出站同样带认证头）", async () => {
+    setEnv("JIAOTU_API_KEY", "env-key-57");
+    const { impl, seen } = mockFetch(() => jsonResponse(201, { token: "t", jti: "j", exp: 1 }));
+    await makeMint(impl, { apiKey: undefined }).mintTaskTicket({
+      jti: "tk_e", sub: "s", caseId: null, runId: "r", scope: [], allowedTools: [],
+    });
+    expect(seen[0].headers["authorization"]).toBe("Bearer env-key-57");
+  });
 });
 
 // ---------- INV-2 单口（审批铸票只许椒图 g4，identity/index.ts:772-788 的 x-internal-caller 闸） ----------
@@ -155,11 +167,12 @@ describe("mintApprovalToken：外部模式不可达（防误用炸响，票 58 �
 // ---------- 焚毁读口（GET /internal/tickets/:jti/burned，INV-1 fail-closed 纪律） ----------
 
 describe("JiaoTuUsedTokenReader 出站 wire 形（椒图未登记 jti 也回 200 {burned:false}）", () => {
-  test("已焚/未焚：200 {burned} → 布尔；请求 URL 带编码后的 jti 路径段", async () => {
+  test("已焚/未焚：200 {burned} → 布尔；请求 URL 带编码后的 jti 路径段，头带 Bearer（票 17）", async () => {
     const hit = mockFetch(() => jsonResponse(200, { burned: true }));
     expect(await makeReader(hit.impl).lookup("tk_57B")).toBe(true);
     expect(hit.seen[0].method).toBe("GET");
     expect(hit.seen[0].url).toBe(`${JT_BASE}/internal/tickets/tk_57B/burned`);
+    expect(hit.seen[0].headers["authorization"]).toBe("Bearer jt-key-57");
 
     const miss = mockFetch(() => jsonResponse(200, { burned: false }));
     expect(await makeReader(miss.impl).lookup("tk_absent")).toBe(false);
@@ -188,6 +201,13 @@ describe("JiaoTuUsedTokenReader 出站 wire 形（椒图未登记 jti 也回 200
     const { impl, seen } = mockFetch(() => jsonResponse(200, { burned: true }));
     await makeReader(impl, { baseUrl: undefined }).lookup("tk_env");
     expect(seen[0].url).toBe("http://env-jt:8080/internal/tickets/tk_env/burned");
+  });
+
+  test("未传 apiKey → env JIAOTU_API_KEY 决定 Bearer 值（票 17：lookup 出站同样带认证头）", async () => {
+    setEnv("JIAOTU_API_KEY", "env-key-57");
+    const { impl, seen } = mockFetch(() => jsonResponse(200, { burned: true }));
+    await makeReader(impl, { apiKey: undefined }).lookup("tk_env");
+    expect(seen[0].headers["authorization"]).toBe("Bearer env-key-57");
   });
 });
 

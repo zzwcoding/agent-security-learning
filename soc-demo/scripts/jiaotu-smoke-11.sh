@@ -288,7 +288,9 @@ need "$JTL" '"action": "burn_token"' "幕4：[J] 时间线缺 burn_token OK"
 echo "[J] 时间线三连：request_approval PENDING → approve OK → burn_token OK"
 
 say "幕 4 审批回路（c）：重放同 token → 椒图焚毁账 burned=true → soc-demo 闸 403 token_used"
-SOC_HMAC_KEY="$SOC_HMAC_KEY_FOR_PROBE" JIAOTU_URL="$JIAOTU" JT_TOKEN="$APPROVAL_TOKEN" \
+# 票 17：椒图 internal 口统一认证，探针的 JiaoTuUsedTokenReader 出站须带 Bearer——
+# key 从 .env JIAOTU_API_KEY 读（布景序 ③ 已注册落盘），显式传入不硬编码
+SOC_HMAC_KEY="$SOC_HMAC_KEY_FOR_PROBE" JIAOTU_URL="$JIAOTU" JT_TOKEN="$APPROVAL_TOKEN" JIAOTU_API_KEY="$JIAOTU_API_KEY" \
   pnpm -s exec tsx -e "
 // tsx -e 以 cjs 形态求值：顶层 await 不可用，包 async IIFE
 import { verifyTicket } from './services/agent/src/verify-ticket.ts';
@@ -296,7 +298,7 @@ import { JiaoTuUsedTokenReader } from './services/agent/src/jiaotu/token-ports-j
 (async () => {
   const token = process.env.JT_TOKEN;
   const jti = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8')).jti;
-  const reader = new JiaoTuUsedTokenReader({ baseUrl: process.env.JIAOTU_URL });
+  const reader = new JiaoTuUsedTokenReader({ baseUrl: process.env.JIAOTU_URL, apiKey: process.env.JIAOTU_API_KEY });
   const burned = await reader.lookup(jti);
   if (burned !== true) { console.error('FAIL: 椒图焚毁账未记 ' + jti); process.exit(1); }
   const verdict = verifyTicket(

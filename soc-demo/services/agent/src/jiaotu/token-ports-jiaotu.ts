@@ -3,10 +3,13 @@
 // （HttpMintClient/HttpUsedTokenReader/HttpTokenBurner）——seam 已立（token-ports.ts
 // 接口原样实现），链路代码零改；本文件的类不经装配绝不会被构造，默认形态零变化。
 //
-// wire 契约真源 = 椒图 services/gateway/src/identity/index.ts（2026-09-11 核实）：
-//   铸任务票  POST /internal/tickets/mint   无认证，201 {token, jti, exp}
-//   查焚毁    GET  /internal/tickets/:jti/burned  200 {burned: bool}（未登记的 jti 也是
-//             200 {burned:false}——所以非 200 一律抛，INV-1 fail-closed 口径同内部读口）
+// wire 契约真源 = 椒图 services/gateway/src/identity/index.ts（票 17 后核实：
+// internal 口已统一认证——mint/burned/burn 三口都要 Bearer agent api_key）：
+//   铸任务票  POST /internal/tickets/mint   头 authorization: Bearer <agent api_key>，
+//             201 {token, jti, exp}（401/4xx/5xx 一律抛，铸票在同步路径上）
+//   查焚毁    GET  /internal/tickets/:jti/burned  头 authorization: Bearer <agent api_key>，
+//             200 {burned: bool}（未登记的 jti 也是 200 {burned:false}——所以非 200 一律抛，
+//             INV-1 fail-closed 口径同内部读口）
 //   焚毁发起  POST /internal/tickets/:jti/burn  头 authorization: Bearer <agent api_key>，
 //             幂等 {jti, first_time}；写侧 fire-and-forget 口径与内部 burner 相同
 //
@@ -43,7 +46,7 @@ interface JiaoTuMinted {
  *  apiKey=JIAOTU_API_KEY），测试注入 fetchImpl/显式值覆盖，绝不真出网。 */
 export interface JiaoTuClientOpts {
   baseUrl?: string;
-  /** 仅焚毁口用（Bearer）；mint/burned 两口椒图 MVP 无认证 */
+  /** 三口共用（票 17 起椒图 internal 口统一认证，出站全带 Bearer） */
   apiKey?: string;
   fetchImpl?: typeof fetch;
 }
@@ -52,18 +55,22 @@ export interface JiaoTuClientOpts {
 
 export class JiaoTuMintClient implements MintClient {
   private readonly baseUrl: string;
+  private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(opts: JiaoTuClientOpts = {}) {
     // 缺省服务名按设计文档 §4.1 的 compose 口径（jiaotu-gateway，椒图 GATEWAY_PORT 默认 8080）
     this.baseUrl = opts.baseUrl ?? process.env.JIAOTU_GATEWAY_URL ?? "http://jiaotu-gateway:8080";
+    this.apiKey = opts.apiKey ?? process.env.JIAOTU_API_KEY ?? "";
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 
   async mintTaskTicket(req: TaskTicketRequest): Promise<MintedToken> {
+    // 票 17：椒图 mint 口已统一认证，缺 key 出站即 401（椒图侧 401 + DENIED 审计）——
+    // 本侧不做静默重试/降级，非 2xx 直接抛，worker 拉起立刻看见配置缺口
     const res = await this.fetchImpl(`${this.baseUrl}/internal/tickets/mint`, {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}` },
       body: JSON.stringify({
         agent_identity: req.sub,
         scope: req.scope,
@@ -97,17 +104,23 @@ export class JiaoTuMintClient implements MintClient {
 
 export class JiaoTuUsedTokenReader implements UsedTokenReader {
   private readonly baseUrl: string;
+  private readonly apiKey: string;
   private readonly fetchImpl: typeof fetch;
 
   constructor(opts: JiaoTuClientOpts = {}) {
     this.baseUrl = opts.baseUrl ?? process.env.JIAOTU_GATEWAY_URL ?? "http://jiaotu-gateway:8080";
+    this.apiKey = opts.apiKey ?? process.env.JIAOTU_API_KEY ?? "";
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 
   async lookup(jti: string): Promise<boolean> {
+    // 票 17：焚毁账读口同样统一认证（与 burner 同一把 agent api_key）
     const res = await this.fetchImpl(
       `${this.baseUrl}/internal/tickets/${encodeURIComponent(jti)}/burned`,
-      { signal: AbortSignal.timeout(TIMEOUT_MS) },
+      {
+        headers: { authorization: `Bearer ${this.apiKey}` },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      },
     );
     // 椒图口径：未登记的 jti 也回 200 {burned:false}——401/404/5xx/不可达都是「病」，
     // 一律抛给闸侧 fail-closed（INV-1）：「查不到真相」绝不冒充「真相是没有」

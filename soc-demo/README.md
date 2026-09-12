@@ -67,10 +67,13 @@ docker compose -f docker-compose.yml -f docker-compose.jiaotu.yml --profile jiao
 默认 fake LLM=upstream-stub 假上游不出网；`--real-llm` 真网可选，需
 `JIAOTU_LLM_UPSTREAM`/`JIAOTU_UPSTREAM_AUTHORIZATION`/`SECRETS_LLM_API_KEY` 三把钥匙）。
 
-**诚实边界（票 59，裁决 Q7）**：①椒图的 `/internal/*` 口（任务票 mint/burn、审批申报）
-在跨项目 compose 网内**无认证**——jiaotu-gateway 只 publish 8080 公开面一个口，internal
-口与公开面同口同源（椒图单端口产品形态，未额外 publish），但同一 Docker 网络里的任何
-容器都能直呼它们；网络层隔离加固记椒图 M2（其 README 诚实边界 6 同口径）。②jiaotu
+**诚实边界（票 59，裁决 Q7；①已由票 17 收口）**：①椒图的 `/internal/*` 口（任务票
+mint/burn、审批申报）**已统一 Bearer agent api_key 认证**（椒图票 17，2026-09-11：本仓
+出站三 adapter 全带 `authorization` 头，key=env `JIAOTU_API_KEY`）——残余边界在网络层与
+key 分发面：jiaotu-gateway 只 publish 8080 公开面一个口，internal 口与公开面同口同源
+（椒图单端口产品形态，未额外 publish），同一 Docker 网络里的任何容器仍能直呼这些口，
+而凡拿到 `JIAOTU_API_KEY` 的容器即持该 agent 身份——key 经 `.env`/compose env 进容器，
+分发面按信任边界管理；网络层隔离加固记椒图 M2（其 README 诚实边界 6 同口径）。②jiaotu
 形态的 LLM 上游默认是 upstream-stub（确定性伪 LLM，`deploy/jiaotu/fake-llm-upstream.mjs`），
 真网是**可选**环节（`--real-llm`），钥匙经环境注入、绝不进仓库。③切回默认形态 =
 上面的 down + unset `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 再 `docker compose up -d`，
