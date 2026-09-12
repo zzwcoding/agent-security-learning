@@ -326,7 +326,7 @@ WeKnora 对本仓库(Agent 安全评估学习)是一个**难得的全链路攻�
 | **越权召回** | 跨库检索按 KB 授权逐库 `authorizeKBAccess`,但"检索上下文注入 prompt 后"的边界完全交给模型;权限范围 API Key 的"按 KB 限制"是否覆盖 Agent 工具的间接读取路径,值得审 | `knowledgebase_search.go`(授权在检索入口)、`website-docs/03-features/01-tenant-auth.md` |
 | **间接提示注入→工具升级** | RAG 结果与 Web 搜索结果都进入 Agent 上下文;Agent 持有 shell_exec/文件写/wiki 写/MCP 工具——被注入内容若诱导调用工具,防御依赖审批 gate 与沙箱 egress 策略 | `internal/agent/tools/shell_exec.go`、`internal/agent/approval/gate.go` |
 | **SSRF(文档管道特色)** | URL 导入/网页抓取/远程图片转存三处都有 `ValidateURLForSSRF`,Handler + Service + Worker **三重防线防 TOCTOU**(`website-docs/02-architecture/03-document-pipeline.md` §2.2);白名单 `SSRF_WHITELIST_EXTRA` 默认放行 compose 内组件 | `internal/utils/security.go:1200` |
-| **沙箱逃逸面** | Docker 后端挂 `docker.sock` 等于宿主机 root——官方在 compose 注释里直接写明并**默认关闭、管理员显式开启**(docker-compose.yml:44-48);exec 以 uid 1000 运行,关闭 symlink chown 逃逸;egress 默认拒绝 | CHANGELOG.md v0.8.0 Sandbox security 条目、`internal/sandbox/url_guard.go` |
+| **沙箱逃逸面** | Docker 后端挂 `docker.sock` 等于宿主机 root——官方在 compose 注释里直接写明并**默认关闭、管理员显式开启**(docker-compose.yml:44-48);exec 以 uid 1000 运行,关闭 symlink chown 逃逸;**~~egress 默认拒绝~~**(2026-09-12 纠偏:沙箱内进程 egress 默认放开、deny 是 opt-in,`tenant_config.go:307-315`;url_guard.go 拦的是服务器→沙箱控制面 SSRF,非沙箱内进程出网) | CHANGELOG.md v0.8.0 Sandbox security 条目、`internal/sandbox/url_guard.go`、`internal/sandbox/tenant_config.go:307-315` |
 
 ### 9.2 值得精读的"防御工程"代码
 
