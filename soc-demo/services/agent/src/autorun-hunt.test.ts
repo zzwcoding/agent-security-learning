@@ -32,11 +32,15 @@ import { makeFakeLoopLlm } from "./orchestration/llm-stubs.js";
 import { DefaultTemplateSource } from "./orchestration/template.js";
 import { HttpHypothesisPort } from "./orchestration/hypothesis-port.js";
 import type { OrchestrationDeps } from "./orchestration/flow.js";
+import type { ScanSeam } from "./orchestration/ports.js";
 import type { MintClient } from "./token-ports.js";
 import { makeTaskTicket, startCaseBackend, type CaseBackend } from "../workers/triage/testkit.js";
 import { waitForRunTerminal } from "./testkit.js";
 
 const tick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+/** guards 扫描假件（票 74 planner 消毒缝）：全放行。 */
+const scanAllow: ScanSeam = async (text) => ({ blocked: false, action: "allow", text });
 
 interface Rig {
   db: DB;
@@ -67,6 +71,7 @@ function rig(cb: CaseBackend, over: { llm?: OrchestrationDeps["llm"] } = {}): Ri
     },
     templates: new DefaultTemplateSource(),
     llm: over.llm ?? makeFakeLoopLlm(),
+    scan: scanAllow, // 票 74 planner 消毒缝：假件全放行（扫描语义在 prompt-guard.test 咬）
   };
   // hunt 两工厂只读 audit + orchestration 两格（注册表 hunt_flow/hunt_task makeGraph）；
   // 其余格填零值——组图期不被触碰，类型上仍满足 RunKindGraphDeps。

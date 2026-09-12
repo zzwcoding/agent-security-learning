@@ -1,4 +1,4 @@
-// m14 编排循环 · 轮次链图（票 73）。
+// m14 编排循环 · 轮次链图（票 73 建链，票 74 planner 节点定稿）。
 //
 // 轮次链六节点固定：intake→planner→dispatch→await_children→judge→outcome——FlowNode[]
 // 走 graph.ts 既有节点包装（node_enter/exit 事件、budget.step、每 superstep 框架检查点
@@ -6,57 +6,31 @@
 // 的 outcome 发 round_relay 事件（本 run 的 audit 事件流，SSE 可回放），relay（relay.ts，
 // dispatcher 层）拉起 round k+1 的 hunt_flow run——图内永远一轮一条串行链（ADR 0005）。
 //
-// planner/judge/gap 本票是确定性最小桩（llm-stubs.ts）；hunt prompt 与真工具归票 78/79，
-// 预算分档归票 77，两票 narrow-scope 铸票归票 76。行为约定里的防转（T06）、预算双闸
-//（T18）、取消停止语义（T10）由后续票在 outcome/dispatch 的既有缝上落。
+// planner 节点自票 74 起是真节点（planner.ts planRound：防注入消毒 → schema 校验降级 →
+// 菜单 fail-closed → 截断 → 建议/拒绝审计）；judge/gap 仍是确定性桩（llm-stubs.ts，
+// 真件归票 75）。行为约定里的防转（T06）、预算双闸（T18）、取消停止语义（T10）由后续票
+// 在 outcome/dispatch 的既有缝上落。
 import type { FlowNode } from "../graph.js";
 import { paramsHash } from "../verify-ticket.js";
 import type { AuditSink } from "../audit.js";
 import type {
   ChildOutcome,
   ChildWaiter,
-  GapOutput,
   HypothesisDetail,
-  LoopLlm,
-  HypothesisPort,
-  HuntLedger,
-  LoopEventBus,
+  OrchestrationDeps,
   PlannedTask,
-  RunDoor,
   RoundReport,
   RoundRecord,
-  TemplateSource,
 } from "./ports.js";
+import { recordAudit } from "./audit-log.js";
 import { makeChildWaiter } from "./await-children.js";
 import { makeHuntLauncher } from "./launcher.js";
 import { taskFingerprint } from "./llm-stubs.js";
+import { planRound } from "./planner.js";
 
-/** m14 机制件的注入总面（生产装配在 index.ts；注册表 RunKindGraphDeps.orchestration）。 */
-export interface OrchestrationDeps {
-  port: HypothesisPort;
-  ledger: HuntLedger;
-  bus: LoopEventBus;
-  door: RunDoor;
-  templates: TemplateSource;
-  llm: LoopLlm;
-}
-
-const ACTOR = { type: "agent", id: "agent:hunt_flow" } as const;
-
-/** 五要素审计（INV-8）带 run 关联的 requestId（异步执行无 HTTP 头可借，dispatch_* 同款口径）。 */
-function recordAudit(
-  audit: AuditSink,
-  runId: string,
-  entry: {
-    action: string;
-    objectId: string;
-    objectType: string;
-    details: Record<string, unknown>;
-    result: "SUCCESS" | "FAILURE" | "DENIED";
-  },
-): void {
-  audit.record({ ...entry, actor: ACTOR, requestId: `hunt_${runId}`, createdAt: Date.now() });
-}
+// 注入总面接口本体上移 ports.ts（票 74）；此处保留再出口——既有消费方
+//（run-kinds.ts/index.ts/task-flow.ts/测试）的 import 路径不动。
+export type { OrchestrationDeps };
 
 /** 六节点轮次链工厂（run-kinds.ts 注册表 hunt_flow.makeGraph 调；测试直接调）。
  *  waiter 在工厂构造时即挂上事件订阅——先于 dispatch 发生，子 run 终局事件不会错过。 */
@@ -96,6 +70,10 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         const template = orch.templates.of(detail.template_id);
         if (!template) throw new Error(`template_unregistered:${detail.template_id}`);
         const lastGap = detail.rounds.length > 0 ? detail.rounds[detail.rounds.length - 1].gap : null;
+        // 连续两轮 planner 失败的判定原料（行为 3 后半）：失败轮归集形 = 空组合且无 judge
+        //（正常轮 judge 恒非空——judge 节点只在 planner 失败时被跳过）
+        const lastRound = detail.rounds[detail.rounds.length - 1];
+        const prevPlannerFailed = lastRound !== undefined && lastRound.judge === null && lastRound.tasks.length === 0;
         ctx.state.hypothesis_id = hypothesisId;
         ctx.state.hypothesis_text = detail.text;
         ctx.state.round_no = roundNo;
@@ -103,36 +81,28 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         ctx.state.max_tasks = template.maxTasks;
         ctx.state.menu = [...template.menu];
         ctx.state.gap = lastGap;
+        ctx.state.prev_planner_failed = prevPlannerFailed;
         ctx.state.evidence_so_far = detail.rounds.map((r) => `round${r.round_no}:${r.tasks.map((t) => t.tool).join("+")}`);
       },
     },
-    // ---- 2. planner：选组合（1..max_tasks；菜单子集内）----
+    // ---- 2. planner：选组合（1..max_tasks；菜单子集内）——票 74 真节点（planner.ts：
+    //         消毒 → schema 降级 → 菜单 fail-closed → 截断 → 建议/拒绝审计分痕）----
     {
       name: "planner",
       run: async (ctx) => {
-        const planInput = {
-          hypothesis_text: String(ctx.state.hypothesis_text ?? ""),
-          evidence_so_far: (ctx.state.evidence_so_far as string[]) ?? [],
-          gap: (ctx.state.gap as GapOutput | null) ?? null,
-          menu: (ctx.state.menu as string[]) ?? [],
-          template: { max_rounds: Number(ctx.state.max_rounds), max_tasks: Number(ctx.state.max_tasks) },
-        };
-        const started = Date.now();
-        const plan = await orch.llm.planner(planInput);
-        ctx.charge(plan.tokens);
-        ctx.checkLlm(started, Date.now());
-        // 单轮任务数上限（spec 预算档：≤2）：超限截断不拒整轮（T03 的机器半边，审计随 outcome 落）
-        const capped = plan.tasks.slice(0, Math.max(1, Number(ctx.state.max_tasks)));
-        ctx.state.tasks = capped;
-        ctx.state.tasks_truncated = plan.tasks.length > capped.length;
-        ctx.state.tasks_fingerprint = taskFingerprint(capped);
-        ctx.emit("audit", { action: "hunt_plan", round_no: ctx.state.round_no, tasks: capped, truncated: ctx.state.tasks_truncated });
+        await planRound({ orch, audit, runId }, ctx);
       },
     },
     // ---- 3. dispatch：按组合扇出 hunt_task 子 run（独立 run 行 + parent/round 簿记）----
     {
       name: "dispatch",
       run: async (ctx) => {
+        if (ctx.state.planner_failed === true) {
+          // 本轮终止（planner fail-closed，行为 3/4）：无决定 → 无 B 半边审计、无子 run
+          //（DENIED 已由 planner 落 hunt_plan_denied；run 不死，outcome 归集空轮）
+          ctx.state.children_ids = [];
+          return;
+        }
         const tasks = (ctx.state.tasks as PlannedTask[]) ?? [];
         const hypothesisId = String(ctx.state.hypothesis_id);
         const roundNo = Number(ctx.state.round_no);
@@ -143,9 +113,11 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
           children.push(await launcher.launchTask({ hypothesisId, roundNo, parentRunId: runId, task }));
         }
         ctx.state.children_ids = children;
-        // 铸票失败/门失败原样上抛 = 不落任何五要素 SUCCESS——fail-closed 的审计口径在 runner 强杀路径
+        // 铸票失败/门失败原样上抛 = 不落任何五要素 SUCCESS——fail-closed 的审计口径在 runner 强杀路径。
+        // 审计分痕 B（路由决定，INV-8）：实际执行的组合——与 planner 的建议条目
+        //（hunt_plan_suggest）两个 action 可区分可查。
         recordAudit(audit, runId, {
-          action: "hunt_dispatch",
+          action: "hunt_dispatch_decide",
           objectId: runId,
           objectType: "run",
           details: { round_no: roundNo, hypothesis_id: hypothesisId, children, tasks_fingerprint: ctx.state.tasks_fingerprint },
@@ -181,6 +153,11 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
     {
       name: "judge",
       run: async (ctx) => {
+        if (ctx.state.planner_failed === true) {
+          // 本轮终止：无组合即无子报告可裁——judge 缺席由 outcome 归集（judge=null 记为
+          // 失败轮标记，下一轮 intake 据此识别连续失败）
+          return;
+        }
         const tasks = (ctx.state.tasks as PlannedTask[]) ?? [];
         const joined = (ctx.state.children as { run_id: string; status: string; result_summary: string; params_hash: string }[]) ?? [];
         const roundReports: RoundReport[] = tasks.map((task, i) => ({
@@ -211,6 +188,38 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         const joined = (ctx.state.children as RoundRecord["children"]) ?? [];
         const judge = ctx.state.judge as RoundRecord["judge"];
         const evidence = (ctx.state.evidence_so_far as string[]) ?? [];
+
+        // planner 失败轮（行为 3 后半）：空轮归集 → 连续两轮失败 cancelled(planner_broken)，
+        // 否则接力下一轮换输入再试；无 gap 翻译（judge 缺席）。DENIED 已由 planner 落账。
+        if (ctx.state.planner_failed === true) {
+          const prevFailed = ctx.state.prev_planner_failed === true;
+          await orch.port.recordRound(hypothesisId, { round_no: roundNo, tasks: [], children: [], judge: null, gap: null });
+          let relayed = false;
+          if (prevFailed) {
+            // 连续两轮 planner 失败 → 假设 cancelled（原因 planner_broken，m2 PATCH 写半边）
+            await orch.port.transition(hypothesisId, "cancelled", { reason: "planner_broken" });
+          } else if (roundNo < Number(ctx.state.max_rounds)) {
+            relayed = true;
+            ctx.emit("audit", {
+              action: "round_relay",
+              hypothesis_id: hypothesisId,
+              next_round: roundNo + 1,
+              parent_run_id: runId,
+              fingerprint: "",
+            } as Record<string, unknown>);
+          } else {
+            await orch.port.transition(hypothesisId, "cancelled", { reason: "budget" });
+          }
+          ctx.state.outcome = { round_no: roundNo, recorded: true, relayed };
+          recordAudit(audit, runId, {
+            action: "hunt_round_outcome",
+            objectId: hypothesisId,
+            objectType: "hypothesis",
+            details: { round_no: roundNo, run_id: runId, planner_failed: true, relayed },
+            result: "SUCCESS",
+          });
+          return;
+        }
 
         // 不充分 → gap 翻译缺口（下一轮 planner 的换组合输入）
         let gap: RoundRecord["gap"] = null;

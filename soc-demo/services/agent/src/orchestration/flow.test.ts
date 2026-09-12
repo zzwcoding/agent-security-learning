@@ -24,9 +24,13 @@ import { makeFakeLoopLlm } from "./llm-stubs.js";
 import { DefaultTemplateSource } from "./template.js";
 import { makeHuntFlow, type OrchestrationDeps } from "./flow.js";
 import { makeHuntTaskFlow } from "./task-flow.js";
-import type { HypothesisDetail, HypothesisPort, RoundRecord } from "./ports.js";
+import type { HypothesisDetail, HypothesisPort, RoundRecord, ScanSeam } from "./ports.js";
 
 const HYP = "hyp-t02";
+
+/** guards 扫描假件（票 74 planner 消毒缝）：全放行——本文件只咬轮次链轨迹，
+ *  扫描/占位语义在 prompt-guard.test.ts。 */
+const scanAllow: ScanSeam = async (text) => ({ blocked: false, action: "allow", text });
 
 /** m2 假设实体假件：记账式 port（迁移/轮次归集全落内存，非法迁移抛 409 语义错误）。 */
 class FakeHypothesisPort implements HypothesisPort {
@@ -86,6 +90,7 @@ function rig(): Rig {
     door,
     templates: new DefaultTemplateSource(),
     llm: makeFakeLoopLlm(),
+    scan: scanAllow, // 票 74 消毒缝：假件全放行（轨迹不受消毒影响）
   };
   // emitEvent → tap → bus：与 index.ts 生产装配同一个槽位（emitEvent 落盘真相 + 进程内扇出）
   setEventTap((e) => bus.publish(e));

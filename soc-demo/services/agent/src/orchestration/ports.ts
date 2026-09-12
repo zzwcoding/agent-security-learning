@@ -14,6 +14,7 @@
 //   LoopLlm        —— planner/judge/gap 的 LLM adapter（m14 卡 Seam：fake/real 双件；
 //                     本票 fake 确定性桩，74/75 换真）。
 import type { SseEventType } from "../events.js";
+import type { ScanChannel, ScanDecision, ScanOptions } from "../guards-client.js";
 
 // ---------- 模板格式契约（R10 例外：纯类型无行为，单文件语义） ----------
 
@@ -172,4 +173,23 @@ export interface ChildOutcome {
 
 export interface ChildWaiter {
   wait(childRunIds: string[]): Promise<ChildOutcome[]>;
+}
+
+// ---------- m14 机制件的注入总面（原声明在 flow.ts，票 74 上移到此：planner 节点体
+//  与 flow 图工厂都要消费它——ports 只被依赖、不依赖人，免机制目录内循环 import）。
+
+/** guards 注入扫描公开缝（m5 investigation 先例：生产 = scanInjection，测试 = 假件）。
+ *  只走 guards-client 的公开 client 面（REST seam），禁触 guards 服务内部（边界规则）。 */
+export type ScanSeam = (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<ScanDecision>;
+
+export interface OrchestrationDeps {
+  port: HypothesisPort;
+  ledger: HuntLedger;
+  bus: LoopEventBus;
+  door: RunDoor;
+  templates: TemplateSource;
+  llm: LoopLlm;
+  /** 票 74：planner prompt 的防注入扫描缝；缺省 = scanInjection（生产装配零改动）。
+   *  可选放尾部——票 73 的既有装配与测试不受影响，测试在缝处注假件。 */
+  scan?: ScanSeam;
 }

@@ -9,6 +9,8 @@
 //     → 走 gap → 换组合再来一轮）。
 //   gap：从 judge 的 gap_description 直翻缺口（unknown/suggested_focus 是机制壳）。
 import { paramsHash } from "../verify-ticket.js";
+import { GatewayLlmClient } from "../llm-client.js";
+import { RealLoopPlanner } from "./llm-real.js";
 import type {
   GapInput,
   GapOutput,
@@ -79,11 +81,24 @@ export class FakeLoopGap {
   }
 }
 
-/** fake 三件套的默认装配（index.ts 生产装配与测试共用；AGENT_LLM=real 时本票仍用桩，
- *  换真归 74/75——机制目录不碰凭证代理）。 */
+/** fake 三件套的默认装配（测试用；index.ts 票 73 装配暂持——production 切换见 makeLoopLlm）。 */
 export function makeFakeLoopLlm(): LoopLlm {
   return {
     planner: (i) => new FakeLoopPlanner().plan(i),
+    judge: (i) => new FakeLoopJudge().judge(i),
+    gap: (i) => new FakeLoopGap().gap(i),
+  };
+}
+
+/** loop LLM 装配总口（票 74）：出网开关与四 worker 同一口径——AGENT_LLM=fake →
+ *  确定性桩；其余值 → planner 走 llm-client seam + 凭证代理（RealLoopPlanner）。
+ *  judge/gap 真件归票 75（本票只定稿 planner 半边）。默认不显式传 mode 时读
+ *  AGENT_LLM env（缺省 fake——与 index.ts LLM_MODE 的 env 链同源）。 */
+export function makeLoopLlm(mode: string = process.env.AGENT_LLM ?? "fake"): LoopLlm {
+  if (mode === "fake") return makeFakeLoopLlm();
+  const planner = new RealLoopPlanner(new GatewayLlmClient({ actor: "agent:hunt_flow" }));
+  return {
+    planner: (i) => planner.plan(i),
     judge: (i) => new FakeLoopJudge().judge(i),
     gap: (i) => new FakeLoopGap().gap(i),
   };
