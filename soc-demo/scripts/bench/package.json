@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "test": "node --test",
-    "b1": "node b1-endpoints.mjs"
+    "b1": "node b1-endpoints.mjs",
+    "b3": "node b3-dispatcher.mjs"
   },
   "devDependencies": {
     "autocannon": "^8.0.0",
