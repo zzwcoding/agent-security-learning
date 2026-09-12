@@ -8,7 +8,7 @@
 
 **Blocked by:** 58
 
-**Status:** done（2026-09-11 主窗口验收：五门禁 worktree 复跑全绿 agent 538→548+4s；六幕活体冒烟主窗口亲手复跑 PASS=可复现、teardown 零残留；椒图 177 全绿+bench 双门槛 100%/0%；--real-llm 属可选环节未实弹，开关与三钥匙校验就位留收官序列）
+**Status:** done（2026-09-11 主窗口验收：五门禁 worktree 复跑全绿 agent 538→548+4s；六幕活体冒烟主窗口亲手复跑 PASS=可复现、teardown 零残留；椒图 177 全绿+bench 双门槛 100%/0%；**2026-09-12 --real-llm 真网实弹闭合**：第八次点火六幕真网全通[真实 minimax 上游]+金丝雀 0 命中双证+票 13 凭证注入实弹，真网迭代五补丁与两张发现票见实现记录补遗）
 
 **验收（四道全绿，每条注源）：**
 - [x] 零回归（内部模式）：`pnpm test`（含 approval-loop 五验收）+`pnpm test:eval` 全绿，rigs 不设 env（源 §5-1）
@@ -17,7 +17,7 @@
 - [x] 椒图侧回归：椒图 `pnpm test`+`pnpm bench` 双门槛不受影响（源 §5-4）
 - [x] jiaotu 栈拓扑断言：含 jiaotu-gateway、不含内部 gateway 服务、HMAC env 同源（源 裁决 2026-09-11 全外接形态）
 - [x] Q7 硬要求落账：internal 两口未 publish 宿主核实记录 + README 诚实边界段落（源 裁决记录 Q7）
-- [ ] `--real-llm` 真网冒烟（可选环节）：金丝雀 0 命中断言 + 票 13 UPSTREAM_AUTHORIZATION 实弹验证（源 裁决记录 Q8 附注）——**未跑**：真网钥匙待用户手动注入（Keychain `agent-key minimax`），脚本开关与三钥匙校验已就位，属收官序列可选环节
+- [x] `--real-llm` 真网冒烟（可选环节）：金丝雀 0 命中断言 + 票 13 UPSTREAM_AUTHORIZATION 实弹验证（源 裁决记录 Q8 附注）——**2026-09-12 闭合**（用户拍板真网实弹）：第八次点火六幕真网全通（真实 minimax 上游，finish_reason=stop）；金丝雀 0 命中双证（冒烟新增断言 b4005db + 定向探针审计 500 条逐字节 grep 真值零命中）；票 13 UPSTREAM_AUTHORIZATION 凭证注入实弹走通。真网迭代沉淀六补丁（fa3b25f/fae858b/c50ddda/c08fa99+d78c589/b4005db 等）与两张发现票（64/65），见实现记录补遗
 
 **实现记录：**（2026-09-11 施工完毕，四道全绿）
 
@@ -37,7 +37,13 @@
 4. 椒图侧回归：`pnpm test` 24 文件/177 全绿；`pnpm bench` 双门槛：拦截率 100.00%（出厂集 8/8）/ 误报率 0.00%（负样本 24/24），退出码 0。
 5. jiaotu 栈拓扑断言：compose-topology.test.ts 票 59 describe 全绿（含 jiaotu-gateway、不含内部 gateway、HMAC 同源）。
 6. Q7 落账：jiaotu-gateway 渲染面 publish 恰好 ["8080"]（静态+config 双断言）；internal 两口与公开面同口同源（椒图单端口产品形态，其自家 compose 同口径），未额外 publish 任何口，upstream-stub 不 publish 宿主；README 诚实边界段落已写。
-7. `--real-llm`：开关位落好（三把钥匙校验，缺一不半跑）；真网实弹未跑（本票不实弹，金丝雀 0 命中断言留真网冒烟环节）。
+7. `--real-llm`：开关位落好（三把钥匙校验，缺一不半跑）；**2026-09-12 真网实弹闭合**（见验收行）。
+
+**实现记录补遗（2026-09-12 真网实弹迭代，五补丁+两发现票）**
+- 补丁链：fa3b25f（SSE/chat/executed 等待预算真网放大——fake 秒级 vs 真网单调用 5-30s）→ fae858b（LLM 客户端超时预算：真实 minimax 调用超 60s 缺省链被 fail-closed 强杀=纪律正确，compose 增 LLM_TIMEOUT_MS 空缺省透传+真网 300s）→ c50ddda（幕 2 双终态断言+开票 64）→ c08fa99（幕 1 verdict 有界重放：minimax 温度 0 服务端非确定）→ d78c589（资源兜底预算：真实推理模型 investigation 单节点 23 次 LLM 调用撞 MAX_STEPS=20 缺省 → budget_exceeded=纪律正确，compose 增透传+真网 40/200k；budget.ts num() 空串安全已核）→ b4005db（金丝雀 0 命中断言进冒烟）。
+- 幕 1 重放两坑：同 id 重放被 ingest 指纹去重（triage_skip 继承旧 verdict，"三次 uncertain"全是假象）→ 补丁六变体 id；补丁三自己踩了实现记录⑦记过的全角括号坑 → 补丁四花括号修。
+- 发现票：**64** investigation 提示面漏扫（直球注入 triage 段 strip 后、investigation 提示面带毒上行，[J] g6 403 兜底——双防线首实战）；**65** classify prompt 候选硬约束使 gate 不可见 deny 分支真网不可达（幕 3 双形态断言+decideIntent 语义探针）。
+- 真网终局（第八次点火）：幕 1 变体重放第 3 次得 tp、六幕全 PASS、金丝雀 0 命中、teardown 零残留。
 
 **偏离票面决定**（均以设计 §五/裁决为准）
 - ① `UPSTREAM_BASE_URL` 缺省 `${JIAOTU_LLM_UPSTREAM:-}` 空缺省 → 改为缺省 `http://upstream-stub:9990`（票面空缺省=椒图代理面 fail-closed 500，与设计 §五/Q8"默认 fake LLM、CI 可跑"直接冲突，以设计为准）。
