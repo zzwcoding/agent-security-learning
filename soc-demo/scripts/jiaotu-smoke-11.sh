@@ -417,6 +417,15 @@ ACC_HOST="$(json_field 'd["triage_accuracy"]' < eval-results/latest.json)"
 TOTALS="$(printf '%s' "$EVAL_WEB" | json_field 'd["totals"]["cases"]')"
 echo "triage_accuracy=$ACC_WEB cases=$TOTALS 内外一致零漂移 — PASS 幕6"
 
+# ── 金丝雀 0 命中（裁决 Q8 附注，INV-4）──────────────────────────────────────
+# provider 真值（SECRETS_LLM_API_KEY）不许落入椒图审计持久层——全量审计逐字节 grep 真值，
+# 命中即 INV-4 破防。fake 模式无真值，跳过（口径：SECRETS_LLM_API_KEY 非空才查）。
+if [ -n "${SECRETS_LLM_API_KEY:-}" ]; then
+  CANARY_HITS="$(curl -s "$JIAOTU/api/v1/audit?limit=500" | grep -c -- "$SECRETS_LLM_API_KEY" || true)"
+  [ "${CANARY_HITS:-0}" -eq 0 ] || fail "金丝雀：provider key 真值在椒图审计命中 $CANARY_HITS 次（INV-4 破防）"
+  echo "金丝雀 0 命中：provider 真值未落椒图审计（$SECRETS_LLM_API_KEY 不在 500 条审计的任何字节）— PASS"
+fi
+
 # ── 收尾 ──────────────────────────────────────────────────────────────────────
 say "收尾：teardown（down -v，零残留）"
 docker compose "${CPAIR[@]}" down -v --remove-orphans > /dev/null 2>&1
