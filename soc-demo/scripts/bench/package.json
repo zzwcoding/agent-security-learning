@@ -12,6 +12,7 @@
   },
   "devDependencies": {
     "autocannon": "^8.0.0",
-    "hdr-histogram-percentiles-obj": "^3.0.0"
+    "hdr-histogram-percentiles-obj": "^3.0.0",
+    "undici": "^8.10.2"
   }
 }
