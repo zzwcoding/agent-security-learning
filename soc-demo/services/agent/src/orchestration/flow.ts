@@ -24,7 +24,6 @@ import type {
 import { recordAudit } from "./audit-log.js";
 import { makeChildWaiter } from "./await-children.js";
 import { makeHuntLauncher } from "./launcher.js";
-import { taskFingerprint } from "./llm-stubs.js";
 import { planRound } from "./planner.js";
 import { converge, judgeRound } from "./judge.js";
 import { analyzeGap } from "./gap.js";
@@ -109,9 +108,22 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
         const roundNo = Number(ctx.state.round_no);
         const children: string[] = [];
         for (const task of tasks) {
-          // 铸票在 m3 正门内按注册表票面走（本票 menu 级票面；逐任务 narrow-scope 归票 76）。
-          // 门失败（含铸票失败）原样上抛 = 任务不执行、无悬置（fail-closed，T15 机器半边）。
-          children.push(await launcher.launchTask({ hypothesisId, roundNo, parentRunId: runId, task }));
+          // 铸票在 m3 正门内走（票 76：launchTask 随任务过门，窄票面由门内解析现铸
+          // ——子票铸于 dispatch；门失败（含铸票失败）= 任务不执行、无悬置）。
+          try {
+            children.push(await launcher.launchTask({ hypothesisId, roundNo, parentRunId: runId, task }));
+          } catch (err) {
+            // T15（INV-1/8）：铸票失败先落五要素 DENIED（该任务 + 原因可回放），再原样
+            // 上抛交 runner 强杀路径收口（run 不带病续跑、无半拉子 run）——fail-closed。
+            recordAudit(audit, runId, {
+              action: "hunt_dispatch_mint_denied",
+              objectId: hypothesisId,
+              objectType: "hypothesis",
+              details: { round_no: roundNo, tool: task.tool, reason: String(err) },
+              result: "DENIED",
+            });
+            throw err;
+          }
         }
         ctx.state.children_ids = children;
         // 铸票失败/门失败原样上抛 = 不落任何五要素 SUCCESS——fail-closed 的审计口径在 runner 强杀路径。

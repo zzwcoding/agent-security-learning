@@ -33,7 +33,9 @@ export function makeHuntLauncher(door: RunDoor, ledger: HuntLedger): HuntLaunche
       return runId;
     },
     async launchTask(req) {
-      const runId = await door.post({ kind: "hunt_task", case_id: req.hypothesisId });
+      // 票 76：任务上下文随拉起过门——子票的窄票面（allowed_tools = task.tool）由 m3
+      // 正门内按注册表解析器解析现铸（子票铸于 dispatch），本件只递数据不碰铸票（R11）。
+      const runId = await door.post({ kind: "hunt_task", case_id: req.hypothesisId, task: req.task });
       ledger.put({
         runId,
         role: "task",

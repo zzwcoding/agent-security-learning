@@ -154,9 +154,12 @@ export interface HypothesisPort {
 
 // ---------- m3 标准入口壳与事件 ----------
 
-/** POST /internal/runs 的进程内壳：返回 run_id（app.ts 装配注入；铸票/入队全在正门内）。 */
+/** POST /internal/runs 的进程内壳：返回 run_id（app.ts 装配注入；铸票/入队全在正门内）。
+ *  票 76：hunt_task 拉起随载任务上下文（dispatch 的 planner 组合产物）——子票的窄票面
+ *  由 m3 正门内按注册表解析器（ticketSpecFor）从它解析，机制目录只递数据不碰铸票
+ * （R11：票面 scope 在 m3 票务装配面生成，生成后不可再改）。 */
 export interface RunDoor {
-  post(payload: { kind: string; case_id?: string }): Promise<string>;
+  post(payload: { kind: string; case_id?: string; task?: PlannedTask }): Promise<string>;
 }
 
 /** agent 落盘事件（events.ts RunEvent 的结构子集，避免机制件直依赖总线内部）。 */

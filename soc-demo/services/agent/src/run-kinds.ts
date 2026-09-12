@@ -290,7 +290,7 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
     // 预算走默认档（分档归票 77）；INV-3：无任何 L2。菜单与 orchestration/template.ts
     // 的机制默认档取同一组能力名（票 79 模板登记面接管后收敛到单一来源）。
     ticket: { sub: "agent:hunt_flow", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
-    makeGraph: (deps) => (run, ticket) =>
+    makeGraph: (deps) => (run) =>
       makeHuntFlow({
         runId: run.id,
         orch: requireOrchestration(deps),
@@ -298,11 +298,12 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
       }),
   },
   hunt_task: {
-    // 票 73（m14）：扇出子 run。本票票面 = 菜单级（menu 超集），逐任务 narrow-scope
-    // 两票制归票 76（子票 ⊆ 父菜单的 INV-11 结构保证不变）。
+    // 票 73/76（m14）：扇出子 run。注册表票面 = 菜单级兜底（无任务上下文的直拉/恢复
+    // 路径旧口径不变）；dispatch 逐任务拉起时经 ticketSpecFor 解析 narrow-scope 子票
+    //（allowed_tools = 该任务唯一工具），两票时序见 app.ts /internal/runs 的铸票点。
     intake: "case",
     ticket: { sub: "agent:hunt_task", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
-    makeGraph: (deps) => (run, ticket) =>
+    makeGraph: (deps) => (run) =>
       makeHuntTaskFlow({
         runId: run.id,
         orch: requireOrchestration(deps),
@@ -310,6 +311,28 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
       }),
   },
 };
+
+/** 票面规格解析（m3 票务装配面的唯一出口，app.ts 铸票点消费）：
+ *  hunt_task 带任务上下文 → narrow-scope 子票（allowed_tools = {该任务唯一工具}，
+ *  specs/orchestration-loop.md「票务（m9）」子票行）；无任务上下文（直拉/恢复）→
+ *  注册表菜单级兜底（票 73 口径不变）；其余 kind 恒返回注册表票面（旧 kind 零变化）。
+ *
+ *  INV-11 缝闸：子票 ⊆ 父菜单的铸票侧结构保证——任务工具不在父票面（hunt_flow 的
+ *  planner 只读菜单）内即拒铸抛错。planner 的菜单闸（T04）是第一道，这里是第二道：
+ *  越界任务在铸票唯一通道上就拿不到票（fail-closed，绝不签出越界票面）。 */
+export function ticketSpecFor(kind: string, task?: { tool?: unknown } | null): RunKindTicket {
+  const spec = requireRunKind(kind).ticket;
+  if (kind !== "hunt_task" || !task) return spec;
+  // 显式任务上下文但 tool 缺失/为空 = 载荷畸形——fail-closed 拒解析，绝不静默放宽到菜单级
+  if (typeof task.tool !== "string" || !task.tool) {
+    throw new Error("hunt_task 任务上下文缺 tool，子票面无法解析（fail-closed）");
+  }
+  const parentFace = REGISTRY.hunt_flow.ticket.allowedTools;
+  if (!parentFace.includes(task.tool)) {
+    throw new Error(`hunt_task 子票拒铸：工具 ${task.tool} 不在父票菜单内（INV-11，铸票缝 fail-closed）`);
+  }
+  return { ...spec, allowedTools: [task.tool] };
+}
 
 /** 在册 kind 全集（注册表是唯一事实来源——原 app.ts RUN_KINDS 字面量由此消失）。 */
 export const RUN_KIND_IDS: string[] = Object.keys(REGISTRY);

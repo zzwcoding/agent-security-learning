@@ -22,12 +22,13 @@ import { THIN_CHAT_FLOW } from "../workers/chat/flow.js";
 import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "../workers/chat/session.js";
 import { visibleTools } from "../workers/chat/visible-tools.js";
 import type { RunRow } from "./runs.js";
-import { requireRunKind, runKindOf, type RunGraphFactory } from "./run-kinds.js";
+import { requireRunKind, runKindOf, ticketSpecFor, type RunGraphFactory } from "./run-kinds.js";
 import { registerUnderPressure } from "./under-pressure.js";
 import {
   enqueueRunJob,
   runDispatchConcurrency,
   approvalTtlSecondsFromEnv,
+  startJobPayload,
   startRunDispatcher,
 } from "./run-dispatcher.js";
 
@@ -276,7 +277,7 @@ export function buildApp(opts: {
   //   经 launchChatRun 铸只读票组 chat 子图——公开面 POST /api/v1/chat 是它的正门。
   //   票 36 起 case_flow 同路进柴：吃 case_id 直拉调查+富化链（index.ts 组链）。）
   app.post("/internal/runs", async (req, reply) => {
-    const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; message?: string; role?: string };
+    const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; message?: string; role?: string; task?: { tool?: unknown } };
     if (!body.kind) return reply.status(400).send({ error: "kind_required" });
     // 拉起校验全部读注册表（票 44）：不在册 400；intake 决定吃 alert_id 还是 case_id；
     // requiresMessage 是 chat_flow 的「没消息就没有图可跑」——缺 message 直接 400，不造空 run。
@@ -326,11 +327,43 @@ export function buildApp(opts: {
       // 原样同步跑完（下面的非 chat kind 才落 queued 秒回）。
       return reply.status(202).send({ run_id: run.id, status: run.status });
     }
+    // 票 76 两票制：子票铸于 dispatch——hunt_task 拉起随载任务上下文（m14 dispatch 的
+    // launchTask 过门，任务即 planner 组合产物）时，窄票面在本正门内经 ticketSpecFor
+    // 解析现铸（INV-11 缝闸在解析器内：父菜单外拒铸），票随 start 任务落盘、执行件
+    // 直接用（不再按 kind 二次铸）。铸票失败 = 该子 run 落 failed(mint_failed)（与
+    // 分发循环铸票强杀同口径），不 enqueue、无悬置，502 回给 dispatch 侧触发其
+    // fail-closed + DENIED 审计（T15）。
+    let childTicket: string | null = null;
+    if (
+      body.kind === "hunt_task" && opts.makeNodes &&
+      body.task !== undefined && typeof body.task?.tool === "string" && body.task.tool
+    ) {
+      try {
+        const spec = ticketSpecFor(body.kind, body.task);
+        const minted = await mint.mintTaskTicket({
+          jti: `tk_${randomUUID()}`,
+          sub: spec.sub,
+          caseId: run.caseId,
+          runId: run.id,
+          scope: [...spec.scope],
+          allowedTools: [...spec.allowedTools],
+        });
+        childTicket = minted.token;
+      } catch (err) {
+        failUnTicketedRun(run.id, err);
+        return reply.status(502).send({ error: "mint_failed" });
+      }
+    }
     // 票 47（ADR 0004-1）：非 chat kind 落 queued 即秒回——执行移交后台分发循环
     // （run-dispatcher）。铸票/组图/执行全跟着任务走进循环（铸票失败的 502 面随之
     // 变成 run failed(reason=mint_failed)，失败可观察且「不留无票 run」口径不变）。
     // actor 随任务落盘：异步后请求头早没了，close_flow 的确认审计还得记到人头上（票 39）。
-    enqueueRunJob(db, run.id, "start", { actor });
+    // 票 76：hunt_task 的任务上下文与已铸子票随任务在册（resume 重组图与执行件的凭据）。
+    enqueueRunJob(db, run.id, "start", {
+      actor,
+      ...(childTicket ? { ticket: childTicket } : {}),
+      ...(body.task ? { task: body.task } : {}),
+    });
     return reply.status(202).send({ run_id: run.id, status: run.status });
   });
 
@@ -377,11 +410,13 @@ export function buildApp(opts: {
    *  resume 若不带它，runOpts 的静态 nodes 会把图换成薄径——LangGraph 找不到挂起的
    *  worker 节点直接跑完，L2 动作静默丢失。故 resume 前按原 run.kind 重新铸任务票
    *  （票面规格不变，INV-3 依旧无 L2）并重组 worker 图；静态 nodes（薄径/演示图）不受影响。
-   *  票 47 起由分发循环的执行步调用（决定已落卡后异步重组），不再在审批端点里同步做。 */
+   *  票 47 起由分发循环的执行步调用（决定已落卡后异步重组），不再在审批端点里同步做。
+   *  票 76：hunt_task 按拉起时随任务在册的上下文重解析同一致窄票面（票面 scope 生成后
+   *  不可再改，R11 语义）；无在册上下文（旧 kind / 直拉）= 注册表票面，口径不变。 */
   async function rebuildResumeNodes(runId: string): Promise<FlowNode[] | undefined> {
     if (opts.nodes || !opts.makeNodes) return opts.nodes;
     const run = requireRun(db, runId);
-    const spec = requireRunKind(run.kind).ticket;
+    const spec = ticketSpecFor(run.kind, taskOf(startJobPayload(db, runId)?.task));
     const minted = await mint.mintTaskTicket({
       jti: `tk_${randomUUID()}`,
       sub: spec.sub,
@@ -396,6 +431,36 @@ export function buildApp(opts: {
   // ---- 票 47：分发循环的两个执行件（队列任务的落地面）。与同步时代同一套代码
   //（铸票 → 组图 → executeRun/resumeRun），只是调用时机从 HTTP 请求内挪到了循环里；
   // requestId 用 dispatch_ 前缀自造——审计仍五要素齐全（INV-8），请求关联靠 run_id。 ----
+
+  /** 铸票失败的强杀口径（票 47 分发循环执行件的同步版，票 76 dispatch 铸票点复用）：
+   *  run 推到 failed(reason=mint_failed)（queued→running→failed 两步合法迁移）+
+   *  审计 FAILURE + error 事件——「不留无票 run」，失败可观察（INV-1/INV-8）。 */
+  function failUnTicketedRun(runId: string, err: unknown): void {
+    const ctx: RunCtx = {
+      audit,
+      requestId: `dispatch_${randomUUID()}`,
+      actor: { type: "system", id: "m3:dispatcher" },
+    };
+    transitionRun(db, runId, "running", ctx);
+    transitionRun(db, runId, "failed", ctx, "mint_failed");
+    ctx.audit.record({
+      action: "kill",
+      actor: ctx.actor as { type: string; id: string },
+      objectId: runId,
+      objectType: "run",
+      details: { code: "mint_failed", message: String(err), status: { from: "queued", to: "failed" } },
+      requestId: ctx.requestId,
+      result: "FAILURE",
+      createdAt: Date.now(),
+    });
+    emitEvent(db, runId, "error", { code: "mint_failed", message: String(err) });
+  }
+
+  /** 任务上下文的落盘形 → 解析器入参形（票 76：非 {tool:string} 形一律视为无上下文，
+   *  落回注册表票面——不猜，更不因脏 payload 拒绝旧 kind 的拉起）。 */
+  function taskOf(x: unknown): { tool?: unknown } | undefined {
+    return x !== null && typeof x === "object" ? (x as { tool?: unknown }) : undefined;
+  }
 
   /** 分发循环专用的执行参数（无 HTTP 头可借：审计 requestId 自造）。 */
   function dispatcherRunOpts(): ExecuteOpts {
@@ -413,43 +478,36 @@ export function buildApp(opts: {
 
   /** start 任务：铸任务票 → 组图 → 从 queued 开跑。铸票失败 = 不留无票 run：
    *  镜像 runFlow 的强杀口径把 run 推到 failed(reason=mint_failed)（queued→running→
-   *  failed 两步合法迁移）+ 审计 FAILURE + error 事件（原 502 面的异步等价物）。 */
-  async function executeStartJob(runId: string, actor?: { type: string; id: string }): Promise<void> {
+   *  failed 两步合法迁移）+ 审计 FAILURE + error 事件（原 502 面的异步等价物）。
+   *  票 76：dispatch 时已铸的 hunt_task 子票随任务在册 → 直接用（时序归 dispatch）；
+   *  其余路径按票面解析器现铸（旧 kind 恒注册表票面，时序零变化）。 */
+  async function executeStartJob(
+    runId: string,
+    actor?: { type: string; id: string },
+    payload?: Record<string, unknown> | null,
+  ): Promise<void> {
     const run = requireRun(db, runId);
     let nodes = opts.nodes;
     if (opts.makeNodes) {
       try {
-        const spec = requireRunKind(run.kind).ticket;
-        const minted = await mint.mintTaskTicket({
-          jti: `tk_${randomUUID()}`,
-          sub: spec.sub,
-          // 分诊时还没有 case（闸侧跳过绑定校验）；其余 kind 绑定案件（FR-S2.2）——
-          // 票 36 起 case_flow 同 knowledge_flow 口径：case_id 随拉起即在
-          caseId: run.kind === "alert_flow" ? null : run.caseId,
-          runId: run.id,
-          scope: [...spec.scope],
-          allowedTools: [...spec.allowedTools],
-        });
+        const preTicket = typeof payload?.ticket === "string" ? payload.ticket : null;
+        const task = taskOf(payload?.task);
+        const spec = preTicket ? null : ticketSpecFor(run.kind, task);
+        const minted = preTicket
+          ? { token: preTicket }
+          : await mint.mintTaskTicket({
+              jti: `tk_${randomUUID()}`,
+              sub: spec!.sub,
+              // 分诊时还没有 case（闸侧跳过绑定校验）；其余 kind 绑定案件（FR-S2.2）——
+              // 票 36 起 case_flow 同 knowledge_flow 口径：case_id 随拉起即在
+              caseId: run.kind === "alert_flow" ? null : run.caseId,
+              runId: run.id,
+              scope: [...spec!.scope],
+              allowedTools: [...spec!.allowedTools],
+            });
         nodes = await opts.makeNodes(run, minted.token, { actor });
       } catch (err) {
-        const ctx: RunCtx = {
-          audit,
-          requestId: `dispatch_${randomUUID()}`,
-          actor: { type: "system", id: "m3:dispatcher" },
-        };
-        transitionRun(db, runId, "running", ctx);
-        transitionRun(db, runId, "failed", ctx, "mint_failed");
-        ctx.audit.record({
-          action: "kill",
-          actor: ctx.actor as { type: string; id: string },
-          objectId: runId,
-          objectType: "run",
-          details: { code: "mint_failed", message: String(err), status: { from: "queued", to: "failed" } },
-          requestId: ctx.requestId,
-          result: "FAILURE",
-          createdAt: Date.now(),
-        });
-        emitEvent(db, runId, "error", { code: "mint_failed", message: String(err) });
+        failUnTicketedRun(runId, err);
         return;
       }
     }
@@ -684,7 +742,8 @@ export function buildApp(opts: {
           execute: async (job) => {
             if (job.action === "resume") return executeResumeJob(job.runId);
             const actor = job.payload?.actor as { type: string; id: string } | undefined;
-            return executeStartJob(job.runId, actor);
+            // 票 76：任务载荷（已铸子票/任务上下文）随 job 进执行件
+            return executeStartJob(job.runId, actor, job.payload);
           },
           concurrency: opts.dispatcher?.concurrency ?? runDispatchConcurrency(),
           approvalTtlSeconds: opts.dispatcher?.approvalTtlSeconds ?? approvalTtlSecondsFromEnv(),

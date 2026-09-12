@@ -478,7 +478,7 @@
 | 禁止 | 例外 | 理由 |
 |---|---|---|
 | `services/*` 各 workspace 包互相 import 源码内部（跨服务只走公开 REST/SSE 面） | （无；原违例已由票 28 清偿） | 深模块边界（ADR 0001/0002 一贯口径） |
-| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——ADR 0003 允许清单扩展已追认，票 45）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
+| `evals/` 引用 services 内部实现 | `evals/src/{runner,scenarios,judge,assertions}.ts`、`evals/src/rigs/{shared,approval,replay,chat,investigation,triage,attack,hunting}.ts`（票 44·F6 自 scenarios.ts 拆出的布景 rig，同组装入口角色——ADR 0003 允许清单扩展已追认，票 45；hunting 为票 76 两票制 INV-11 遍历矩阵 rig，同角色扩展）与 `suite.test.ts` 的组装入口符号（buildApp/executeRun/makeXxxFlow/FakeXxxLlm/MemoryXxx/GatewayLlmClient/事件读口）；禁触 case-backend `db.ts`/`store.ts` 写路径 | 决策 #10 快道单测级注入，ADR 0003 裁决 3 |
 | `scripts/`、`tools/` 中立层 import services/evals/packages 内部 | （无） | 中立层保持可独立执行（票 09 replay 三铁律同源） |
 | `services/`、`evals/` 测试与 rig 反引仓库级 `scripts/` 禁止（replay 类走子进程） | 原违例已由票 28 清偿、票 46 收口 evals 向；**现行豁免**：`services/agent/src/jiaotu/jiaotu-register.test.ts`（票 62，2026-09-12 L0 补记） | scripts 不在模块图内；豁免理由：注册脚本是 soc-demo→椒图的跨仓契约正门、无任何运行时被依赖，契约锁需要函数级注入（mockFetch 测试缝），子进程化会丢失注入能力——豁免精确到该测试文件，体检复核 |
 | `packages/mcp-audit` import 任何 workspace 包（独立 CLI） | （无） | m12 卡独立交付（ADR 0002 票 25 沿革） |

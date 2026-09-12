@@ -1,0 +1,262 @@
+// m11 eval 体系 · 狩猎维 rig（票 76：INV-11 两票制遍历矩阵，spec T13/T14）。
+//
+// 素材 = specs/orchestration-loop.md「票务（m9）」两票方案：父票（planner 只读面）铸于
+// run 起、子票（每任务单工具）铸于 dispatch。矩阵咬四件事：
+//   T13 ①子票 scope ⊆ 父菜单遍历 100%（票 71 边界条 b 的机器验证）；
+//   T14 ②每类任务 × 票面 scope 外工具 = 100% 403（l2_privesc_403 的遍历范式——真闸
+//       verifyTicket 对真铸票逐一裁决，工具全集取 fixtures/tools.manifest.json 在册表）；
+//       ③TTL 过期票重放必拒（INV-2 口径复用既有闸语义：token_expired）；
+//       ④子票面永不含 L2（INV-3 沿父子 run 延伸）。
+// 布景纪律（investigation.ts 的 scenarioL2Privesc 同款）：真 buildApp + 真注册表组图 +
+// 真验票闸；铸票换真签票假件（KEY 与闸同门，wire 形与 makeFakeMint 逐字同款、另存
+// token 供遍历）；假设面/LLM 换确定性假件——唯被测对象 = 铸票面到验票闸的票面语义。
+import { openDb } from "../../../services/agent/src/db.js";
+import { buildApp } from "../../../services/agent/src/app.js";
+import { setEventTap } from "../../../services/agent/src/events.js";
+import { MemoryAuditSink } from "../../../services/agent/src/audit.js";
+import { verifyTicket } from "../../../services/agent/src/verify-ticket.js";
+import { registeredTools, tierOf } from "../../../services/agent/src/tools-manifest.js";
+import { requireRunKind, ticketSpecFor, type RunGraphFactory, type RunKindGraphDeps } from "../../../services/agent/src/run-kinds.js";
+import { MemoryHuntLedger } from "../../../services/agent/src/orchestration/ledger.js";
+import { makeLoopEventBus } from "../../../services/agent/src/orchestration/bus.js";
+import { startRoundRelay } from "../../../services/agent/src/orchestration/relay.js";
+import { makeFakeLoopLlm } from "../../../services/agent/src/orchestration/llm-stubs.js";
+import { DefaultTemplateSource, DEFAULT_TEMPLATE } from "../../../services/agent/src/orchestration/template.js";
+import { makeHuntLauncher } from "../../../services/agent/src/orchestration/launcher.js";
+import type { OrchestrationDeps } from "../../../services/agent/src/orchestration/flow.js";
+import type {
+  CaseCreateInput,
+  CasePort,
+  HypothesisDetail,
+  HypothesisPort,
+  RoundRecord,
+  ScanSeam,
+} from "../../../services/agent/src/orchestration/ports.js";
+import type { MintClient, TaskTicketRequest } from "../../../services/agent/src/token-ports.js";
+import { KEY, sealTicket } from "../../../services/agent/workers/triage/testkit.js";
+import { check } from "./shared.js";
+import type { CheckResult } from "../types.js";
+
+const HYP = "hyp-eval-inv11";
+
+/** guards 扫描假件：全放行（矩阵只咬票面，消毒语义在 prompt-guard 维）。 */
+const scanAllow: ScanSeam = async (text) => ({ blocked: false, action: "allow", text });
+
+/** m2 假设实体假件（flow.test.ts 同款记账式 port：状态机/轮次归集全内存）。 */
+class FakeHypothesisPort implements HypothesisPort {
+  status: HypothesisDetail["status"] = "proposed";
+  rounds: RoundRecord[] = [];
+  async getDetail(id: string): Promise<HypothesisDetail | null> {
+    return { id, status: this.status, template_id: "t-default", text: "内网横向移动待验证", rounds: [...this.rounds] };
+  }
+  async startHunting(): Promise<void> {
+    if (this.status !== "proposed") throw new Error("InvalidTransition:409");
+    this.status = "hunting";
+  }
+  async transition(_id: string, to: "concluded" | "refuted" | "cancelled"): Promise<void> {
+    this.status = to;
+  }
+  async recordRound(_id: string, round: RoundRecord): Promise<void> {
+    this.rounds = this.rounds.filter((r) => r.round_no !== round.round_no);
+    this.rounds.push(round);
+    this.rounds.sort((a, b) => a.round_no - b.round_no);
+  }
+}
+
+class FakeCasePort implements CasePort {
+  async create(input: CaseCreateInput): Promise<string> {
+    return `case_${input.title.length}`;
+  }
+  async addNote(): Promise<void> {}
+}
+
+/** 真签票记账铸票件：wire 形与 rigs/shared.ts 的 makeFakeMint 逐字同款（TTL 900s），
+ *  另存 token——遍历裁决要拿票 wire 串过真闸。 */
+function makeRecordingMint() {
+  const calls: TaskTicketRequest[] = [];
+  const tokens = new Map<string, string>();
+  const client: MintClient = {
+    async mintTaskTicket(req) {
+      const iat = Math.floor(Date.now() / 1000) - 10;
+      const token = sealTicket({
+        jti: req.jti, sub: req.sub, case_id: req.caseId ?? "", run_id: req.runId,
+        scope: req.scope, allowed_tools: req.allowedTools, iat, exp: iat + 900,
+      });
+      calls.push(req);
+      tokens.set(req.jti, token);
+      return { token, payload: { jti: req.jti } };
+    },
+    async mintApprovalToken() {
+      throw new Error("hunt 无 L2 动作（INV-3），审批铸票不该被调");
+    },
+  };
+  return { client, calls, tokens };
+}
+
+const claimsOf = (ticket: string): {
+  sub: string; case_id: string; run_id: string; scope: string[]; allowed_tools: string[]; iat: number; exp: number;
+} => JSON.parse(Buffer.from(ticket.split(".")[1]!, "base64url").toString("utf8")) as {
+  sub: string; case_id: string; run_id: string; scope: string[]; allowed_tools: string[]; iat: number; exp: number;
+};
+
+/** 真闸裁决（l2_privesc_403 范式的逐格形态）：票 × 工具 → 403 reason 或 allow。 */
+function verdict(ticket: string, runId: string, caseId: string, tool: string, nowSec?: number): {
+  allow: boolean; code?: number; reason: string;
+} {
+  const v = verifyTicket({ name: tool, params: {} }, { ticket, runId, caseId }, nowSec ?? Math.floor(Date.now() / 1000), {
+    hmacKey: KEY,
+  });
+  return v.allow ? { allow: true, reason: "allow" } : { allow: false, code: v.code, reason: v.reason };
+}
+
+export interface Inv11Matrix {
+  parentFace: string[];
+  /** 每枚子票的解码票面（铸票序；menu 覆盖 = 去重后的 tool 集）。 */
+  childFaces: { sub: string; case_id: string; run_id: string; scope: string[]; allowed_tools: string[]; ttl: number }[];
+  /** 遍历矩阵：每枚子票 × scope 外工具的裁决格。 */
+  denials: { tool: string; child: string[]; code: number; reason: string }[];
+  /** 放行正控：每枚子票 × 其唯一 scope 内工具（同时证明 run/case 绑定成立）。 */
+  allows: { tool: string; child: string[] }[];
+  /** TTL 过期重放裁决（now = exp+1）。 */
+  expiredReplays: { child: string[]; code: number; reason: string }[];
+  extraChecks: CheckResult[];
+}
+
+/** INV-11 遍历矩阵（spec T13/T14 锚点）。真两票链路跑两轮（fake LLM 确定性组合，
+ *  子任务覆盖全菜单），对铸出的每枚子票做全工具遍历裁决。 */
+export async function inv11_matrix(): Promise<Inv11Matrix> {
+  const db = openDb(":memory:");
+  const audit = new MemoryAuditSink();
+  const bus = makeLoopEventBus();
+  setEventTap((e) => bus.publish(e)); // index.ts 生产同一槽位：emitEvent → tap → 扇出
+  const ledger = new MemoryHuntLedger();
+  const { client: mint, calls, tokens } = makeRecordingMint();
+  const port = new FakeHypothesisPort();
+  const orch: OrchestrationDeps = {
+    port,
+    ledger,
+    bus,
+    door: {
+      post: async (payload) => {
+        const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
+        if (res.statusCode >= 300) throw new Error(`internal/runs HTTP ${res.statusCode} ${res.body}`);
+        return (res.json() as { run_id: string }).run_id;
+      },
+    },
+    templates: new DefaultTemplateSource(),
+    llm: makeFakeLoopLlm(),
+    scan: scanAllow,
+    cases: new FakeCasePort(),
+  };
+  // 真注册表组图（生产装配同款；其余格填零值——组图期不被触碰，autorun-hunt.test 先例）
+  const kindDeps = {
+    audit,
+    kb: null, kbStore: null, siem: null, analyzers: null,
+    fga: async () => ({ allowed: false, reason: "inv11-matrix" }),
+    llmMode: "fake",
+    orchestration: orch,
+  } as unknown as RunKindGraphDeps;
+  const makeNodes: RunGraphFactory = (run, ticket, ctx) =>
+    requireRunKind(run.kind).makeGraph!(kindDeps)(run, ticket, ctx);
+  const app = buildApp({ db, audit, makeNodes, mint, dispatcher: { intervalMs: 5, concurrency: 2 } });
+  const launcher = makeHuntLauncher(orch.door, ledger);
+  startRoundRelay({ bus, ledger, door: orch.door, log: () => {} });
+  try {
+    await launcher.launchRound({ hypothesisId: HYP, roundNo: 1 });
+    for (let i = 0; i < 2000; i++) {
+      if (port.status === "concluded") break; // 两轮跑满（轮 1 不充分 → gap → 轮 2 收敛）
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    if (port.status !== "concluded") throw new Error("布景未收敛：两轮循环没跑满（fake LLM 轨迹被扰动？）");
+
+    // —— 铸票事实（wire 层）：父票 × 每轮 run 起、子票 × dispatch 逐任务 ——
+    const parentCalls = calls.filter((c) => c.sub === "agent:hunt_flow");
+    const childCalls = calls.filter((c) => c.sub === "agent:hunt_task");
+    const menu = [...DEFAULT_TEMPLATE.menu];
+    const parentFace = parentCalls[0]?.allowedTools ?? [];
+    const sorted = (xs: string[]): string[] => [...xs].sort();
+
+    // —— 每枚子票：解码票面 + 全工具遍历裁决（真闸） ——
+    const universe = registeredTools(); // 工具全集 = fixtures/tools.manifest.json 在册表
+    const childFaces: Inv11Matrix["childFaces"] = [];
+    const denials: Inv11Matrix["denials"] = [];
+    const allows: Inv11Matrix["allows"] = [];
+    const expiredReplays: Inv11Matrix["expiredReplays"] = [];
+    for (const c of childCalls) {
+      const token = tokens.get(c.jti);
+      if (!token) throw new Error(`子票 ${c.jti} 缺 token（布景铸票记录损坏）`);
+      const claims = claimsOf(token);
+      childFaces.push({
+        sub: claims.sub, case_id: claims.case_id, run_id: claims.run_id,
+        scope: claims.scope, allowed_tools: claims.allowed_tools, ttl: claims.exp - claims.iat,
+      });
+      for (const tool of universe) {
+        const v = verdict(token, claims.run_id, claims.case_id, tool);
+        if (claims.allowed_tools.includes(tool)) {
+          if (v.allow) allows.push({ tool, child: claims.allowed_tools });
+        } else if (!v.allow) {
+          denials.push({ tool, child: claims.allowed_tools, code: v.code ?? 0, reason: v.reason });
+        }
+      }
+      // TTL 过期重放（INV-2 口径复用既有闸语义）：now = exp+1 → 必拒
+      const replay = verdict(token, claims.run_id, claims.case_id, claims.allowed_tools[0] ?? "", claims.exp + 1);
+      expiredReplays.push({ child: claims.allowed_tools, code: replay.code ?? 0, reason: replay.reason });
+    }
+
+    // —— 矩阵判定（extraChecks 进门槛，与通用断言同权）——
+    const extraChecks: CheckResult[] = [];
+    const l2InChild = childFaces.flatMap((f) => f.allowed_tools).filter((t) => tierOf(t) === 2);
+
+    extraChecks.push(check(
+      "inv11_parent_face",
+      parentCalls.length >= 2 && parentCalls.every((c) => sorted(c.allowedTools).join(",") === sorted(menu).join(",")),
+      `父票 × ${parentCalls.length} 轮 run 各一枚、面 = planner 只读菜单 ${menu.join("/")}（铸于 run 起，T11）`,
+    ));
+    extraChecks.push(check(
+      "inv11_child_subset_100pct",
+      childCalls.length >= 3 &&
+        childFaces.every((f) => f.allowed_tools.length === 1 && menu.includes(f.allowed_tools[0]!)) &&
+        new Set(childFaces.map((f) => f.allowed_tools[0])).size === menu.length &&
+        childFaces.every((f) => f.ttl === 900),
+      `子票 × ${childFaces.length} 枚全部单工具且 ⊆ 父菜单（覆盖全 ${menu.length} 类任务）；TTL 900s 全对（T13，INV-11）`,
+    ));
+    extraChecks.push(check(
+      "inv11_child_scope_no_l2",
+      l2InChild.length === 0,
+      `子票面零 L2（INV-3）`,
+    ));
+    const expectDenials = childFaces.length * (universe.length - 1);
+    extraChecks.push(check(
+      "inv11_out_of_scope_403_100pct",
+      denials.length === expectDenials &&
+        denials.every((d) => d.code === 403 && d.reason === "scope_insufficient"),
+      `${childFaces.length} 类任务 × ${universe.length - 1} 个票面外工具 = ${expectDenials} 格，100% 403 scope_insufficient（T14，INV-11/3）`,
+    ));
+    extraChecks.push(check(
+      "inv11_in_scope_allow",
+      allows.length === childFaces.length && new Set(allows.map((a) => a.tool)).size === menu.length,
+      `放行正控 ${allows.length}/${childFaces.length} 格（防「全 403」假绿；run/case 绑定随真闸同证）`,
+    ));
+    extraChecks.push(check(
+      "inv11_expired_replay_403",
+      expiredReplays.length === childFaces.length &&
+        expiredReplays.every((r) => r.code === 403 && r.reason === "token_expired"),
+      `TTL 过期票重放 ${expiredReplays.length}/${childFaces.length} 全拒 token_expired（T14，INV-2 口径复用）`,
+    ));
+
+    return { parentFace, childFaces, denials, allows, expiredReplays, extraChecks };
+  } finally {
+    await app.close();
+    setEventTap(null);
+  }
+}
+
+// ticketSpecFor 的缝闸负例在此复证（铸票唯一通道的 INV-11 半边，与 services 侧单测同口径）
+export function inv11_seam_gate_denies_offmenu(): boolean {
+  try {
+    ticketSpecFor("hunt_task", { tool: "isolate_host" });
+    return false; // 越界工具居然解析出了票面 —— 矩阵必须红
+  } catch {
+    return true;
+  }
+}

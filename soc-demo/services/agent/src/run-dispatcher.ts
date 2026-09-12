@@ -103,6 +103,17 @@ export function completeRunJob(db: DB, id: number): void {
   db.prepare("UPDATE run_jobs SET state = 'done' WHERE id = ?").run(id);
 }
 
+/** run 的 start 任务载荷（票 76）：dispatch 拉起时随任务落盘的上下文（hunt_task 的
+ *  task 原样在册）。resume 重组图按它重解析同一致窄票面——票面 scope 生成后不可再改
+ * （边界规则 R11 语义），无在册 start 任务（旧数据/直拉）返回 null。 */
+export function startJobPayload(db: DB, runId: string): Record<string, unknown> | null {
+  const row = db
+    .prepare("SELECT payload FROM run_jobs WHERE run_id = ? AND action = 'start' ORDER BY id DESC LIMIT 1")
+    .get(runId) as { payload: string | null } | undefined;
+  if (!row?.payload) return null;
+  return JSON.parse(row.payload) as Record<string, unknown>;
+}
+
 // ---------- env 解析（fail-closed 缺省，不猜） ----------
 
 /** 消费循环并发上限：RUN_DISPATCH，缺省 1；非正整数回 1。 */
