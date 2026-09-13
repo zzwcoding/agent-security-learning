@@ -370,7 +370,7 @@ describe("T16 poisoned_report_scanned · judge 半边（毒子报告进 prompt �
     const downScan: ScanSeam = async () => ({ blocked: true, action: "fail_closed", reason: "guards_unreachable" });
     const captured: string[] = [];
     const llm = judgeLlm(capturingVerdictSeam(captured, JUDGE_JSON));
-    const { state } = await driveJudge(llm, downScan, {
+    await driveJudge(llm, downScan, {
       hypothesis_text: "普通假设句",
       round_no: 1,
       tasks: [reportWith("普通报告").task],

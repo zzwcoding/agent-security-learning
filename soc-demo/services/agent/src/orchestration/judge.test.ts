@@ -40,7 +40,6 @@ import type {
   JudgeInput,
   JudgeOutput,
   LoopLlm,
-  PlannedTask,
   RoundRecord,
 } from "./ports.js";
 

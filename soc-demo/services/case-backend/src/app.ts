@@ -361,7 +361,7 @@ export function buildApp(opts: { db?: DB } = {}) {
     return { hypotheses: listHypotheses(db, { status: q.status }) };
   });
 
-  app.post("/api/v1/hypotheses/:id/cancel", (req, reply) => {
+  app.post("/api/v1/hypotheses/:id/cancel", (req) => {
     const { id } = req.params as { id: string };
     const body = (req.body ?? {}) as { by?: string; reason?: string };
     const ctx = ctxOf(req.headers);

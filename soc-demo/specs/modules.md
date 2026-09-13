@@ -98,8 +98,14 @@
   `POST /api/v1/alerts`（ingest 唯一写正门，201 新建/200 去重）、`PATCH /api/v1/alerts/:id`（verdict 生命周期，FR-M4.5）、
   `POST /api/v1/alerts/:id/reopen`（FR-M2.1，保留待消费方）、`POST /api/v1/cases/:id/observables`（FR-M6.3 回写，去重合并）、
   `POST /api/v1/cases/:id/tasks` + `POST /api/v1/tasks/:id/log`（m5 add_task_log 消费）
-- 事件出口：`GET /api/v1/events?after=`（outbox 游标；alert.created / case.closed；autorun 消费者，票 40）
+- 事件出口：`GET /api/v1/events?after=`（outbox 游标；alert.created / case.closed / hypothesis.created / hypothesis.cancelled；autorun 消费者，票 40/73/77）
 - 内部面：`POST /internal/audit`（FR-S5 两路汇入写口，票 35）、`POST /internal/used-tokens` + `GET /internal/used-tokens/:jti`（INV-2 焚毁写/读，验票闸生产依赖）
+- 假设第七实体（票 73 落地；2026-09-13 收官体检补卡——页面映射节"m2 卡面新增"此前漏落卡）：
+  `POST /api/v1/hypotheses`（发起：置 proposed + outbox hypothesis.created 同事务拉起 hunt_flow）、
+  `POST /api/v1/hypotheses/:id/cancel`（发起人 + hunting 态；取消同事务发 hypothesis.cancelled，票 77 补线）、
+  `GET /api/v1/hypotheses?status=` / `GET /api/v1/hypotheses/:id`（详情含轮次归集段 {round_no, tasks[], children[], judge, gap}，狩猎页消费）、
+  机器面两张：`PATCH /api/v1/hypotheses/:id`（循环驱动迁移的写半边，agent hypothesis-port 消费；状态机外 409）+ `POST /api/v1/hypotheses/:id/rounds`（(hyp, round_no) 幂等落账）
+  - Case 新增 `hypothesis_id` 可空列（命中建案回填，票 73/75）；`POST /api/v1/cases` 接受该可空字段（票 75，spec 授权细化）
 
 ### 依赖
 
