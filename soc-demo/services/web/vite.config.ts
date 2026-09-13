@@ -63,6 +63,9 @@ export default defineConfig({
   // vitest（seam 单测：SSE 重连/api client/登录态/流水线归约/审批/时间线/对话/Eval）跑在 jsdom 里
   test: {
     environment: "jsdom",
-    setupFiles: ["src/test/setup.ts"],
+    // 票 94：immediate-guard 必须列在 setup.ts **之前**——react-dom@19 的 scheduler 在模块
+    // 求值时就捕获 setImmediate（localSetImmediate），而 setup.ts 首行的 antd patch import
+    // 会连带求值 react-dom→scheduler；句柄追踪装晚了就追不到已捕获的那份 setImmediate。
+    setupFiles: ["src/test/immediate-guard.ts", "src/test/setup.ts"],
   },
 });
