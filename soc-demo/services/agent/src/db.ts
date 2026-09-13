@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS runs (
   kind TEXT NOT NULL,
   alert_id TEXT NOT NULL,
   case_id TEXT,
+  -- 票 90（m14 正名）：hunt_flow/hunt_task 的拉起实体。可空——旧 kind 恒 NULL。
+  hypothesis_id TEXT,
   status TEXT NOT NULL DEFAULT 'queued',
   fail_reason TEXT,
   steps INTEGER NOT NULL DEFAULT 0,
@@ -117,12 +119,15 @@ CREATE INDEX IF NOT EXISTS idx_run_jobs_state ON run_jobs(state, id);
 // 票 17：runs 增 case_id（knowledge_flow 的目标案件）。老库靠查缺补列——
 // SQLite 的 CREATE TABLE IF NOT EXISTS 不会给已存在的表补列（case-backend 同款做法）。
 // 狗粮票 58：approvals 增 external_approval_id（外部审批卡的椒图侧锚），同一套幂等迁移。
+// 票 90：runs 增 hypothesis_id（hunt_flow/hunt_task 的拉起实体专用列，可空）——
+// 票 73 受控接受的 case_id 位承载就此清偿，存量行零影响（新列恒 NULL）。
 function migrate(db: DB): void {
   const cols = new Set(
     (db.prepare("PRAGMA table_info(runs)").all() as { name: string }[]).map((c) => c.name),
   );
   if (cols.size === 0) return; // runs 表不存在（DDL 已建，不该发生）
   if (!cols.has("case_id")) db.exec("ALTER TABLE runs ADD COLUMN case_id TEXT");
+  if (!cols.has("hypothesis_id")) db.exec("ALTER TABLE runs ADD COLUMN hypothesis_id TEXT");
   const approvalCols = new Set(
     (db.prepare("PRAGMA table_info(approvals)").all() as { name: string }[]).map((c) => c.name),
   );

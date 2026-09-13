@@ -73,8 +73,8 @@ export function makeHuntFlow(deps: { runId: string; orch: OrchestrationDeps; aud
     {
       name: "intake",
       run: async (ctx) => {
-        // 拉起实体：hunt_flow 经 m3 标准入口吃 case_id 位承载 hypothesis_id（run 行无
-        // hypothesis 列；本票不扩 runs schema——见 run-kinds.ts 注册表注释）
+        // 拉起实体：hunt_flow 的 hypothesis_id 走 runs.hypothesis_id 专用列（票 90 正名，
+        // case_id 位承载已清偿；信封键位保持 case_id=graph.ts 派生口径，值源换专用列）
         const hypothesisId = typeof ctx.state.case_id === "string" ? ctx.state.case_id : "";
         if (!hypothesisId) throw new Error("missing hypothesis_id in handoff state (case_id)");
 

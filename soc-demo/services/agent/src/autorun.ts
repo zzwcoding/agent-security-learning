@@ -86,11 +86,13 @@ export function dbCursorStore(db: DB): CursorStore {
 }
 
 /** 拉起请求（语义形，camelCase）：index.ts 折成 /internal/runs 的 snake wire。
- *  票 73（L0 派发中裁决①）：hunt_flow 走 caseId 位承载 hypothesis_id（m14 卡备注口径）。 */
+ *  票 73（L0 派发中裁决①）→ 票 90 正名：hunt_flow 走 hypothesisId 专用字段
+ * （runs.hypothesis_id 专用列在位，case_id 位承载清偿）。 */
 export interface LaunchReq {
   kind: "alert_flow" | "knowledge_flow" | "hunt_flow";
   alertId?: string;
   caseId?: string;
+  hypothesisId?: string;
 }
 
 /** 依赖注入面（全 seam）：生产装配见 index.ts，测试全换假件。 */
@@ -118,13 +120,15 @@ export interface AutorunDeps {
   log?(entry: Record<string, unknown>): void;
 }
 
-/** 生产防重一：查 runs 表——同一告警/案件已有非 failed 的同类 run 就不再拉。
- *  failed 不挡（重试语义）；并发窗口由 verdict 锁（票 13）做最后兜底。 */
+/** 生产防重一：查 runs 表——同一告警/案件/假设已有非 failed 的同类 run 就不再拉。
+ *  failed 不挡（重试语义）；并发窗口由 verdict 锁（票 13）做最后兜底。
+ *  票 90：hunt 行的拉起实体落 hypothesis_id 专用列（case_id 清偿为空），防重读面同步
+ *  换键——旧 kind 两列语义零变化（其 hypothesis_id 恒 NULL，不产生误命中）。 */
 export function runsLookup(db: DB): (kind: string, refId: string) => boolean {
   const q = db.prepare(
-    "SELECT id FROM runs WHERE kind = ? AND (alert_id = ? OR case_id = ?) AND status != 'failed' LIMIT 1",
+    "SELECT id FROM runs WHERE kind = ? AND (alert_id = ? OR case_id = ? OR hypothesis_id = ?) AND status != 'failed' LIMIT 1",
   );
-  return (kind: string, refId: string) => !!q.get(kind, refId, refId);
+  return (kind: string, refId: string) => !!q.get(kind, refId, refId, refId);
 }
 
 /** 生产防重二：M2 kb 账面查（GET /api/v1/kb/proposals 全量拉回按 source_case_id 过滤
@@ -220,8 +224,9 @@ async function decide(
     // 轮 1 拉起——spec 行为约定 1「假设提交即置 proposed 并拉起 hunt_flow」的消费半边，
     // 照 alert.created 先例。防重两道闸缺一不可（hasActiveRun + hasRoundRun，见 deps 注释）；
     // 拉起经 deps.launch（index.ts 装配 = HuntLauncher.launchRound：door 正门 + 簿记锚落账），
-    // hypothesis_id 经 case_id 位承载（票 73 ③ L0 口径，m14 卡备注）。拉起失败不动游标
-    //（at-least-once，此刻 ② 尚未落账，下轮重试会真重试——与 alert.created 同款语义）。
+    // 票 90 正名：传参走 LaunchReq.hypothesisId（runs.hypothesis_id 专用列在位，case_id 位
+    // 承载清偿）。拉起失败不动游标（at-least-once，此刻 ② 尚未落账，下轮重试会真重试
+    // ——与 alert.created 同款语义）。
     const hypId = typeof e.payload.hypothesisId === "string" ? e.payload.hypothesisId : "";
     if (!hypId) return { action: "skipped", skip: { topic: e.topic, refId: "", reason: "malformed_payload" } };
     const seen = batchSeen.get("hunt_flow") ?? new Set<string>();
@@ -233,7 +238,7 @@ async function decide(
       return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "round_exists" } };
     }
     try {
-      await deps.launch({ kind: "hunt_flow", caseId: hypId });
+      await deps.launch({ kind: "hunt_flow", hypothesisId: hypId });
     } catch (err) {
       return { action: "failed", error: String(err) };
     }

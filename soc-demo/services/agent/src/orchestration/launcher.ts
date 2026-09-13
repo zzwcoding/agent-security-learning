@@ -21,7 +21,9 @@ export interface HuntLauncher {
 export function makeHuntLauncher(door: RunDoor, ledger: HuntLedger): HuntLauncher {
   return {
     async launchRound(req) {
-      const runId = await door.post({ kind: "hunt_flow", case_id: req.hypothesisId });
+      // 票 90 正名：door wire 发 hypothesis_id（runs.hypothesis_id 专用列在位，
+      // case_id 位承载清偿——wire 面不再超载 case_id）。
+      const runId = await door.post({ kind: "hunt_flow", hypothesis_id: req.hypothesisId });
       ledger.put({
         runId,
         role: "round",
@@ -35,7 +37,7 @@ export function makeHuntLauncher(door: RunDoor, ledger: HuntLedger): HuntLaunche
     async launchTask(req) {
       // 票 76：任务上下文随拉起过门——子票的窄票面（allowed_tools = task.tool）由 m3
       // 正门内按注册表解析器解析现铸（子票铸于 dispatch），本件只递数据不碰铸票（R11）。
-      const runId = await door.post({ kind: "hunt_task", case_id: req.hypothesisId, task: req.task });
+      const runId = await door.post({ kind: "hunt_task", hypothesis_id: req.hypothesisId, task: req.task });
       ledger.put({
         runId,
         role: "task",

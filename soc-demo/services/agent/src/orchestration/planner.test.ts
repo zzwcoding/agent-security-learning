@@ -107,8 +107,8 @@ function rig(llm: LoopLlm, scan: ScanSeam = scanAllow): Rig {
   const ledger = new MemoryHuntLedger();
   const port = new FakeHypothesisPort();
   const door = {
-    post: async (payload: { kind: string; case_id?: string }): Promise<string> =>
-      createRun(db, { kind: payload.kind, caseId: payload.case_id ?? null }, { audit, requestId: "rig-door" }).id,
+    post: async (payload: { kind: string; hypothesis_id?: string }): Promise<string> =>
+      createRun(db, { kind: payload.kind, hypothesisId: payload.hypothesis_id ?? null }, { audit, requestId: "rig-door" }).id,
   };
   const orch: OrchestrationDeps = {
     port,
@@ -141,7 +141,7 @@ function rig(llm: LoopLlm, scan: ScanSeam = scanAllow): Rig {
   return {
     db, audit, bus, ledger, port, orch,
     async runRound(roundNo) {
-      const parent = createRun(db, { kind: "hunt_flow", caseId: HYP }, { audit, requestId: `req-r${roundNo}` });
+      const parent = createRun(db, { kind: "hunt_flow", hypothesisId: HYP }, { audit, requestId: `req-r${roundNo}` });
       ledger.put({ runId: parent.id, role: "round", hypothesisId: HYP, roundNo, parentRunId: null, task: null });
       return executeRun(db, parent.id, { nodes: nodesFor(parent.id), audit, requestId: `req-r${roundNo}` });
     },

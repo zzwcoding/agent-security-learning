@@ -161,7 +161,9 @@ export interface HypothesisPort {
  *  由 m3 正门内按注册表解析器（ticketSpecFor）从它解析，机制目录只递数据不碰铸票
  * （R11：票面 scope 在 m3 票务装配面生成，生成后不可再改）。 */
 export interface RunDoor {
-  post(payload: { kind: string; case_id?: string; task?: PlannedTask }): Promise<string>;
+  /** 票 90 正名：hunt 拉起实体 = hypothesis_id（runs.hypothesis_id 专用列在位，case_id 位
+   *  承载清偿——door wire 不再超载 case_id；案件 kind 的 case_id 语义照旧）。 */
+  post(payload: { kind: string; hypothesis_id?: string; task?: PlannedTask }): Promise<string>;
 }
 
 /** agent 落盘事件（events.ts RunEvent 的结构子集，避免机制件直依赖总线内部）。 */

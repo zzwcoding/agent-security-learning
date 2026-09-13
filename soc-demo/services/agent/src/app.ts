@@ -278,15 +278,20 @@ export function buildApp(opts: {
   //   经 launchChatRun 铸只读票组 chat 子图——公开面 POST /api/v1/chat 是它的正门。
   //   票 36 起 case_flow 同路进柴：吃 case_id 直拉调查+富化链（index.ts 组链）。）
   app.post("/internal/runs", async (req, reply) => {
-    const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; message?: string; role?: string; task?: { tool?: unknown } };
+    // 票 90：hunt 两 kind 的拉起实体 = hypothesis_id（runs.hypothesis_id 专用列正名，
+    // case_id 位承载清偿）——payload 接受可选 hypothesis_id，case_id 语义照旧只归案件 kind。
+    const body = (req.body ?? {}) as { kind?: string; alert_id?: string; case_id?: string; hypothesis_id?: string; message?: string; role?: string; task?: { tool?: unknown } };
     if (!body.kind) return reply.status(400).send({ error: "kind_required" });
-    // 拉起校验全部读注册表（票 44）：不在册 400；intake 决定吃 alert_id 还是 case_id；
-    // requiresMessage 是 chat_flow 的「没消息就没有图可跑」——缺 message 直接 400，不造空 run。
+    // 拉起校验全部读注册表（票 44）：不在册 400；intake 决定吃 alert_id/case_id/hypothesis_id
+    // （票 90 正名后 hunt 两 kind 吃 hypothesis_id）；requiresMessage 是 chat_flow 的
+    // 「没消息就没有图可跑」——缺 message 直接 400，不造空 run。
     const desc = runKindOf(body.kind);
     if (!desc) {
       return reply.status(400).send({ error: "unknown_kind", details: [body.kind] });
     }
-    if (desc.intake === "case") {
+    if (desc.intake === "hypothesis") {
+      if (!body.hypothesis_id) return reply.status(400).send({ error: "hypothesis_id_required" });
+    } else if (desc.intake === "case") {
       if (!body.case_id) return reply.status(400).send({ error: "case_id_required" });
     } else if (!body.alert_id) {
       return reply.status(400).send({ error: "kind_and_alert_id_required" });
@@ -309,9 +314,12 @@ export function buildApp(opts: {
     const actor = { type: actorType, id: actorId };
     const run = createRun(
       db,
-      desc.intake === "case"
-        ? { kind: body.kind, caseId: body.case_id ?? null }
-        : { kind: body.kind, alertId: body.alert_id },
+      desc.intake === "hypothesis"
+        ? // 票 90：hunt 行 case_id 恒空，拉起实体落专用列（正名后簿记/审计读面口径不变）
+          { kind: body.kind, hypothesisId: body.hypothesis_id ?? null }
+        : desc.intake === "case"
+          ? { kind: body.kind, caseId: body.case_id ?? null }
+          : { kind: body.kind, alertId: body.alert_id },
       {
         audit,
         requestId,

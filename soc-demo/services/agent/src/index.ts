@@ -270,10 +270,11 @@ app
     }
     const launch: Parameters<typeof startAutorun>[0]["launch"] = async (req) => {
       // 票 73（L0 派发中裁决①）：hypothesis.created → hunt_flow 轮 1——经 launcher
-      //（door 正门 + 簿记锚落账，防重闸二的落账半边）；hypothesis_id 经 case_id 位承载
-      //（m14 卡备注口径）。autorun 只拉轮 1，轮间接力归 startRoundRelay。
+      //（door 正门 + 簿记锚落账，防重闸二的落账半边）；票 90 正名：autorun 传参走
+      // LaunchReq.hypothesisId（runs.hypothesis_id 专用列在位，case_id 位承载清偿）。
+      // autorun 只拉轮 1，轮间接力归 startRoundRelay。
       if (req.kind === "hunt_flow") {
-        await huntLauncher.launchRound({ hypothesisId: req.caseId as string, roundNo: 1 });
+        await huntLauncher.launchRound({ hypothesisId: req.hypothesisId as string, roundNo: 1 });
         return;
       }
       // 拉起 payload 的实体字段按注册表 intake 定（票 44）：alert = alert_id，case = case_id

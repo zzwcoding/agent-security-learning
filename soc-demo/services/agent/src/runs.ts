@@ -20,6 +20,9 @@ export interface RunRow {
   /** 票 17：knowledge_flow 的目标案件（alert_flow 为 null）。alert_id 列保持 NOT NULL，
    *  无告警上下文的 run 存空串——避免老库重建表（SQLite 去 NOT NULL 代价大）。 */
   caseId: string | null;
+  /** 票 90：hunt_flow/hunt_task 的拉起实体（专用列在位，票 73 的 case_id 位承载清偿；
+   *  旧 kind 恒 null）。 */
+  hypothesisId: string | null;
   status: RunStatus;
   failReason: string | null;
   steps: number;
@@ -37,6 +40,7 @@ function mapRun(row: Record<string, unknown> | undefined): RunRow | null {
     kind: row.kind as string,
     alertId: row.alert_id as string,
     caseId: (row.case_id as string | null) ?? null,
+    hypothesisId: (row.hypothesis_id as string | null) ?? null,
     status: row.status as RunStatus,
     failReason: (row.fail_reason as string | null) ?? null,
     steps: row.steps as number,
@@ -48,21 +52,21 @@ function mapRun(row: Record<string, unknown> | undefined): RunRow | null {
 
 export function createRun(
   db: DB,
-  input: { kind: string; alertId?: string; caseId?: string | null },
+  input: { kind: string; alertId?: string; caseId?: string | null; hypothesisId?: string | null },
   ctx: RunCtx,
 ): RunRow {
   const id = `run_${randomUUID()}`;
   const now = nowMs();
   db.prepare(
-    `INSERT INTO runs (id, kind, alert_id, case_id, status, created_at, updated_at)
-     VALUES (?, ?, ?, ?, 'queued', ?, ?)`,
-  ).run(id, input.kind, input.alertId ?? "", input.caseId ?? null, now, now);
+    `INSERT INTO runs (id, kind, alert_id, case_id, hypothesis_id, status, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, 'queued', ?, ?)`,
+  ).run(id, input.kind, input.alertId ?? "", input.caseId ?? null, input.hypothesisId ?? null, now, now);
   ctx.audit.record({
     action: "create",
     actor: ctx.actor ?? { type: "system", id: "internal" },
     objectId: id,
     objectType: "run",
-    details: { created: { kind: input.kind, alertId: input.alertId ?? "", caseId: input.caseId ?? null } },
+    details: { created: { kind: input.kind, alertId: input.alertId ?? "", caseId: input.caseId ?? null, hypothesisId: input.hypothesisId ?? null } },
     requestId: ctx.requestId,
     result: "SUCCESS",
     createdAt: nowMs(),

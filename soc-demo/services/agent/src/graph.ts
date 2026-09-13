@@ -525,11 +525,16 @@ export async function executeRun(db: DB, runId: string, opts: ExecuteOpts = {}):
   const run = requireRun(db, runId);
   return runFlow(db, runId, makeDeps(opts), {
     mode: "start",
-    // 票 17：knowledge_flow 带 case_id（无 alert），交接信封按 run 行拼齐两种 kind；
-    // 票 18：chat_flow 由调用方注入完整交接态（message/role 随请求来，不在 run 行）
+    // 票 17：knowledge_flow 带 case_id（无 alert），交接信封按 run 行拼齐各种 kind；
+    // 票 18：chat_flow 由调用方注入完整交接态（message/role 随请求来，不在 run 行）；
+    // 票 90：hunt_flow/hunt_task 的拉起实体走 runs.hypothesis_id 专用列（case_id 位清偿
+    // 为空）——信封键位仍是 case_id（机制目录 flow.ts 取消检查/intake 的读面契约，
+    // 本票禁触），值源换成专用列，行为逐字节不变。
     initialState: opts.initialState ?? (run.caseId
       ? { kind: run.kind, case_id: run.caseId }
-      : { kind: run.kind, alert_id: run.alertId }),
+      : run.hypothesisId
+        ? { kind: run.kind, case_id: run.hypothesisId }
+        : { kind: run.kind, alert_id: run.alertId }),
   });
 }
 

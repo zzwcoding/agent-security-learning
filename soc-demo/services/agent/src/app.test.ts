@@ -66,15 +66,35 @@ test.each([
   // 票 18：chat_flow 已进白名单（吃 case_id+message，另有 message_required 校验），
   // 「未知 kind」样例换成永不入册的名字。
   // 票 36：case_flow 进白名单（吃 case_id，与 knowledge_flow 同口径）。
+  // 票 90：hunt 两 kind 正名——拉起实体 = hypothesis_id 专用列，case_id 位不再参与
+  // hunt 校验（只带 case_id 也拒，承载位超载清偿）。
   ["缺 kind", { alert_id: "al-1" }, "kind_required"],
   ["缺 alert_id", { kind: "alert_flow" }, "kind_and_alert_id_required"],
   ["未知 kind", { kind: "nope_flow", alert_id: "al-1" }, "unknown_kind"],
   ["case_flow 缺 case_id", { kind: "case_flow" }, "case_id_required"],
+  ["hunt_flow 缺 hypothesis_id", { kind: "hunt_flow" }, "hypothesis_id_required"],
+  ["hunt_flow 只带 case_id（承载位已清偿）", { kind: "hunt_flow", case_id: "case_1" }, "hypothesis_id_required"],
+  ["hunt_task 缺 hypothesis_id", { kind: "hunt_task" }, "hypothesis_id_required"],
 ])("%s → 400", async (_label, payload, error) => {
   const { app } = makeApp();
   const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
   expect(res.statusCode).toBe(400);
   expect(res.json().error).toBe(error);
+  await app.close();
+});
+
+test("票 90 正名：POST /internal/runs {kind:\"hunt_flow\", hypothesis_id} → run 行 hypothesis_id 专用列在位、case_id 清偿为空", async () => {
+  const { db, app } = makeApp();
+  const res = await app.inject({
+    method: "POST",
+    url: "/internal/runs",
+    payload: { kind: "hunt_flow", hypothesis_id: "hyp-90" },
+  });
+  expect(res.statusCode).toBe(202);
+  const row = db
+    .prepare("SELECT kind, hypothesis_id, case_id FROM runs WHERE id = ?")
+    .get(res.json().run_id) as Record<string, unknown>;
+  expect(row).toEqual({ kind: "hunt_flow", hypothesis_id: "hyp-90", case_id: null });
   await app.close();
 });
 

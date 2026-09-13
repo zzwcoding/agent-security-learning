@@ -24,6 +24,7 @@ const runRow = (kind: string): RunRow => ({
   kind,
   alertId: "al-registry",
   caseId: null,
+  hypothesisId: null,
   status: "running",
   failReason: null,
   steps: 0,
@@ -53,7 +54,7 @@ describe("run kind 注册表完整性（票 44：一处注册处处消费）", (
   test("每个 kind 三件套齐全：intake 合法 / 票面齐全 / 图工厂在位（三张平行表一致性由单源保证）", () => {
     for (const id of RUN_KIND_IDS) {
       const desc = requireRunKind(id);
-      expect(["alert", "case"], `${id} intake`).toContain(desc.intake);
+      expect(["alert", "case", "hypothesis"], `${id} intake`).toContain(desc.intake);
       expect(desc.ticket.sub, `${id} ticket.sub`).toMatch(/^agent:/);
       expect(desc.ticket.scope.length, `${id} ticket.scope`).toBeGreaterThan(0);
       expect(desc.ticket.allowedTools.length, `${id} ticket.allowedTools`).toBeGreaterThan(0);
@@ -92,11 +93,15 @@ describe("run kind 注册表完整性（票 44：一处注册处处消费）", (
     expect(requireRunKind("knowledge_flow").ticket.scope).toEqual(["case:read", "kb:propose"]);
   });
 
-  test("intake / requiresMessage 口径（票 17/18/36/39/73 原样）", () => {
+  test("intake / requiresMessage 口径（票 17/18/36/39 原样；hunt 两 kind 票 90 正名吃 hypothesis_id）", () => {
     expect(requireRunKind("alert_flow").intake).toBe("alert");
     expect(requireRunKind("close_flow").intake).toBe("alert");
-    for (const id of ["knowledge_flow", "chat_flow", "case_flow", "hunt_flow", "hunt_task"]) {
+    for (const id of ["knowledge_flow", "chat_flow", "case_flow"]) {
       expect(requireRunKind(id).intake).toBe("case");
+    }
+    // 票 90：hunt 两 kind 拉起实体 = hypothesis_id 专用列（case_id 位承载清偿，旧口径 case 位不再参与）
+    for (const id of ["hunt_flow", "hunt_task"]) {
+      expect(requireRunKind(id).intake).toBe("hypothesis");
     }
     // 只有 chat_flow 拉起必须带 message（没消息就没有图可跑）
     for (const id of RUN_KIND_IDS) {

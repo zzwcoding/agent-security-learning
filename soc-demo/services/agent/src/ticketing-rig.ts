@@ -192,11 +192,13 @@ export const childMints = (order: string[]): string[] =>
 export const plannedRounds = (order: string[]): string[][] =>
   order.filter((o) => o.startsWith("planner:")).map((o) => o.split(":")[2]!.split("+"));
 
-/** 真闸裁决 helper（真 gateway 腿取证用）：票 × 工具 → 是否放行。 */
+/** 真闸裁决 helper（真 gateway 腿取证用）：票 × 工具 → 是否放行。
+ *  票 90 正名：hunt 两票不绑案件（case_id claim 随承载清偿为空）——验票 ctx 不再
+ *  钉 caseId（此前钉 HYP 是借位承载的布景残留），按票面裁决只咬工具 scope + run 绑定。 */
 export function verifyAllows(ticket: string, tool: string, runId: string, key: string): boolean {
   return verifyTicket(
     { name: tool, params: {} },
-    { ticket, runId, caseId: HYP },
+    { ticket, runId },
     Math.floor(Date.now() / 1000),
     { hmacKey: key },
   ).allow;

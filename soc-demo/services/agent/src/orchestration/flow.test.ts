@@ -93,8 +93,8 @@ function rig(): Rig {
   const port = new FakeHypothesisPort();
   const door = {
     // 假门：与真门同形（建 run 行返回 run_id；铸票/入队细节归 app.ts，测试不覆盖）
-    post: async (payload: { kind: string; case_id?: string }): Promise<string> =>
-      createRun(db, { kind: payload.kind, caseId: payload.case_id ?? null }, { audit, requestId: "rig-door" }).id,
+    post: async (payload: { kind: string; hypothesis_id?: string }): Promise<string> =>
+      createRun(db, { kind: payload.kind, hypothesisId: payload.hypothesis_id ?? null }, { audit, requestId: "rig-door" }).id,
   };
   const orch: OrchestrationDeps = {
     port,
@@ -162,7 +162,7 @@ describe("T01 hunt_flow_start_transitions（行为约定 1：首轮前置 huntin
     const rig1 = rig();
     const { db, audit, port, orch } = rig1;
     rig1.drive();
-    const parent = createRun(db, { kind: "hunt_flow", caseId: HYP }, { audit, requestId: "req-t01" });
+    const parent = createRun(db, { kind: "hunt_flow", hypothesisId: HYP }, { audit, requestId: "req-t01" });
     expect(parent.status).toBe("queued"); // m3 标准入口：落 queued
 
     const done = await executeRun(db, parent.id, {
@@ -204,7 +204,7 @@ describe("T01 hunt_flow_start_transitions（行为约定 1：首轮前置 huntin
     const rig1 = rig();
     const { db, audit, port, orch } = rig1;
     port.status = "cancelled";
-    const parent = createRun(db, { kind: "hunt_flow", caseId: HYP }, { audit, requestId: "req-t01b" });
+    const parent = createRun(db, { kind: "hunt_flow", hypothesisId: HYP }, { audit, requestId: "req-t01b" });
     const done = await executeRun(db, parent.id, {
       nodes: makeHuntFlow({ runId: parent.id, orch, audit }),
       audit,
@@ -227,7 +227,7 @@ describe("T02 round_chain_event_order（六节点序 + 接力幂等 + SSE 可回
     const relay = startRoundRelay({ bus, ledger, door: orch.door, log: (e) => relayLog.push(e) });
     drive();
 
-    const round1 = createRun(db, { kind: "hunt_flow", caseId: HYP }, { audit, requestId: "req-t02" });
+    const round1 = createRun(db, { kind: "hunt_flow", hypothesisId: HYP }, { audit, requestId: "req-t02" });
     ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
 
     await executeRun(db, round1.id, { nodes: makeHuntFlow({ runId: round1.id, orch, audit }), audit, requestId: "req-t02" });

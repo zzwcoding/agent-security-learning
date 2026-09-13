@@ -127,8 +127,8 @@ function loopRig(opts: { llm?: LoopLlm; wrapChild?: (nodes: FlowNode[]) => FlowN
   const ledger = new MemoryHuntLedger();
   const port = new FakeHypothesisPort();
   const door = {
-    post: async (payload: { kind: string; case_id?: string }): Promise<string> =>
-      createRun(db, { kind: payload.kind, caseId: payload.case_id ?? null }, { audit, requestId: "rig-door" }).id,
+    post: async (payload: { kind: string; hypothesis_id?: string }): Promise<string> =>
+      createRun(db, { kind: payload.kind, hypothesisId: payload.hypothesis_id ?? null }, { audit, requestId: "rig-door" }).id,
   };
   const orch: OrchestrationDeps = {
     port,
@@ -223,7 +223,7 @@ describe("T06 spin_guard（行为约定 10：相邻轮同指纹拒组合，gap �
         gap: () => ({ gap_description: "缺口原地踏步", unknown: "unknown-x", suggested_focus: ["same-focus"] }),
       }),
     });
-    const round1 = createRun(rig.db, { kind: "hunt_flow", caseId: HYP }, { audit: rig.audit, requestId: "req-t06" });
+    const round1 = createRun(rig.db, { kind: "hunt_flow", hypothesisId: HYP }, { audit: rig.audit, requestId: "req-t06" });
     rig.ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
     await rig.settle();
     await rig.stop();
@@ -251,7 +251,7 @@ describe("T06 spin_guard（行为约定 10：相邻轮同指纹拒组合，gap �
     // FakeLoopGap 的 suggested_focus 随证据条数变化 → 每轮 gap hash 不同 → 同组合不判空转；
     // FakeLoopJudge 在第 2 轮（有既往轮）收敛 → concluded 而非 cancelled(spin)。
     const rig = loopRig(); // fake 三件套默认档即此轨迹（planner 有 gap 换组合，此处靠指纹豁免语义）
-    const round1 = createRun(rig.db, { kind: "hunt_flow", caseId: HYP }, { audit: rig.audit, requestId: "req-t06b" });
+    const round1 = createRun(rig.db, { kind: "hunt_flow", hypothesisId: HYP }, { audit: rig.audit, requestId: "req-t06b" });
     rig.ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
     await rig.settle();
     await rig.stop();
@@ -284,7 +284,7 @@ describe("T09 rounds_exhausted（max_rounds=20 硬顶 → cancelled(budget_round
         }),
       },
     });
-    const round1 = createRun(rig.db, { kind: "hunt_flow", caseId: HYP }, { audit: rig.audit, requestId: "req-t09" });
+    const round1 = createRun(rig.db, { kind: "hunt_flow", hypothesisId: HYP }, { audit: rig.audit, requestId: "req-t09" });
     rig.ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
     await rig.settle();
     await rig.stop();
@@ -322,7 +322,7 @@ describe("T09 rounds_exhausted（max_rounds=20 硬顶 → cancelled(budget_round
 describe("T10 user_cancel_children（行为约定 12：人取消 → 同 11 停止语义，原因 user_cancelled）", () => {
   test("挂起中的父 run 停、未起的子 run 不干活，父链审计齐（INV-8），终态不可回退（INV-10）", async () => {
     const rig = loopRig(); // fake planner 首轮出 2 个任务 → 2 个子 run
-    const round1 = createRun(rig.db, { kind: "hunt_flow", caseId: HYP }, { audit: rig.audit, requestId: "req-t10" });
+    const round1 = createRun(rig.db, { kind: "hunt_flow", hypothesisId: HYP }, { audit: rig.audit, requestId: "req-t10" });
     rig.ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
     // 不 await、不开 drive：父 run 停在 await_children（parksOnEvents 放行形态的进程内
     // 等价物），子 run 已声明、保持 queued（未起）
@@ -395,7 +395,7 @@ describe("T10 user_cancel_children（行为约定 12：人取消 → 同 11 停�
         ),
     });
     rig.drive();
-    const round1 = createRun(rig.db, { kind: "hunt_flow", caseId: HYP }, { audit: rig.audit, requestId: "req-t10b" });
+    const round1 = createRun(rig.db, { kind: "hunt_flow", hypothesisId: HYP }, { audit: rig.audit, requestId: "req-t10b" });
     rig.ledger.put({ runId: round1.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
     const parentDone = executeRun(rig.db, round1.id, {
       nodes: makeHuntFlow({ runId: round1.id, orch: rig.orch, audit: rig.audit }),

@@ -108,10 +108,11 @@ function rig(
   };
   const app = buildApp({ db, audit, makeNodes, mint, dispatcher: { intervalMs: 5, concurrency: 2 } });
   const huntLauncher = makeHuntLauncher(orch.door, ledger);
-  // index.ts launch 的同款分支（生产装配照抄：hunt_flow → launcher 轮 1）
+  // index.ts launch 的同款分支（生产装配照抄：hunt_flow → launcher 轮 1；票 90 正名
+  // 后 autorun 传参走 LaunchReq.hypothesisId，case_id 位不再承载）
   const launch = async (req: Parameters<AutorunDeps["launch"]>[0]): Promise<void> => {
     if (req.kind === "hunt_flow") {
-      await huntLauncher.launchRound({ hypothesisId: req.caseId as string, roundNo: 1 });
+      await huntLauncher.launchRound({ hypothesisId: req.hypothesisId as string, roundNo: 1 });
       return;
     }
     throw new Error(`本测试只消费 hunt_flow，收到 ${req.kind}`);
@@ -131,8 +132,9 @@ function rig(
   };
 }
 
+// 票 90 正名：hunt run 行按 hypothesis_id 专用列寻址（case_id 位清偿后不再是 hunt 行的键）
 const huntRuns = (db: DB, hypId: string): Record<string, unknown>[] =>
-  db.prepare("SELECT * FROM runs WHERE kind = 'hunt_flow' AND case_id = ? ORDER BY id").all(hypId) as Record<string, unknown>[];
+  db.prepare("SELECT * FROM runs WHERE kind = 'hunt_flow' AND hypothesis_id = ? ORDER BY id").all(hypId) as Record<string, unknown>[];
 
 async function waitUntil(fn: () => boolean, what: string, timeoutMs = 10000): Promise<void> {
   const deadline = Date.now() + timeoutMs;
@@ -169,6 +171,10 @@ describe("票 73·L0 裁决①：hypothesis.created → autorun → hunt_flow（
       // hunt_flow run 出现并由分发循环跑到终态
       await waitUntil(() => huntRuns(db, hypId).length === 1, "hunt_flow run 出现");
       const run = huntRuns(db, hypId)[0];
+      // 票 90 正名验收：run 行 hypothesis_id 专用列在位、case_id 位清偿为空
+      //（簿记/审计/轮次归集读面口径不变——ledger 与 m2 账面照旧）
+      expect(run.hypothesis_id).toBe(hypId);
+      expect(run.case_id).toBeNull();
       const done = await waitForRunTerminal(db, String(run.id), { timeoutMs: 15000 });
       expect(done.status).toBe("completed");
 

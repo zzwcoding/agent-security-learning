@@ -100,8 +100,10 @@ export interface RunKindGraphDeps {
 /** run kind 描述符：一个 kind 的全部静态知识（票 44 的「一处注册」）。 */
 export interface RunKindDescriptor {
   /** 拉起请求吃哪个实体 id：alert = alert_id 必填；case = case_id 必填（run 行对应落列，
-   *  autorun 拉起 payload 同口径）。close_flow 虽然动作在案件上，入口仍吃 alert_id（票 39）。 */
-  intake: "alert" | "case";
+   *  autorun 拉起 payload 同口径）；hypothesis = hypothesis_id 必填（票 90 正名：hunt 两
+   *  kind 的拉起实体落 runs.hypothesis_id 专用列，case_id 位承载清偿）。close_flow 虽然动作
+   *  在案件上，入口仍吃 alert_id（票 39）。 */
+  intake: "alert" | "case" | "hypothesis";
   /** 拉起请求必须带 message 交接态（chat_flow：没消息就没有图可跑 → 400，不造空 run）。 */
   requiresMessage?: boolean;
   ticket: RunKindTicket;
@@ -283,12 +285,12 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
     },
   },
   hunt_flow: {
-    // 票 73（m14）：拉起实体 = hypothesis_id，走 case_id 位承载——run 行无 hypothesis 列，
-    // 本票不扩 runs schema（m14 卡 {kind:"hunt_flow", hypothesis_id} 与 app.ts 既有 intake
-    // 校验相容的最小落法；扩列与否归后续票/体检追认）。流水线骨架不进 pipelineNodes：
+    // 票 73（m14）→ 票 90 正名：拉起实体 = hypothesis_id，落 runs.hypothesis_id 专用列
+    //（票 73 施工时曾受控借 case_id 位承载，专用列在位后清偿——intake 校验与 run 行
+    // 列位同步正名，行为断言零变化）。流水线骨架不进 pipelineNodes：
     // fixtures/sse-events.json flow_nodes 契约锁是旧 kind 的（注册表完整性测试双向锁），
     // hunt 链节点从 node_enter 事件动态发现（描述符注释的既有口径）。
-    intake: "case",
+    intake: "hypothesis",
     parksOnEvents: true,
     // 票 79（L0 裁定②）：父票面 = planner 只读面（机制默认菜单 ∪ 三族模板菜单，内容
     // 层单一来源 huntFlowTicketFace()）+ hypothesis_register（L1 写，仅供 outcome 收敛
@@ -307,7 +309,7 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
     // 票 73/76（m14）：扇出子 run。注册表票面 = 菜单级兜底（无任务上下文的直拉/恢复
     // 路径旧口径不变）；dispatch 逐任务拉起时经 ticketSpecFor 解析 narrow-scope 子票
     //（allowed_tools = 该任务唯一工具），两票时序见 app.ts /internal/runs 的铸票点。
-    intake: "case",
+    intake: "hypothesis",
     ticket: { sub: "agent:hunt_task", scope: ["case:read"], allowedTools: huntFlowTicketFace() },
     makeGraph: (deps) => (run, ticket) => {
       // 机制图先行（73 公开接口）；票 79（L0 裁定①）：装配层注入了真执行体
