@@ -1,0 +1,39 @@
+{
+  "_readme": "weknora 剧本库 fixture（票 79③·Memory stub 数据面）：playbook_lookup 的本地剧本库。真 weknora 服务对接归票 83——stub 是真接口假实现（换 HTTP 实现不换调用方，MemoryVectorStore 先例）。queries 字段是各族剧本的既定取证面（占位 {slot} 由假设实例填充），是狩猎模板 waves 的内容母本。",
+  "playbooks": [
+    {
+      "id": "pb-webshell-001",
+      "title": "Webshell 落盘与探针访问狩猎",
+      "family": "webshell",
+      "purpose": "验证『上传目录出现脚本落盘 + 探针 URL 异常访问』类假设：先查 web 访问痕迹，再查 FIM 落盘。",
+      "queries": [
+        { "tool": "web_access_query", "params": { "url_pattern": "{url_pattern}", "time_window": "{time_window}" } },
+        { "tool": "file_change_query", "params": { "field": "path", "value": "{path}", "time_window": "{time_window}" } }
+      ],
+      "refs": ["ATT&CK T1505.003"]
+    },
+    {
+      "id": "pb-c2-001",
+      "title": "C2 心跳与持久化进程狩猎",
+      "family": "c2",
+      "purpose": "验证『外联目的出现周期性信标 + 持久化进程谱系』类假设：按频率口径查重复信标，并行查进程父子关系。",
+      "queries": [
+        { "tool": "outbound_conn_query", "params": { "field": "freq", "value": "2", "time_window": "{time_window}" } },
+        { "tool": "outbound_conn_query", "params": { "field": "dst_ip", "value": "{dst_ip}", "time_window": "{time_window}" } },
+        { "tool": "proc_lineage_query", "params": { "process": "{process}", "role": "child", "time_window": "{time_window}" } }
+      ],
+      "refs": ["ATT&CK T1071", "ATT&CK T1053"]
+    },
+    {
+      "id": "pb-credential-leak-001",
+      "title": "凭据文件篡改与外带狩猎",
+      "family": "credential_leak",
+      "purpose": "验证『凭据文件被读取或篡改并外带』类假设：查 FIM 篡改证据，再按外带域名查外联。",
+      "queries": [
+        { "tool": "file_change_query", "params": { "field": "path", "value": "{path}", "time_window": "{time_window}" } },
+        { "tool": "outbound_conn_query", "params": { "field": "domain", "value": "{exfil_domain}", "time_window": "{time_window}" } }
+      ],
+      "refs": ["ATT&CK T1003", "ATT&CK T1041"]
+    }
+  ]
+}

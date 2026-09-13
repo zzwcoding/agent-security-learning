@@ -1,0 +1,26 @@
+{
+  "_readme": "weknora 关系图 fixture（票 79③·Memory stub 数据面）：graph_query 的本地只读图。T22/INV-5 口径——graph_query 只回 approved 态关系；proposed 关系由 hypothesis_register（L1 写）落账、人审通道票 83 对接后才进检索面。seed 里故意放一条 proposed 态关系作 T22 的负例探针（proposed_only_unlisted）。",
+  "relations": [
+    {
+      "subject": { "type": "host", "value": "web01" },
+      "predicate": "resolved_to",
+      "object": { "type": "ip", "value": "203.0.113.66" },
+      "status": "approved",
+      "source": "seed:ir-2023-041"
+    },
+    {
+      "subject": { "type": "ip", "value": "203.0.113.66" },
+      "predicate": "beacons_to",
+      "object": { "type": "domain", "value": "c2.evil-baseline.example" },
+      "status": "approved",
+      "source": "seed:ir-2023-041"
+    },
+    {
+      "subject": { "type": "host", "value": "web01" },
+      "predicate": "hosts_webshell",
+      "object": { "type": "file", "value": "/var/www/html/uploads/sh.php" },
+      "status": "proposed",
+      "source": "seed:pending-review"
+    }
+  ]
+}

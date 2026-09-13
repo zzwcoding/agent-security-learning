@@ -51,6 +51,10 @@ import { scanInjection } from "./guards-client.js";
 import type { FgaChecker } from "./fga-client.js";
 import { makeHuntFlow, type OrchestrationDeps } from "./orchestration/flow.js";
 import { makeHuntTaskFlow } from "./orchestration/task-flow.js";
+// 票 79（内容包）：hunt_flow 票面与 hunt_task 真执行体的单一来源都在内容层（m5 领地）——
+// 本注册表只消费（票面 = huntFlowTicketFace()；执行体 = deps.huntExecutor 缺省桩）。
+import { huntFlowTicketFace } from "../workers/investigation/hunt-pack.js";
+import { wireHuntTaskExecutor, type HuntExecutorDeps } from "../workers/investigation/hunt-executor.js";
 
 /** 每-kind 的任务票规格（FR-M3.4 worker 拉起即申领最小 scope 票；INV-3：票面永不含
  *  L2——kb_write 不在 knowledge 的 allowed_tools 里，L2 走审批卡铸 ApprovalToken）。 */
@@ -87,6 +91,10 @@ export interface RunKindGraphDeps {
   /** 票 73：m14 编排循环的注入总面（port/ledger/bus/door/templates/llm——生产装配在
    *  index.ts，测试换假件）。hunt_flow/hunt_task 的 makeGraph 必需；缺 = 组图即炸响。 */
   orchestration?: OrchestrationDeps;
+  /** 票 79（L0 裁定①）：hunt_task 真执行体装配面（78 四维查询 + 79 weknora 三工具）。
+   *  生产 = index.ts 注入；缺省 = 机制 execute 桩原样（73 口径零回归——机制测试与
+   *  INV-11 rig 不受影响）。换 weknora HTTP 实现（票 83）只换这里的成员，不换调用方。 */
+  huntExecutor?: HuntExecutorDeps;
 }
 
 /** run kind 描述符：一个 kind 的全部静态知识（票 44 的「一处注册」）。 */
@@ -150,9 +158,6 @@ function makeCaseChain(deps: RunKindGraphDeps, runId: string, ticket: string): F
 //   hunt_flow     = 票 73 m14 轮次链（intake→planner→dispatch→await_children→judge→outcome，
 //                   一轮一条串行链；轮间接力在 dispatcher 层，见 orchestration/relay.ts）；
 //   hunt_task     = 票 73 m14 扇出的取证子 run（复用 plan/decide 循环的 hunt 桩形）。
-
-/** hunt 菜单（机制级能力名，无业务内容——R10）；与 orchestration/template.ts 默认档同源。 */
-const HUNT_MENU_TOOLS = ["kb_lookup", "siem_query", "related_alerts"] as const;
 
 /** hunt_flow/hunt_task 的图工厂必需编排注入面；缺 = 组装错误要炸响，绝不静默换图。 */
 function requireOrchestration(deps: RunKindGraphDeps): OrchestrationDeps {
@@ -285,11 +290,12 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
     // hunt 链节点从 node_enter 事件动态发现（描述符注释的既有口径）。
     intake: "case",
     parksOnEvents: true,
-    // planner 票面 = 只读查证面（spec：playbook_lookup/graph_query/kb 类；hunt 专属工具
-    // 未登记前用既有 L0 只读件占位——tools-manifest.test 咬「票面 ⊆ manifest」）。
-    // 预算走默认档（分档归票 77）；INV-3：无任何 L2。菜单与 orchestration/template.ts
-    // 的机制默认档取同一组能力名（票 79 模板登记面接管后收敛到单一来源）。
-    ticket: { sub: "agent:hunt_flow", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
+    // 票 79（L0 裁定②）：父票面 = planner 只读面（机制默认菜单 ∪ 三族模板菜单，内容
+    // 层单一来源 huntFlowTicketFace()）+ hypothesis_register（L1 写，仅供 outcome 收敛
+    // 归档步——register 不入任何 planner 组合菜单，planner 输出含 register = 菜单外
+    // 拒绝 T04）。预算走默认档；INV-3：面内无任何 L2。「票面 ⊆ manifest」由
+    // tools-manifest.test 咬死。
+    ticket: { sub: "agent:hunt_flow", scope: ["case:read"], allowedTools: huntFlowTicketFace() },
     makeGraph: (deps) => (run) =>
       makeHuntFlow({
         runId: run.id,
@@ -302,13 +308,24 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
     // 路径旧口径不变）；dispatch 逐任务拉起时经 ticketSpecFor 解析 narrow-scope 子票
     //（allowed_tools = 该任务唯一工具），两票时序见 app.ts /internal/runs 的铸票点。
     intake: "case",
-    ticket: { sub: "agent:hunt_task", scope: ["case:read"], allowedTools: [...HUNT_MENU_TOOLS] },
-    makeGraph: (deps) => (run) =>
-      makeHuntTaskFlow({
+    ticket: { sub: "agent:hunt_task", scope: ["case:read"], allowedTools: huntFlowTicketFace() },
+    makeGraph: (deps) => (run, ticket) => {
+      // 机制图先行（73 公开接口）；票 79（L0 裁定①）：装配层注入了真执行体
+      //（deps.huntExecutor）→ 把 execute 节点从桩换成真件（m5 hunt-executor），
+      // 机制目录零改动；未注入 = 桩原样（机制测试/INV-11 rig 的既有口径）。
+      const nodes = makeHuntTaskFlow({
         runId: run.id,
         orch: requireOrchestration(deps),
         audit: deps.audit,
-      }),
+      });
+      if (!deps.huntExecutor) return nodes;
+      return wireHuntTaskExecutor(nodes, {
+        ...deps.huntExecutor,
+        runId: run.id,
+        ticket,
+        cancelBoard: requireOrchestration(deps).cancel?.board,
+      });
+    },
   },
 };
 

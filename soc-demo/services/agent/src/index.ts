@@ -38,6 +38,18 @@ import { RealChromaClient, MemoryVectorStore } from "../workers/knowledge/vector
 import type { VectorStore } from "../workers/knowledge/vector-store.js";
 import { ChromaKb } from "../workers/knowledge/kb.js";
 import { makeFgaChecker } from "./fga-client.js";
+// 票 79（狩猎业务内容包）：三族模板登记面（HuntTemplateSource——三族优先、机制默认档
+// 兜底）、weknora 三工具 Memory stub（playbook/graph L0 只读 + hypothesis_register L1
+// 写）与 hunt_task 真执行体装配面——全部内容层/装配层落点，机制目录零触碰。
+import { HuntTemplateSource } from "../workers/investigation/hunt-pack.js";
+import {
+  MemoryPlaybookLibrary,
+  MemoryWeknoraGraph,
+  WEKNORA_FIXTURES,
+  WEKNORA_GRAPH_FIXTURE,
+  makeHuntRegisterSeam,
+} from "../workers/investigation/weknora.js";
+import type { HuntExecutorDeps } from "../workers/investigation/hunt-executor.js";
 // 票 73（m14 编排循环）：机制件的真件装配——事件扇出（tap 单槽变扇出点）、父子 run 簿记、
 // m2 假设实体 REST adapter、run 机器标准入口壳、模板机制默认档、fake LLM 三件套、轮次接力。
 import { makeLoopEventBus } from "./orchestration/bus.js";
@@ -153,9 +165,14 @@ const db = openDb(dbPath);
 // 实体走公开 REST（CASE_BACKEND_URL）；拉起子 run/下一轮 run 打 m3 标准入口正门
 //（app.inject POST /internal/runs——铸票/组图/执行全在正门内，R11 铸票唯一通道不动）。
 // planner/judge/gap 走 makeLoopLlm 出网开关总口（票 74 建口、票 75 三件齐：AGENT_LLM=
-// fake → 确定性桩，其余 → ChatSeam 凭证代理真件）；cases/register 缝用缺省件（HttpCasePort
-// /MemoryHypothesisRegister，register 真工具归票 79），生产装配零格补。
+// fake → 确定性桩，其余 → ChatSeam 凭证代理真件）。
+// 票 79（狩猎业务内容包）装配：模板登记面 = HuntTemplateSource（三族模板优先，机制
+// 默认档兜底）；register 缝 = weknora Memory stub（MemoryHypothesisRegister 缺省件退役
+// ——五要素审计在 seam 实现内落账，L0 裁定②）；huntExecutor = hunt_task 真执行体
+//（78 四维查询 + 79 三工具，缺省桩的换件点在 run-kinds 注册表）。
 const huntLedger = new SqliteHuntLedger(db);
+const huntPlaybooks = new MemoryPlaybookLibrary(WEKNORA_FIXTURES);
+const huntGraph = new MemoryWeknoraGraph(WEKNORA_GRAPH_FIXTURE);
 const ORCH_DEPS: OrchestrationDeps = {
   port: new HttpHypothesisPort(),
   ledger: huntLedger,
@@ -169,10 +186,20 @@ const ORCH_DEPS: OrchestrationDeps = {
       return (res.json() as { run_id: string }).run_id;
     },
   },
-  templates: new DefaultTemplateSource(),
+  templates: new HuntTemplateSource(new DefaultTemplateSource()),
   llm: makeLoopLlm(LLM_MODE), // 票 75 生产切换（74 移交）：AGENT_LLM 口径与四 worker 同一总口
+  register: makeHuntRegisterSeam({ graph: huntGraph, audit }), // 票 79：converge 缝换真 stub（proposed-only + INV-8 审计）
 };
 RUN_KIND_DEPS.orchestration = ORCH_DEPS;
+// 票 79（L0 裁定①）：hunt_task 真执行体——m5 plan/decide 执行半边 + 78 executeHuntTool
+// 门 + 79 weknora 三工具；装配面经 RUN_KIND_DEPS 注入注册表缝（缺省 = 机制桩）。
+const huntExecutor: HuntExecutorDeps = {
+  siem: fixtureSiem,
+  playbook: huntPlaybooks,
+  graph: huntGraph,
+  audit,
+};
+RUN_KIND_DEPS.huntExecutor = huntExecutor;
 // 票 77（预算双闸/取消停止）：取消机制装配——预算强杀 error 事件的 m14 消费半边
 //（假设侧 cancelled 落账 + 信号板，轮次链/子 run 的节点包装层检查据此掐停）；人取消
 //（POST /hypotheses/:id/cancel）经同一 requestCancel 口进同一停止链。

@@ -65,12 +65,17 @@ function parsePrdA1(): A1Row[] {
 // ADR 0004-2 已知偏差（记票 48 出入①，2026-09-12 票 63 收回）：get_case 已补列 PRD
 // A.1（L1，沉淀读案）。票 78（2026-09-13）：狩猎查询工具 ×4 登记先行——manifest 既有
 // 口径（先登记后持票），PRD A.1 表与 gateway FGA 矩阵的收编归 L0 记票（list_approvals
-// 首例同款）；在收编落地前，四个名字逐个点名在此，多一个没记票的 → 红。
+// 首例同款）；票 79（2026-09-13）：weknora 三工具（playbook_lookup/graph_query = L0
+// 只读、hypothesis_register = L1 写）同口径登记。在收编落地前，七个名字逐个点名在此，
+// 多一个没记票的 → 红。
 const KNOWN_NOT_IN_A1: string[] = [
   "file_change_query",
   "outbound_conn_query",
   "web_access_query",
   "proc_lineage_query",
+  "playbook_lookup",
+  "graph_query",
+  "hypothesis_register",
 ];
 
 describe("ToolManifest ≡ PRD A.1（文档面：漂移必红）", () => {

@@ -13,7 +13,7 @@
 import { openDb } from "../../../services/agent/src/db.js";
 import { buildApp } from "../../../services/agent/src/app.js";
 import { setEventTap } from "../../../services/agent/src/events.js";
-import { MemoryAuditSink } from "../../../services/agent/src/audit.js";
+import { MemoryAuditSink, type AuditEntry } from "../../../services/agent/src/audit.js";
 import { verifyTicket } from "../../../services/agent/src/verify-ticket.js";
 import { registeredTools, tierOf } from "../../../services/agent/src/tools-manifest.js";
 import { requireRunKind, ticketSpecFor, type RunGraphFactory, type RunKindGraphDeps } from "../../../services/agent/src/run-kinds.js";
@@ -23,6 +23,10 @@ import { startRoundRelay } from "../../../services/agent/src/orchestration/relay
 import { makeFakeLoopLlm } from "../../../services/agent/src/orchestration/llm-stubs.js";
 import { DefaultTemplateSource, DEFAULT_TEMPLATE } from "../../../services/agent/src/orchestration/template.js";
 import { makeHuntLauncher } from "../../../services/agent/src/orchestration/launcher.js";
+// 票 79（内容包）：三族模板登记面 + fake hunt LLM + weknora 三工具 stub + 真执行体数据源
+import { HuntTemplateSource, makeHuntFakeLoopLlm, loadHuntTemplates, renderHypothesisText, type HuntTemplateFixture } from "../../../services/agent/workers/investigation/hunt-pack.js";
+import { MemoryPlaybookLibrary, MemoryWeknoraGraph, WEKNORA_FIXTURES, WEKNORA_GRAPH_FIXTURE, makeHuntRegisterSeam, type RegisterRecord } from "../../../services/agent/workers/investigation/weknora.js";
+import { FixtureSiem } from "../../../services/agent/workers/investigation/siem.js";
 import type { OrchestrationDeps } from "../../../services/agent/src/orchestration/flow.js";
 import type {
   CaseCreateInput,
@@ -34,6 +38,7 @@ import type {
 } from "../../../services/agent/src/orchestration/ports.js";
 import type { MintClient, TaskTicketRequest } from "../../../services/agent/src/token-ports.js";
 import { KEY, sealTicket } from "../../../services/agent/workers/triage/testkit.js";
+import { FIXTURES_ALERTS } from "./shared.js";
 import { check } from "./shared.js";
 import type { CheckResult } from "../types.js";
 
@@ -172,7 +177,10 @@ export async function inv11_matrix(): Promise<Inv11Matrix> {
     // —— 铸票事实（wire 层）：父票 × 每轮 run 起、子票 × dispatch 逐任务 ——
     const parentCalls = calls.filter((c) => c.sub === "agent:hunt_flow");
     const childCalls = calls.filter((c) => c.sub === "agent:hunt_task");
-    const menu = [...DEFAULT_TEMPLATE.menu];
+    // 票 79：父票面 = 注册表单一来源（planner 只读面 ∪ 三族菜单 + register）；布景实际
+    // 跑的 planner 菜单仍是机制默认档（DefaultTemplateSource）——子票 ⊆ planner 菜单 ⊆ 父票面。
+    const plannerMenu = [...DEFAULT_TEMPLATE.menu];
+    const expectedParentFace = [...requireRunKind("hunt_flow").ticket.allowedTools];
     const parentFace = parentCalls[0]?.allowedTools ?? [];
     const sorted = (xs: string[]): string[] => [...xs].sort();
 
@@ -209,16 +217,18 @@ export async function inv11_matrix(): Promise<Inv11Matrix> {
 
     extraChecks.push(check(
       "inv11_parent_face",
-      parentCalls.length >= 2 && parentCalls.every((c) => sorted(c.allowedTools).join(",") === sorted(menu).join(",")),
-      `父票 × ${parentCalls.length} 轮 run 各一枚、面 = planner 只读菜单 ${menu.join("/")}（铸于 run 起，T11）`,
+      parentCalls.length >= 2 &&
+        parentCalls.every((c) => sorted(c.allowedTools).join(",") === sorted(expectedParentFace).join(",")) &&
+        plannerMenu.every((t) => expectedParentFace.includes(t)),
+      `父票 × ${parentCalls.length} 轮 run 各一枚、面 = 注册表单一来源（planner 只读面 ∪ 三族菜单 + register，${expectedParentFace.length} 件）；planner 菜单 ⊆ 父票面（铸于 run 起，T11）`,
     ));
     extraChecks.push(check(
       "inv11_child_subset_100pct",
       childCalls.length >= 3 &&
-        childFaces.every((f) => f.allowed_tools.length === 1 && menu.includes(f.allowed_tools[0]!)) &&
-        new Set(childFaces.map((f) => f.allowed_tools[0])).size === menu.length &&
+        childFaces.every((f) => f.allowed_tools.length === 1 && plannerMenu.includes(f.allowed_tools[0]!)) &&
+        new Set(childFaces.map((f) => f.allowed_tools[0])).size === plannerMenu.length &&
         childFaces.every((f) => f.ttl === 900),
-      `子票 × ${childFaces.length} 枚全部单工具且 ⊆ 父菜单（覆盖全 ${menu.length} 类任务）；TTL 900s 全对（T13，INV-11）`,
+      `子票 × ${childFaces.length} 枚全部单工具且 ⊆ planner 菜单 ⊆ 父票面（覆盖全 ${plannerMenu.length} 类任务）；TTL 900s 全对（T13，INV-11）`,
     ));
     extraChecks.push(check(
       "inv11_child_scope_no_l2",
@@ -234,7 +244,7 @@ export async function inv11_matrix(): Promise<Inv11Matrix> {
     ));
     extraChecks.push(check(
       "inv11_in_scope_allow",
-      allows.length === childFaces.length && new Set(allows.map((a) => a.tool)).size === menu.length,
+      allows.length === childFaces.length && new Set(allows.map((a) => a.tool)).size === plannerMenu.length,
       `放行正控 ${allows.length}/${childFaces.length} 格（防「全 403」假绿；run/case 绑定随真闸同证）`,
     ));
     extraChecks.push(check(
@@ -259,4 +269,204 @@ export function inv11_seam_gate_denies_offmenu(): boolean {
   } catch {
     return true;
   }
+}
+
+// ---------- 票 79④：三族假设端到端布景（spec 验收①/T07/T08 的真执行体路径骨架，票 81 复用） ----------
+//
+// 每族一条独立布景：真 buildApp + 真注册表组图 + 真验票闸 + 真执行体（deps.huntExecutor
+// = FixtureSiem 语料 + weknora Memory stub）+ 真模板登记缝（HuntTemplateSource）；假设面/
+// loop LLM/register 走内容包假件与 weknora stub——唯被测对象 = 三族假设的轮次轨迹与收敛
+// 结论（hit 建案挂 hypothesis_id / miss refuted + register(proposed)，机制语义零复制）。
+
+/** m2 假设实体假件（票 76 版的参数化形态：template_id/文本随族注入）。 */
+class FamilyHypothesisPort implements HypothesisPort {
+  status: HypothesisDetail["status"] = "proposed";
+  rounds: RoundRecord[] = [];
+  constructor(
+    readonly hypothesisId: string,
+    readonly templateId: string,
+    readonly text: string,
+  ) {}
+  async getDetail(id: string): Promise<HypothesisDetail | null> {
+    return { id, status: this.status, template_id: this.templateId, text: this.text, rounds: [...this.rounds] };
+  }
+  async startHunting(): Promise<void> {
+    if (this.status !== "proposed") throw new Error("InvalidTransition:409");
+    this.status = "hunting";
+  }
+  async transition(_id: string, to: "concluded" | "refuted" | "cancelled"): Promise<void> {
+    this.status = to;
+  }
+  async recordRound(_id: string, round: RoundRecord): Promise<void> {
+    this.rounds = this.rounds.filter((r) => r.round_no !== round.round_no);
+    this.rounds.push(round);
+    this.rounds.sort((a, b) => a.round_no - b.round_no);
+  }
+}
+
+/** 建案/note 记账假件（T07/T08 的收敛断言面）。 */
+class RecordingCasePort implements CasePort {
+  created: CaseCreateInput[] = [];
+  notes = 0;
+  async create(input: CaseCreateInput): Promise<string> {
+    this.created.push({ ...input });
+    return `case_${this.created.length}`;
+  }
+  async addNote(): Promise<void> {
+    this.notes += 1;
+  }
+}
+
+export interface HuntFamilyTrajectory {
+  templateId: string;
+  hypothesisId: string;
+  hypothesisText: string;
+  status: HypothesisDetail["status"];
+  /** 期望轨迹对照面：每轮的工具组合 + judge 裁决（recordRound 的轮次归集）。 */
+  rounds: { round_no: number; tools: string[]; judge: RoundRecord["judge"] }[];
+  caseHypothesisIds: string[];
+  noteCount: number;
+  registerRecords: RegisterRecord[];
+  registerAuditCount: number;
+  /** 子 run 报告摘要（hunt_task_report 审计 details——真执行体的可观察证据）。 */
+  childSummaries: string[];
+}
+
+/** 单族布景：假设提交（proposed）→ hunt_flow 轮 1 → 轮间接力 → 收敛终态。 */
+async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTrajectory> {
+  const hypothesisId = `hyp-e2e-${f.template_id}`;
+  const hypothesisText = renderHypothesisText(f);
+  const audit = new MemoryAuditSink();
+  const bus = makeLoopEventBus();
+  setEventTap((e) => bus.publish(e));
+  const ledger = new MemoryHuntLedger();
+  const { client: mint } = makeRecordingMint();
+  const port = new FamilyHypothesisPort(hypothesisId, f.template_id, hypothesisText);
+  const cases = new RecordingCasePort();
+  const playbook = new MemoryPlaybookLibrary(WEKNORA_FIXTURES);
+  const graph = new MemoryWeknoraGraph(WEKNORA_GRAPH_FIXTURE);
+  const orch: OrchestrationDeps = {
+    port,
+    ledger,
+    bus,
+    door: {
+      post: async (payload) => {
+        const res = await app.inject({ method: "POST", url: "/internal/runs", payload });
+        if (res.statusCode >= 300) throw new Error(`internal/runs HTTP ${res.statusCode} ${res.body}`);
+        return (res.json() as { run_id: string }).run_id;
+      },
+    },
+    templates: new HuntTemplateSource(new DefaultTemplateSource()),
+    llm: makeHuntFakeLoopLlm(),
+    scan: scanAllow,
+    cases,
+    register: makeHuntRegisterSeam({ graph, audit }), // L0 裁定②：converge 缝 = weknora stub（INV-8 在 seam 内）
+  };
+  // 真注册表组图 + 真执行体注入（生产 index.ts 装配同款差异点：huntExecutor + 模板/register 缝）
+  const kindDeps = {
+    audit,
+    kb: null, kbStore: null, siem: new FixtureSiem(FIXTURES_ALERTS), analyzers: null,
+    fga: async () => ({ allowed: false, reason: "hunt-pack-e2e" }),
+    llmMode: "fake",
+    orchestration: orch,
+    huntExecutor: { siem: new FixtureSiem(FIXTURES_ALERTS), playbook, graph, audit, hmacKey: KEY },
+  } as unknown as RunKindGraphDeps;
+  const makeNodes: RunGraphFactory = (run, ticket, ctx) =>
+    requireRunKind(run.kind).makeGraph!(kindDeps)(run, ticket, ctx);
+  const app = buildApp({ db: openDb(":memory:"), audit, makeNodes, mint, dispatcher: { intervalMs: 5, concurrency: 2 } });
+  const launcher = makeHuntLauncher(orch.door, ledger);
+  const stopRelay = startRoundRelay({ bus, ledger, door: orch.door, log: () => {} });
+  try {
+    await launcher.launchRound({ hypothesisId, roundNo: 1 });
+    for (let i = 0; i < 4000; i++) {
+      if (["concluded", "refuted", "cancelled"].includes(port.status)) break;
+      await new Promise((r) => setTimeout(r, 5));
+    }
+    if (!["concluded", "refuted", "cancelled"].includes(port.status)) {
+      throw new Error(`布景未收敛：${f.template_id} 停在 ${port.status}（fake 轨迹被扰动？）`);
+    }
+    return {
+      templateId: f.template_id,
+      hypothesisId,
+      hypothesisText,
+      status: port.status,
+      rounds: port.rounds.map((r) => ({
+        round_no: r.round_no,
+        tools: r.tasks.map((t) => t.tool),
+        judge: r.judge,
+      })),
+      caseHypothesisIds: cases.created.map((c) => c.hypothesis_id ?? ""),
+      noteCount: cases.notes,
+      registerRecords: graph.entries.filter((e) => e.hypothesis_id === hypothesisId),
+      registerAuditCount: audit.entries.filter((e) => e.action === "hypothesis_register").length,
+      childSummaries: audit.entries
+        .filter((e: AuditEntry) => e.action === "hunt_task_report")
+        .map((e) => String(e.details.result_summary)),
+    };
+  } finally {
+    stopRelay.stop();
+    await app.close();
+    setEventTap(null);
+  }
+}
+
+/** 三族端到端（票 79④）：fixture 假设 + 期望轮次轨迹 + 收敛结论断言的 eval 骨架。 */
+export async function hunt_pack_e2e(): Promise<{ families: HuntFamilyTrajectory[]; extraChecks: CheckResult[] }> {
+  const families = loadHuntTemplates();
+  const trajectories: HuntFamilyTrajectory[] = [];
+  for (const f of families) trajectories.push(await runFamilyScene(f));
+  const byId = new Map(trajectories.map((t) => [t.templateId, t]));
+  const extraChecks: CheckResult[] = [];
+
+  // 期望轨迹（内容包数据驱动；票 81 紫队 eval 沿同一骨架换真 LLM/真假设）
+  const webshell = byId.get("hunt_webshell")!;
+  const c2 = byId.get("hunt_c2_beacon")!;
+  const cred = byId.get("hunt_credential_leak")!;
+
+  extraChecks.push(check(
+    "e2e_webshell_hit_trajectory",
+    webshell.status === "concluded" &&
+      webshell.rounds.length === 2 &&
+      webshell.rounds[0]!.tools.join("|") === "playbook_lookup|web_access_query" &&
+      webshell.rounds[1]!.tools.join("|") === "file_change_query|graph_query" &&
+      webshell.rounds[1]!.judge?.sufficient === true &&
+      webshell.rounds[1]!.judge?.verdict === "hit" &&
+      webshell.caseHypothesisIds.length === 1 &&
+      webshell.caseHypothesisIds.every((h) => h === webshell.hypothesisId),
+    `webshell 族：2 轮（剧本开局+探针 → FIM+图谱）→ judge hit → 建案挂 hypothesis_id（T07）`,
+  ));
+  extraChecks.push(check(
+    "e2e_c2_gap_pivot_hit_trajectory",
+    c2.status === "concluded" &&
+      c2.rounds.length === 3 &&
+      c2.rounds[0]!.tools.join("|") === "playbook_lookup" &&
+      c2.rounds[1]!.tools.join("|") === "outbound_conn_query" &&
+      c2.rounds[2]!.tools.join("|") === "outbound_conn_query|proc_lineage_query" &&
+      c2.rounds[2]!.judge?.sufficient === true &&
+      c2.rounds[2]!.judge?.verdict === "hit" &&
+      c2.caseHypothesisIds.length === 1,
+    `c2 族：3 轮 gap 换组合（剧本 → 小步外联 → 主目的+进程谱系）→ judge hit → 建案（T07）`,
+  ));
+  extraChecks.push(check(
+    "e2e_credential_miss_archive_trajectory",
+    cred.status === "refuted" &&
+      cred.rounds.length === 2 &&
+      cred.rounds[1]!.judge?.sufficient === true &&
+      cred.rounds[1]!.judge?.verdict === "miss" &&
+      cred.noteCount >= 1 &&
+      cred.registerRecords.length === 1 &&
+      cred.registerRecords[0]!.status === "proposed" &&
+      cred.registerAuditCount === 1,
+    `credential 族：2 轮取证零命中 → judge miss → refuted + note + register(proposed)（T08，INV-5/8）`,
+  ));
+  extraChecks.push(check(
+    "e2e_real_executor_evidence",
+    [webshell, c2, cred].every((t) =>
+      t.childSummaries.length > 0 &&
+      t.childSummaries.every((s) => s.includes("total=") && !s.startsWith("stub observation")),
+    ),
+    `三族子 run 摘要全部来自真执行体（FixtureSiem/weknora 观察格式，非 73 桩 canned 文案）`,
+  ));
+
+  return { families: trajectories, extraChecks };
 }

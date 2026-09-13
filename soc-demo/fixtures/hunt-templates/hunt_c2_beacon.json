@@ -1,0 +1,25 @@
+{
+  "template_id": "hunt_c2_beacon",
+  "family": "c2_beacon",
+  "title": "C2 心跳与持久化进程谱系",
+  "hypothesis_patterns": [
+    "怀疑主机 {host} 存在 C2 心跳：外联目的 {dst_ip} 出现周期性信标，且 {process} 由 {parent} 拉起维持持久化。"
+  ],
+  "menu": ["playbook_lookup", "graph_query", "outbound_conn_query", "proc_lineage_query"],
+  "max_rounds": 6,
+  "max_tasks": 2,
+  "default_time_window": { "from": "2023-04-25T00:00:00.000Z", "to": "2023-04-26T00:00:00.000Z" },
+  "example_slots": { "host": "web01", "dst_ip": "203.0.113.66", "process": "sh", "parent": "cron" },
+  "waves": [
+    [
+      { "tool": "playbook_lookup", "params": { "tag": "c2" }, "rationale": "开局先调剧本库，锚定 C2 心跳狩猎的频率口径与维度（剧本/图谱开局是狩猎 plan 起手式）" }
+    ],
+    [
+      { "tool": "outbound_conn_query", "params": { "field": "dst_ip", "value": "198.51.100.99", "time_window": "{time_window}" }, "rationale": "首轮缺取证面证据：先按低置信目的小步取证（零命中也要留缺口轨迹）" }
+    ],
+    [
+      { "tool": "outbound_conn_query", "params": { "field": "dst_ip", "value": "{dst_ip}", "time_window": "{time_window}" }, "rationale": "按剧本换回假设主目的 IP，查周期性信标（C2 心跳维度）" },
+      { "tool": "proc_lineage_query", "params": { "process": "{process}", "role": "child", "time_window": "{time_window}" }, "rationale": "并行查持久化进程谱系（父子关系，role=child）" }
+    ]
+  ]
+}

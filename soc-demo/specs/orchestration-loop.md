@@ -93,7 +93,7 @@
 | await_children 事件唤醒、全仓无轮询实现（T19） | `services/agent/src/orchestration/await.test.ts::event_wakeup_no_polling` |
 | 应急取证模板落地 diff 不触 m14 目录（零增量验收）（T20） | `tools/check_zero_increment.py` |
 | hypothesis 状态机外变更 409（INV-10）（T21） | `services/case-backend/src/hypotheses.test.ts::illegal_transition_409` |
-| register 只写 proposed / graph_query 只回 approved（T22，`INV-5`） | `services/agent/src/orchestration/graph-stub.test.ts::proposed_only_unlisted` |
+| register 只写 proposed / graph_query 只回 approved（T22，`INV-5`） | `services/agent/workers/investigation/weknora.test.ts::proposed_only_unlisted（票 79 落位：stub 与测试在 m5 领地与实现同处，m14 目录零触碰——L0 裁定 ③ 同步）` |
 | 紫队：attack fixture→假设→发现判定走 ground truth 断言（不靠 LLM 自评）（T23） | `evals/src/rigs/purple.ts::discovery_rate_ground_truth` |
 
 ## 依赖与风险

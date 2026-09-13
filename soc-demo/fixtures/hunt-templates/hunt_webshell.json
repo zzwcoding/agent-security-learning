@@ -1,0 +1,23 @@
+{
+  "template_id": "hunt_webshell",
+  "family": "webshell",
+  "title": "Webshell 落盘与探针访问",
+  "hypothesis_patterns": [
+    "怀疑主机 {host} 被植入 webshell：上传目录 {path} 出现新增脚本文件，且探针 {url_pattern} 被异常访问。"
+  ],
+  "menu": ["playbook_lookup", "graph_query", "web_access_query", "file_change_query"],
+  "max_rounds": 6,
+  "max_tasks": 2,
+  "default_time_window": { "from": "2023-04-25T00:00:00.000Z", "to": "2023-04-26T00:00:00.000Z" },
+  "example_slots": { "host": "web01", "path": "/var/www/html/uploads", "url_pattern": "/uploads/sh.php" },
+  "waves": [
+    [
+      { "tool": "playbook_lookup", "params": { "tag": "webshell" }, "rationale": "开局先调剧本库，锚定 webshell 狩猎的取证面与既定查询（剧本/图谱开局是狩猎 plan 起手式）" },
+      { "tool": "web_access_query", "params": { "url_pattern": "{url_pattern}", "time_window": "{time_window}" }, "rationale": "按探针 URL 模式查 web 访问异常（web 攻击痕迹维度，强制 time_window）" }
+    ],
+    [
+      { "tool": "file_change_query", "params": { "field": "path", "value": "{path}", "time_window": "{time_window}" }, "rationale": "换维度补查：按路径查 FIM 落盘证据（webshell 落盘取证）" },
+      { "tool": "graph_query", "params": { "entity": "{host}" }, "rationale": "并行查关系图（approved 态关系——主机已知情报佐证）" }
+    ]
+  ]
+}
