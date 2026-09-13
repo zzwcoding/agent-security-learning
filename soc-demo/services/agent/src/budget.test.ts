@@ -209,8 +209,8 @@ function budgetRig(overrides: { roundBudget?: OrchestrationDeps["roundBudget"]; 
   const ledger = new MemoryHuntLedger();
   const port = new FakeHypothesisPort();
   const door = {
-    post: async (payload: { kind: string; case_id?: string }): Promise<string> =>
-      createRun(db, { kind: payload.kind, caseId: payload.case_id ?? null }, { audit, requestId: "rig-door" }).id,
+    post: async (payload: { kind: string; hypothesis_id?: string }): Promise<string> =>
+      createRun(db, { kind: payload.kind, hypothesisId: payload.hypothesis_id ?? null }, { audit, requestId: "rig-door" }).id,
   };
   const orch: OrchestrationDeps = {
     port,
@@ -244,7 +244,7 @@ function budgetRig(overrides: { roundBudget?: OrchestrationDeps["roundBudget"]; 
   return {
     db, audit, port, orch, cancel,
     async runRound(opts = {}) {
-      const parent = createRun(db, { kind: "hunt_flow", caseId: HYP }, { audit, requestId: "req-t18" });
+      const parent = createRun(db, { kind: "hunt_flow", hypothesisId: HYP }, { audit, requestId: "req-t18" });
       ledger.put({ runId: parent.id, role: "round", hypothesisId: HYP, roundNo: 1, parentRunId: null, task: null });
       await executeRun(db, parent.id, {
         nodes: makeHuntFlow({ runId: parent.id, orch, audit }),
