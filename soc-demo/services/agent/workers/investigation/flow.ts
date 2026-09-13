@@ -22,6 +22,11 @@
 //   - 工具输出进上下文前过 guards tool_output 通道（票 36 接通 G2-6；票 04 策略 =
 //     flag 打标不拦），打标进观察元数据 + 审计。票 50：扫描显式 failMode:"flag"——
 //     guards 不可达折成 flag 打标留痕（reason 可 grep），不再静默放行。
+//   - 案件视图（title + 实体）进 prompt 前过 guards alert_field 通道（票 64：[S]
+//     第一道在 investigation 段补齐）——create-case 把告警 observables 原样挂到案件，
+//     triage 的占位符只消毒了分诊 prompt 副本，带毒实体由此直达调查提示面（票 59
+//     幕 2 真网实测）。block/fail_closed 一律占位符（triage scanField 同源缝）；
+//     显式 failMode:"block"——决策面不靠 env 碰运气，扫描不可达 = 占位符不放行。
 //   - worker 没有 awaitApproval/executeApproved——调查报告的 recommended_actions
 //     只是建议，「只提建议不动手」落在结构上：isolate_host 永远到不了执行层。
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -150,6 +155,35 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
       },
       primaryAlertDate,
     };
+  };
+
+  // ---- 案件提示面安检（票 64）：不可信案件字段进 prompt 前的同源扫描缝 ----
+
+  /** 一个不可信案件字段进 prompt 前的完整安检（triage flow.ts scanField 同源缝：
+   *  guards 扫描 → 按裁决清洗）。block/fail_closed → 占位符 + 审计 DENIED（原文一个
+   *  字节不进 prompt，INV-1）；strip → 清洗文本；allow → 原文。通道 alert_field：
+   *  案件 title/实体源自告警字段（create-case 原样平移 observables），与 triage
+   *  verdict_llm 扫的是同一不可信类。显式 failMode:"block"（票 50 显式化先例）——
+   *  决策面降级不靠 env 碰运气。审计帧只记字段名与判定，不记原文。 */
+  async function scanCaseField(field: string, content: string): Promise<string> {
+    const d = await deps.scan(content, "alert_field", { failMode: "block" });
+    if (!d.blocked) {
+      return d.action === "strip" && d.text ? d.text : content;
+    }
+    record({
+      action: "guards_block",
+      objectId: deps.runId,
+      objectType: "untrusted_field",
+      details: { field, channel: "alert_field", action: d.action, reason: d.reason ?? null, score: d.score ?? null },
+      result: "DENIED",
+    });
+    return `[removed by guards: ${d.action}${d.reason ? `:${d.reason}` : ""}]`;
+  }
+
+  const scanCaseEntity = async (field: string, values: string[]): Promise<string[]> => {
+    const out: string[] = [];
+    for (const v of values) out.push(await scanCaseField(field, v));
+    return out;
   };
 
   // ---- 工具执行体（签名与闸都过了才轮到这里） ----
@@ -303,6 +337,22 @@ export function makeInvestigationFlow(deps: InvestigationDeps): FlowNode[] {
           if (alert && typeof alert.date === "number") primaryAlertDate = alert.date;
         }
         ctx.state.case = caseViewOf(detail, primaryAlertDate);
+        // 票 64：案件视图的不可信自由文本（title + 实体四组）进 prompt 前逐值过同源
+        // 扫描缝——create-case 把告警 observables 原样挂到案件，triage 的占位符只消毒
+        // 了分诊 prompt 副本，带毒实体由此直达调查提示面（票 59 幕 2 真网实测）。
+        // severity/status/primaryAlertDate 是系统受控值不扫；工具回包证据面走 observe()
+        // 的 tool_output 通道（票 04 flag 打标语义不动）——证据保全照旧。
+        const view = ctx.state.case as CaseView;
+        ctx.state.case = {
+          ...view,
+          title: await scanCaseField("case.title", view.title),
+          entities: {
+            ips: await scanCaseEntity("case.entities.ip", view.entities.ips),
+            users: await scanCaseEntity("case.entities.user", view.entities.users),
+            hosts: await scanCaseEntity("case.entities.host", view.entities.hosts),
+            files: await scanCaseEntity("case.entities.file", view.entities.files),
+          },
+        };
       },
     },
     {
