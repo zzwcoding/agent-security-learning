@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 11 大图 · 第二个业务零增量</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 11 大图 · 第二个业务零增量 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 11「第二个业务零增量」的代码落点索引：主视觉线是<b>数据模板 → 装载 → 循环 → 零增量闸</b>——
+第二个业务（应急取证）的全部家当是一张预案卡 JSON（句式族/菜单子集收窄 host 维度/轮次上限/
+既定查询计划/遏制建议文本），内容层装载包只投影机制四字段进循环；右侧机制层（m14 领地）画成
+黑盒——第二业务落地时它<b>零行增量</b>，蹲在边界线上的零增量闸（T20）用「diff × 领地交集为空」
+把这条主张变成 CI 二值。菜单收窄是图上最粗的一条红线：ir 菜单 5 件之外，全仓 32 件在册工具的
+其余 <b>27 件</b>（含 web 维度 web_access_query、L2 的 isolate_host）对 planner 100% offmenu_tool 拒。
+与 S7 的呼应：S7 讲「加工具要登记」，S11 讲「加业务只要数据」。本场景数字：<b>4 步 / 15 个节点 /
+3 道安全闸</b>（红描边 🛡️）。（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；
+  <b>暗灰虚线 = 说明性节点</b>（机制层领地黑盒，非数据流）；cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>事件 …</code> = 落盘事件总线扇出（禁轮询）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 11-0..11-4（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「第二个业务的原料长什么样」→ <code>IR_TEMPLATE → HUNT_PACK → REGISTRY</code>（11.1）。</li>
+  <li>想看「闸怎么知道你越界」→ <code>ZGATE</code> 的两条虚线：绿样本（内容层增量）与红样本（领地内一个字节）（11.2，捣乱②实测 exit 1）。</li>
+  <li>想看「4 轮轨迹从哪来」→ <code>FAKE_LLM</code>（菜单签名回族 → 查 waves 波表 → 槽位渲染）与 <code>ROUND_CHAIN</code>（11.3 真栈实测）。</li>
+  <li>想看「27 件工具怎么 100% 拒」→ <code>MENU_GATE → OFFMENU27</code>（11.4）。</li>
+  <li>想看「遏制建议为什么不变成动作」→ <code>CASE_HIT</code>（只进 note 文本，零 ApprovalToken，INV-3/9）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（15 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧值班长/紫队脚本：POST :3002/api/v1/hypotheses 发起 ir 怀疑书（text = 句式族渲染、template_id=ir_host_compromise）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">第二业务的发起门与狩猎三族同扇门——换的只是 template_id 一个字符串</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">IR_TEMPLATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">预案卡 ir_host_compromise.json（33 行全部家当）：句式族 2 句 + 菜单子集 5 件（host 维度收窄）+ 轮次上限 6/单轮 2 + waves 四波 + 遏制建议文本</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">加业务只要数据的实物证据：与 S9 三族狩猎卡同形状，对照只差一个文件（票 80 落地）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HUNT_PACK / ZGATE（绿样本）/ OFFMENU27（读菜单）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HUNT_PACK</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">内容层装载包 hunt-pack.ts（m5 领地·零机制代码）：loadHuntTemplates 读 *.json → HuntTemplateSource 登记缝 → toLoopTemplate 只投影机制四字段（id/上限×2/menu）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分层铁律的手术刀：句式族/槽位/waves/建议文本等业务字段一个都不进机制</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REGISTRY / TEMPLATES_API</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TEMPLATES_API</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">模板清单只读面 GET /api/v1/templates（票 92）：登记面 .all 投影出线，字段名照模板文件原样</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「第二业务已在营业」的真栈可观察证据：4 张卡在册（11.1 实测）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（读面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REGISTRY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run-kinds 注册表（机制侧只认接口）：hunt_flow 票面 = huntFlowTicketFace() 并集（run-kinds.ts:300）；ir 菜单 ⊆ 既有并集 = 零登记增量</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票面真相源唯一：ir 入册时并集不变——第二业务不扩票面由对账测试咬死</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">轮次链六节点 intake→planner→dispatch→await→judge→outcome；ir 实测 4 轮：剧本开局 → 持久化机制 → 执行历史 → 外联+图谱；gap 换组合、相邻指纹必不同（防转闸）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">机制 m14 黑盒：对 ir 零 if/else——第二业务走的是 S9 同一条链（零机制增量的行为半边）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FAKE_LLM / MENU_GATE / CHILD_RUN / CASE_HIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FAKE_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">内容层确定性三件套 makeHuntFakeLoopLlm（fake 档·票 93② 生产接线 index.ts:196）：planner 菜单签名回族 → 查 waves 波表 → 槽位/时间窗渲染；judge 取证面 total&gt;0 → hit，hit 附带遏制建议文本</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">通用波表解释器：ir 轨迹没有一行专属代码（fake LLM 零改码，票 80 实现记录口径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE / CASE_HIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 菜单闸（INV-11 第一道闸·选不得）：offMenu = tasks.filter(不在模板菜单) → 零重试整轮终止 hunt_plan_denied（DENIED）· 零子 run · run 不死（planner.ts:235-239）；🛡️ 防 菜单外组合（INV-11）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单真源=模板注入子集，机制不持第二份清单；收窄即选路空间收窄——动态性是有边界配置的</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（通过）/ OFFMENU27（拒绝样本）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt_task 单趟差：逐任务窄票现铸（ticketSpecFor allowedTools=[任务唯一工具]）→ 真执行体过验票闸（S10 两票制原样）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扇出 N 路 ≠ 一张大票；父菜单外拒铸=签不出（S10 10.2 已实测，本图不重画三闸细节）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（报告回收·事件唤醒）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_HIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">converge 收敛分岔：hit → concluded + 建 Case 挂 hypothesis_id（T07）；miss → refuted + note + register(proposed)；遏制建议 = 模板数据文本，只进 note·零 ApprovalToken（11.3 实测 approvals/used_tokens 零新增）；🛡️ 防 L2 动作绕过人工审批（INV-3/9）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">建议≠授权：数据里写的「须经人工审批」是合同条款——L2 唯一通道是 S4 审批回路</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CASES（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 表 hypotheses：POST /api/v1/hypotheses 建 proposed + outbox hypothesis.created 同事务（INV-6 家族）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">假设五态的账面真相源（INV-10）；11.3 主角 hyp_79281df7 在册</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（事件拉起）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CASES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 表 cases + timeline_entries：hit 建案（case_000018 实测）+ 遏制建议 note 文本落账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">收敛终局的档案去处：账面上「查实」与「建议」分区清楚</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（对账面 11.3）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ZGATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">零增量闸（spec T20 机器半边）tools/check_zero_increment.py：diff 变更集（含未跟踪件/删除）× 机制层领地 5 条 → 交集必须为空；git 不可用 = FAIL（fail-closed）；self-test 14/14；🛡️ 防 机制层被业务增量触碰（分层铁律·PRD §13.1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">否定式断言：领地枚举可审，其余自由度全给内容层；红 = 架构回炉回 L0 而非业务票返工</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MECH_FILES（红样本）/ IR_TEMPLATE（绿样本）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MECH_FILES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">机制层领地五条（说明性节点·本图黑盒）：orchestration/（m14 全目录含测试件）+ budget.ts + token-ports.ts + jiaotu/token-ports-jiaotu.ts + verify-ticket.ts</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">领地内一个字节都是增量 → VIOL exit 1（11.2 捣乱②实测：planner.ts 改一行当场红）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ZGATE（执法对象）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OFFMENU27</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单外 27 件全量遍历（eval/契约级布景）：脚本化 planner 硬点每件越界工具 → 真 planRound 裁决；27/27 hunt_plan_denied · offmenu_tool · 零重试（T04）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">把「100% 拒」变成可断言数字：32 件在册 − 5 件 ir 菜单 = 27 格，含 web_access_query/isolate_host/register 三个代表性样本</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">IR_TEMPLATE / MENU_GATE（读裁决语义）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["值班长 / 紫队脚本<br/>POST :3002/api/v1/hypotheses（text + template_id=ir_host_compromise）"]
+        ZGATE["零增量闸（spec T20 机器半边）<br/>tools/check_zero_increment.py · package.json:18 接 CI<br/>diff 变更集（含未跟踪件/删除）× 机制层领地 → 交集必须为空<br/>git 不可用 = FAIL（fail-closed）· self-test 14/14<br/>🛡️ 防 机制层被业务增量触碰（分层铁律·PRD §13.1）"]
+        OFFMENU27["菜单外 27 件全量遍历（eval/契约级布景）<br/>脚本化 planner 硬点每件越界工具 → 真 planRound 裁决<br/>27/27 hunt_plan_denied · offmenu_tool · 零重试（T04）"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · LangGraph.js · better-sqlite3 · :3003）"]
+        subgraph T111["11.1 内容层装载 · 进入:第二业务=新增一个数据文件 · 节拍:装配时装载(进程起) · 退出:登记缝在册/票面并集不扩"]
+            direction TB
+            IR_TEMPLATE["预案卡 ir_host_compromise.json（33 行·第二业务全部家当）<br/>句式族 2 句 + 菜单子集 5 件（host 维度收窄·剔 web_access_query）<br/>轮次上限 6/单轮 2 + waves 四波 + 遏制建议文本（自带审批口径）"]
+            HUNT_PACK["内容层装载包 hunt-pack.ts（m5 领地·零机制代码）<br/>loadHuntTemplates 读 *.json → HuntTemplateSource 登记缝<br/>toLoopTemplate 只投影机制四字段（id/上限×2/menu）"]
+            TEMPLATES_API["模板清单只读面 GET /api/v1/templates（票 92）<br/>4 张卡在册（真栈实测）"]
+        end
+
+        subgraph T113["11.3 轮次链（机制 m14 黑盒·第二业务零 if/else） · 进入:autorun 消费 hypothesis.created · 节拍:轮间接力 round_relay 事件（禁轮询） · 退出:concluded/refuted/cancelled"]
+            direction TB
+            REGISTRY["run-kinds 注册表（机制侧只认接口）<br/>hunt_flow 票面 = huntFlowTicketFace() 并集<br/>run-kinds.ts:300 · ir 菜单 ⊆ 既有并集 = 零登记增量"]
+            ROUND_CHAIN["轮次链六节点 intake→planner→dispatch→await→judge→outcome<br/>ir 实测 4 轮: 剧本开局 → 持久化机制 → 执行历史 → 外联+图谱<br/>gap 换组合 · 相邻指纹必不同（防转闸）"]
+            FAKE_LLM["内容层确定性三件套 makeHuntFakeLoopLlm（fake 档·index.ts:196 接线）<br/>planner: 菜单签名回族 → 查 waves 波表 → 槽位/时间窗渲染<br/>judge: 取证面 total&gt;0 → hit · hit 附带遏制建议文本（ir 轨迹零专属代码）"]
+            CHILD_RUN["hunt_task 单趟差<br/>逐任务窄票现铸 ticketSpecFor → 真执行体过验票闸<br/>（S10 两票制原样·验票闸细节见 10-big-picture）"]
+            CASE_HIT["converge 收敛分岔<br/>hit → concluded + 建 Case 挂 hypothesis_id（T07）<br/>miss → refuted + note + register(proposed)<br/>遏制建议 = 模板数据文本 只进 note · 零 ApprovalToken（INV-3/9）<br/>🛡️ 防 L2 动作绕过人工审批（INV-3/9）"]
+        end
+
+        subgraph T114["11.4 菜单收窄 · 进入:planner 每轮出组合 · 节拍:逐轮 · 退出:合法组合落 dispatch 或 offmenu 整轮终止"]
+            direction TB
+            MENU_GATE["planner 菜单闸（INV-11 第一道闸·选不得）<br/>offMenu = tasks.filter(不在模板菜单) → 零重试整轮终止<br/>hunt_plan_denied（DENIED）· 零子 run · run 不死<br/>planner.ts:235-239<br/>🛡️ 防 菜单外组合（INV-11）"]
+        end
+
+        subgraph MECH_LAND["机制层领地（T20 五条 · 本图黑盒·说明）"]
+            direction TB
+            MECH_FILES["orchestration/（m14 全目录·含测试件）+ budget.ts<br/>+ token-ports.ts + jiaotu/token-ports-jiaotu.ts + verify-ticket.ts<br/>领地内一个字节都是增量 → VIOL exit 1"]
+        end
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        T_HYP[("M2 表 hypotheses<br/>POST /api/v1/hypotheses 建 proposed<br/>+ outbox hypothesis.created 同事务（INV-6/10）")]
+        T_CASES[("M2 表 cases + timeline_entries<br/>hit 建案 case_000018 挂 hypothesis_id（11.3 实测）<br/>遏制建议只进 note 文本（approvals 零新增）")]
+    end
+
+    %% ===== 11.1 装载链 =====
+    IR_TEMPLATE -. "读 *.json（数据文件进 git=配方有版本有评审）" .-> HUNT_PACK
+    HUNT_PACK -- "登记缝 of(templateId) 命中第四张卡<br/>toLoopTemplate 投影机制四字段（内容字段不进机制）" --> REGISTRY
+    HUNT_PACK -. "huntFlowTicketFace 票面并集<br/>（ir 5 件 ⊆ 既有并集 = 零登记增量·对账咬死）" .-> REGISTRY
+    TEMPLATES_API -. "读 .all 投影出线（第二业务已在营业）" .-> HUNT_PACK
+
+    %% ===== 发起与拉起 =====
+    OPERATOR -- "请求 POST :3002/api/v1/hypotheses（text + template_id）<br/>跨容器→case-backend:3002" --> T_HYP
+    T_HYP -. "事件 hypothesis.created → autorun → 正门建 hunt_flow<br/>（S9 拉起全链，本图不重画）" .-> ROUND_CHAIN
+    ROUND_CHAIN -. "读票面/模板登记缝<br/>（每轮菜单 = 卡上子集注入）" .-> REGISTRY
+
+    %% ===== 11.3 循环（数据→行为）=====
+    ROUND_CHAIN -- "拟单输入: 消毒→LLM（S10 四闸原样）" --> FAKE_LLM
+    FAKE_LLM -- "组合 C_k（waves 波表渲染·槽位+时间窗直替）" --> MENU_GATE
+    MENU_GATE -- "通过: 组合落 dispatch → 逐任务窄票扇出" --> ROUND_CHAIN
+    ROUND_CHAIN -- "扇出: hunt_task 子 run（父不盯表·事件唤醒）" --> CHILD_RUN
+    ROUND_CHAIN -- "收敛: judge sufficient+hit → 建 Case 挂 hypothesis_id" --> CASE_HIT
+    FAKE_LLM -. "judge 附带: 遏制建议=模板文本（建议≠授权）" .-> CASE_HIT
+    CASE_HIT -- "请求 建案/note 写 M2<br/>跨容器→case-backend:3002" --> T_CASES
+    CASE_HIT -. "hit 半边 register 零写入（miss 才归档入图）" .-> ROUND_CHAIN
+
+    %% ===== 11.4 菜单收窄执法 =====
+    MENU_GATE -. "菜单外 27 件: hunt_plan_denied · offmenu_tool<br/>· 零重试整轮终止（web_access_query/isolate_host 全在场）" .-> OFFMENU27
+
+    %% ===== 11.2 零增量闸执法 =====
+    ZGATE -. "绿样本: 内容层增量全在白名单<br/>（预案卡/契约测试/eval rig/本票文档·11.2 实测 diff 8 文件交集 0）" .-> IR_TEMPLATE
+    ZGATE -. "红样本: 领地内一个字节 = VIOL exit 1<br/>（11.2 捣乱②实测: planner.ts 改一行当场点名）" .-> MECH_FILES
+
+    %% ===== 说明性节点（暗灰·非数据流）=====
+    classDef metaNode fill:#1a1a26,stroke:#6c7086,stroke-width:1px,color:#6c7086
+    class MECH_FILES metaNode
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV/T20
+    %% 11.2：ZGATE 防 机制层被业务增量触碰（分层铁律·T20）
+    %% 11.4：MENU_GATE 防 菜单外组合（INV-11 第一道闸·选不得）
+    %% 11.3：CASE_HIT 防 L2 动作绕过人工审批（INV-3/9·建议止于文本）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class ZGATE,MENU_GATE,CASE_HIT guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
