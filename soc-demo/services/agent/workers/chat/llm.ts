@@ -5,6 +5,9 @@
 // 不偷看 fixture 名。两条纪律：
 //   - 分类器只产「意图 + 置信度」，产不出就低置信——澄清反问而非猜（PRD M8 异常与边界）；
 //   - 回答里的数字一律来自工具查询结果（input.result），LLM 不负责编数（chat/01 验收的 judge 口径）。
+// 票 65：分类词汇表契约 = 可见工具清单（candidates）+ 高危动作族清单（highRisk，matrix 全部
+// L2 族工具）——候选外的高危意图必须可识别命名（识别≠授权，意图闸按可见性三态裁决，
+// 不可见 = deny + 解释），两份清单之外的可见动作仍 unknown。伪件与真 prompt 消费同一份清单。
 import type { CaseContext } from "./flow.js";
 
 // ---- prompt 契约（真 adapter 的输入形态；fake 不吃 prompt 只吃结构化 input）----
@@ -13,8 +16,13 @@ export interface ClassifyInput {
   message: string;
   role: string;
   caseContext: CaseContext | null;
-  /** 可判工具面 = 本角色可见清单（Web 下发的同一份；分类器不许发明清单外的工具）。 */
+  /** 本角色可见工具清单（FR-M8.2：Web 下发的同一份；可见性裁决在 gate，不在分类器）。
+   *  票 65：清单语义 = 「可见动作」+「高危动作族」两份词汇表——候选外可见动作仍 unknown。 */
   candidates: string[];
+  /** 高危动作族清单（票 65：visible-tools.highRiskTools()，matrix 全部 L2 族工具）。
+   *  高危意图即使不在可见清单里也要如实识别命名（识别 ≠ 授权），意图闸按角色可见性
+   *  三态裁决——不可见 = deny + 解释（FR-M8.4 原语义真网可达）。 */
+  highRisk: string[];
 }
 
 export interface ClassifyOutput {
@@ -54,7 +62,10 @@ export function buildClassifyPrompt(input: ClassifyInput): string {
   return [
     "你是 SOC 对话助手的城市意图分类器。把用户消息分类成下面清单中的一个工具意图，输出 JSON：",
     '{"tool":"<工具名>","confidence":<0~1>}',
-    `可选工具清单：${input.candidates.join("、") || "（空）"}。清单外一律输出 {"tool":"unknown","confidence":0}。`,
+    `本角色可见工具清单：${input.candidates.join("、") || "（空）"}。`,
+    `高危动作族清单：${input.highRisk.join("、")}。这些高危意图即使不在可见清单里也要如实识别命名`
+    + "（如「隔离主机」→ isolate_host）——可见与否不在分类器裁，意图闸会按角色可见性裁决。",
+    `两份清单都覆盖不了的意图一律输出 {"tool":"unknown","confidence":0}。`,
     caseLine,
     `用户角色：${input.role}`,
     `用户消息：${input.message}`,
@@ -89,21 +100,25 @@ export class FakeChatLlm implements ChatLlm {
   }
 
   async classify(call: ClassifyCall): Promise<ClassifyOutput & { tokens: number }> {
-    const { message } = call.input;
+    const { message, candidates, highRisk } = call.input;
+    // 票 65 契约对齐：伪件与真 prompt 吃同一份「可见清单 + 高危族清单」——关键词命名的
+    // 工具必须 ∈ 两清单之并（高危意图命名合法=新契约本意；不再「恰好绕过」候选约束），
+    // 两清单之外仍 unknown 低置信（澄清反问而非猜）。
+    const scope = [...candidates, ...highRisk];
+    let hit: { tool: string; confidence: number } | null = null;
 
     // 动作意图（L2 族）优先识别——它们是权限演示的主角，关键词明确
-    if (/隔离|isolate/i.test(message)) return { tool: "isolate_host", confidence: 0.9, tokens: this.tokensPerCall };
-    if (/封(禁|掉)?\s*(ip|IP)?|block/i.test(message) && /ip|IP|\d{1,3}\.\d{1,3}/.test(message)) {
-      return { tool: "block_ip", confidence: 0.9, tokens: this.tokensPerCall };
-    }
-    if (/入库|写进知识库|写知识库|kb_write/i.test(message)) return { tool: "kb_write", confidence: 0.9, tokens: this.tokensPerCall };
+    if (/隔离|isolate/i.test(message)) hit = { tool: "isolate_host", confidence: 0.9 };
+    else if (/封(禁|掉)?\s*(ip|IP)?|block/i.test(message) && /ip|IP|\d{1,3}\.\d{1,3}/.test(message)) {
+      hit = { tool: "block_ip", confidence: 0.9 };
+    } else if (/入库|写进知识库|写知识库|kb_write/i.test(message)) hit = { tool: "kb_write", confidence: 0.9 };
     // 只读意图
-    if (/还出现在|出现过|关联.*告警|哪些告警|related/i.test(message)) {
-      return { tool: "related_alerts", confidence: 0.9, tokens: this.tokensPerCall };
-    }
-    if (/siem|日志|full_log|检索日志/i.test(message)) return { tool: "siem_query", confidence: 0.85, tokens: this.tokensPerCall };
-    if (/知识库|知识条目|kb\b/i.test(message)) return { tool: "kb_lookup", confidence: 0.85, tokens: this.tokensPerCall };
-    // 低置信 → 澄清反问而非猜（PRD M8 异常与边界）
+    else if (/还出现在|出现过|关联.*告警|哪些告警|related/i.test(message)) hit = { tool: "related_alerts", confidence: 0.9 };
+    else if (/siem|日志|full_log|检索日志/i.test(message)) hit = { tool: "siem_query", confidence: 0.85 };
+    else if (/知识库|知识条目|kb\b/i.test(message)) hit = { tool: "kb_lookup", confidence: 0.85 };
+
+    if (hit && scope.includes(hit.tool)) return { ...hit, tokens: this.tokensPerCall };
+    // 低置信/清单外 → 澄清反问而非猜（PRD M8 异常与边界）
     return { tool: "unknown", confidence: 0.2, tokens: this.tokensPerCall };
   }
 

@@ -63,3 +63,13 @@ export function visibleTools(role: string): string[] {
   const tools = families.flatMap((f) => loadMatrix().families[f]?.tools ?? []);
   return [...new Set(tools)].sort();
 }
+
+/** 高危动作族清单（票 65）：matrix 里所有 L2 族工具（A.2「需审批」列——kb_write + isolate/block）。
+ *  语义 = 分类器可识别命名的意图词汇表，角色无关——识别 ≠ 授权：soc1 的 A.2 格子仍是「—」
+ *  （本函数不改矩阵、不改可见面），命名后由 gate 按可见性三态裁决（不可见 = deny + 解释）。
+ *  prompt 契约（llm.ts buildClassifyPrompt）与 fake 分类器消费同一份，单一来源不出第二张表。 */
+export function highRiskTools(): string[] {
+  const tools = Object.values(loadMatrix().families)
+    .flatMap((f) => (f.tier === "L2" ? f.tools : []));
+  return [...new Set(tools)].sort();
+}

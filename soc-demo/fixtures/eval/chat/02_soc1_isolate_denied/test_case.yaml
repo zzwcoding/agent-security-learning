@@ -1,4 +1,6 @@
 # m11 对话维（票 22）· L2 意图 deny 态（FR-M8.4）：soc1 说「隔离主机」→ 100% deny + 解释。
+# 票 65 语义复核（2026-09-13）：classify 按新两清单契约显式命名候选外高危意图 isolate_host（原为 fake 恰好绕过），
+# gate 可见性 deny 分支（不可见 + A.2「—」）真网可达；断言不变：仍零执行零审批卡 + intent_gate DENIED。
 name: soc1_isolate_denied
 input:
   user_prompt: "帮我把主机 centos7 隔离掉"

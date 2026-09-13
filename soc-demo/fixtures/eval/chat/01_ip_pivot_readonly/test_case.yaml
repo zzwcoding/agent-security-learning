@@ -1,4 +1,5 @@
 # m11 对话维（票 22）· 只读意图 allow 态（票 18 chat/01 素材，FR-M8.4/FR-M8.6）。
+# 票 65 语义复核（2026-09-13）：related_alerts 在 soc1 可见清单内 → 分类/执行/断言全链不受两清单制影响，预期行为零变化。
 # soc1 案件页追问 IP → related_alerts 走 worker 只读面 → 回答数字来自查询结果（不是 LLM 编的）。
 name: ip_pivot_readonly
 input:

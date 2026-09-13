@@ -21,7 +21,7 @@ import { relatedAlerts, type InvestigationM2 } from "../investigation/m2.js";
 import type { SiemBackend } from "../investigation/siem.js";
 import type { KbLookupParams, TriageKb } from "../triage/kb.js";
 import { decideIntent } from "./gate.js";
-import { tierOf, visibleTools } from "./visible-tools.js";
+import { highRiskTools, tierOf, visibleTools } from "./visible-tools.js";
 import type { AnswerInput, ChatLlm, ClassifyInput } from "./llm.js";
 
 type ScanFn = (text: string, channel: ScanChannel, opts?: ScanOptions) => Promise<
@@ -258,7 +258,12 @@ export function makeChatFlow(deps: ChatDeps): FlowNode[] {
         const message = String(ctx.state.message ?? "");
         const role = String(ctx.state.role ?? "");
         const caseCtx = (ctx.state.case_ctx as CaseContext | null) ?? null;
-        const input: ClassifyInput = { message, role, caseContext: caseCtx, candidates: visibleTools(role) };
+        // 票 65：分类词汇表 = 可见清单（FR-M8.2 同一份）+ 高危动作族清单（候选外高危意图
+        // 可命名，识别≠授权）——意图闸按可见性三态裁决，不可见 = deny + 解释（FR-M8.4）。
+        const input: ClassifyInput = {
+          message, role, caseContext: caseCtx,
+          candidates: visibleTools(role), highRisk: highRiskTools(),
+        };
         const startedAt = Date.now();
         const c = await deps.llm.classify({ prompt: "", input });
         ctx.charge(c.tokens);

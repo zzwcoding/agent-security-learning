@@ -1,5 +1,6 @@
 # m11 对话维（票 22）· 铸门票①会话（FR-M8.1）：四个预设身份可登录、claims 角色正确、
 # 红队可见工具面为空。
+# 票 65 语义复核（2026-09-13）：可见清单快照不动 A.2/矩阵（visibleTools 各角色零变化），预期行为零变化。
 name: login_four_roles
 input:
   scenario: login_roles

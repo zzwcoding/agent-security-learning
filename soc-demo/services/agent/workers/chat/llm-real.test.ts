@@ -10,7 +10,8 @@ import { HttpInvestigationM2 } from "../investigation/m2.js";
 import { makeChatFlow, CHAT_READONLY_TOOLS } from "./flow.js";
 import { RealChatLlm } from "./llm-real.js";
 import type { ChatSeam } from "../triage/llm-real.js";
-import type { AnswerCall, ClassifyCall, ClassifyInput } from "./llm.js";
+import { buildClassifyPrompt, type AnswerCall, type ClassifyCall, type ClassifyInput } from "./llm.js";
+import { highRiskTools, visibleTools } from "./visible-tools.js";
 import { fakeScan, KEY, makeTaskTicket } from "../triage/testkit.js";
 import type { FgaChecker } from "./gate.js";
 
@@ -37,6 +38,7 @@ const classifyInput = (message: string): ClassifyInput => ({
   role: "soc1",
   caseContext: null,
   candidates: ["get_alert", "kb_lookup", "related_alerts", "siem_query", "isolate_host"],
+  highRisk: highRiskTools(),
 });
 
 const classifyCall = (message: string): ClassifyCall => ({ prompt: "", input: classifyInput(message) });
@@ -72,6 +74,28 @@ describe("RealChatLlm · classify 正常面（剥壳后透传，schema 判定在
     expect(prompts[0]).toContain("用户消息：隔离 web-01");
     expect(prompts[0]).toContain("isolate_host"); // 可见工具清单进了 prompt
     expect(prompts[0]).toContain('"tool":"unknown"'); // 清单外 → unknown 的输出契约在 prompt 里
+  });
+});
+
+// ---------- 票 65：classify prompt 契约（可见清单 + 高危动作族清单，候选外高危意图可命名） ----------
+
+describe("票 65 · classify prompt 契约：可见清单 + 高危动作族清单（FR-M8.4 原语义：越权意图命名后交闸拒绝并解释）", () => {
+  test("soc1 真实可见面（不含 isolate_host）→ prompt 仍列高危动作族清单且明确命名许可；两清单之外仍 unknown", () => {
+    const candidates = visibleTools("soc1");
+    expect(candidates).not.toContain("isolate_host"); // 前提：A.2 高危响应族该格「—」，可见清单不含
+    const prompt = buildClassifyPrompt({
+      message: "帮我把主机 centos7 隔离了",
+      role: "soc1",
+      caseContext: null,
+      candidates,
+      highRisk: highRiskTools(),
+    });
+    expect(prompt).toContain("本角色可见工具清单");
+    expect(prompt).toContain("高危动作族清单");
+    expect(prompt).toContain("isolate_host"); // 高危意图词汇表进 prompt（不在 candidates 也在）
+    expect(prompt).toContain("意图闸"); // 命名许可与「可见性交闸裁决」的说明在场
+    expect(prompt).toContain('"tool":"unknown"'); // 两清单之外 → unknown 的兜底契约保留
+    expect(prompt).not.toContain("清单外一律"); // 旧硬约束文本退场（防回退：把命名许可又焊死回候选面）
   });
 });
 

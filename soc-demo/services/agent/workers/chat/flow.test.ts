@@ -17,9 +17,9 @@ import { loadRunState } from "../../src/checkpointer.js";
 import { MemoryBurnRegistry, paramsHash } from "../../src/verify-ticket.js";
 import { HttpInvestigationM2, type InvestigationM2 } from "../investigation/m2.js";
 import { makeChatFlow } from "./flow.js";
-import { FakeChatLlm } from "./llm.js";
+import { FakeChatLlm, type ClassifyCall } from "./llm.js";
 import { signSession, verifySession } from "./session.js";
-import { familyOf, visibleTools } from "./visible-tools.js";
+import { familyOf, highRiskTools, visibleTools } from "./visible-tools.js";
 import { decideIntent, type FgaChecker } from "./gate.js";
 import { fakeScan, httpJson, KEY, makeTaskTicket, seedAlert, startCaseBackend } from "../triage/testkit.js";
 import type { MintClient, MintRequest, TaskTicketRequest } from "../../src/token-ports.js";
@@ -400,6 +400,70 @@ describe("teaching session 与闸单元（铸门票①）", () => {
     expect((await decideIntent("soc1", "siem_query", stubFga())).state).toBe("allow");
     expect((await decideIntent("duty_lead", "isolate_host", stubFga())).state).toBe("require_approval");
     expect((await decideIntent("soc1", "isolate_host", stubFga())).state).toBe("deny");
+  });
+});
+
+// ---------- 票 65：分类命名候选外高危意图 → gate 可见性三态（FR-M8.4 原语义真网可达） ----------
+
+describe("票 65 · FakeChatLlm 与新 prompt 契约对齐（吃同一份可见清单+高危族清单，不再恰好绕过）", () => {
+  const callOf = (message: string, candidates: string[]): ClassifyCall => ({
+    prompt: "",
+    input: { message, role: "soc1", caseContext: null, candidates, highRisk: highRiskTools() },
+  });
+
+  test("soc1 可见面不含 isolate_host → 仍命名 isolate_host（高危族清单许可，识别≠授权）", async () => {
+    const out = await new FakeChatLlm().classify(callOf("帮我把主机 centos7 隔离了", visibleTools("soc1")));
+    expect(out.tool).toBe("isolate_host");
+    expect(out.confidence).toBeGreaterThanOrEqual(0.5);
+  });
+
+  test("两清单之外的关键词 → unknown 低置信（scope 守卫与 prompt 契约同构；红队空可见面）", async () => {
+    const out = await new FakeChatLlm().classify(callOf("18.18.18.18 还出现在哪些告警里", visibleTools("redteam")));
+    expect(out).toMatchObject({ tool: "unknown", confidence: 0.2 });
+  });
+});
+
+describe("票 65 契约复现：classify 吐候选外高危意图 → gate 按可见性三态裁决", () => {
+  test("soc1「隔离主机」→ classify 吐 isolate_host（候选外）→ gate deny +「不可见」解释（FR-M8.4 原语义），intent_gate 审计语义不变", async () => {
+    const rig = await makeFlowRig(new HttpInvestigationM2("http://127.0.0.1:9")); // 全局追问不触 M2，死端口证未触达
+    const out = await rig.runChat({ role: "soc1", message: "帮我把主机 centos7 隔离了" });
+
+    expect(out.status).toBe("completed");
+    // 分类器真的吐出了候选外高危意图（llm_call 审计的 tool 字段 = classify 输出）
+    const llmCall = rig.audit.entries.find(
+      (e) => e.action === "llm_call" && (e.details as { node?: string }).node === "intent_classify",
+    );
+    expect(llmCall?.details).toMatchObject({ tool: "isolate_host" });
+    // gate 可见性 deny 分支复活：解释点名「不可见」+ A.2「—」（不是未知工具、不是 FGA 拒绝）
+    const denied = out.events.find((e) => e.type === "denied");
+    const reason = (denied!.payload as { reason: string }).reason;
+    expect(reason).toContain("不可见");
+    expect(reason).toContain("「—」");
+    expect(reason).toContain("isolate_host");
+    expect(out.events.some((e) => e.type === "tool_call")).toBe(false);
+    expect(out.events.some((e) => e.type === "approval_required")).toBe(false);
+    // intent_gate 审计五要素不变（INV-1 fail-closed：DENIED + role/tool/decision/reason）
+    const gateAudit = rig.audit.entries.find((e) => e.action === "intent_gate");
+    expect(gateAudit).toMatchObject({
+      result: "DENIED",
+      objectType: "intent",
+      details: { role: "soc1", tool: "isolate_host", decision: "deny" },
+    });
+  });
+
+  test("对照腿：duty_lead 同意图 → 可见 → require_approval 开卡（A.2 矩阵语义未被偷改）", async () => {
+    const rig = await makeFlowRig(new HttpInvestigationM2("http://127.0.0.1:9"));
+    const out = await rig.runChat({ role: "duty_lead", message: "帮我把主机 centos7 隔离了" });
+
+    expect(out.status).toBe("awaiting_approval");
+    const approval = out.events.find((e) => e.type === "approval_required");
+    expect((approval!.payload as { tool: string }).tool).toBe("isolate_host");
+    expect(out.events.some((e) => e.type === "denied")).toBe(false);
+    const gateAudit = rig.audit.entries.find((e) => e.action === "intent_gate");
+    expect(gateAudit).toMatchObject({
+      result: "SUCCESS",
+      details: { role: "duty_lead", tool: "isolate_host", decision: "require_approval" },
+    });
   });
 });
 
