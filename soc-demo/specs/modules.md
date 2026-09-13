@@ -407,6 +407,7 @@
 - `node scripts/bench/b3-dispatcher.mjs <并发档>` → run 并发爬坡：run_jobs 队列深度时间序列 + 实测分发吞吐 vs 理论 ~10 run/s
 - `node scripts/bench/b2-chain.mjs <burst|sustained 档位>` → 链路突发与持续流：e2e 延迟分布（alert→run）+ cursor 滞后 + ingest 拐点
 - `node scripts/bench/b4-sse.mjs <订阅者数>` → SSE 扇出：订阅者滞后 + 1s 轮询对照
+- `node scripts/bench/b5-{gateway-down,guards-kill,sqlite-hammer}.mjs` → B5 防线实验三件（停/杀容器与灌压，独立执行入口；与 Seam 节「B5 防线实验亦零代码」同源——票 97 补卡）
 - 报告汇总 → `docs/research/2026-09-12-压力测试报告.md`（每层一表：数字+机器规格+复现命令）
 
 ### 依赖

@@ -75,7 +75,10 @@ key 分发面：jiaotu-gateway 只 publish 8080 公开面一个口，internal �
 而凡拿到 `JIAOTU_API_KEY` 的容器即持该 agent 身份——key 经 `.env`/compose env 进容器，
 分发面按信任边界管理；网络层隔离加固记椒图 M2（其 README 诚实边界 6 同口径）。②jiaotu
 形态的 LLM 上游默认是 upstream-stub（确定性伪 LLM，`deploy/jiaotu/fake-llm-upstream.mjs`），
-真网是**可选**环节（`--real-llm`），钥匙经环境注入、绝不进仓库。③切回默认形态 =
+真网是**可选**环节（`--real-llm`），钥匙经环境注入、绝不进仓库；手工真网（不走冒烟脚本）
+需在 env 给足资源预算三键 `LLM_TIMEOUT_MS=300000`/`MAX_STEPS=40`/`MAX_TOKENS_PER_RUN=200000`
+（真实推理模型的 investigation 单节点 23 次 LLM 调用，教学保守缺省会被 fail-closed/
+budget_exceeded 强杀——口径见 `.env.example` 同名注释，票 96 转正）。③切回默认形态 =
 上面的 down + unset `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 再 `docker compose up -d`，
 零残留。
 

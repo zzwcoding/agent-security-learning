@@ -86,6 +86,13 @@ services:
       # docker-compose.jiaotu.yml overlay，见该文件头注）。
       JIAOTU_GATEWAY_URL: ${JIAOTU_GATEWAY_URL:-}
       JIAOTU_API_KEY: ${JIAOTU_API_KEY:-}
+      # 票 18 per-worker 分账键（jiaotu:register --workers 落盘；四键全不设=单键模式
+      # 逐字节回归）。llm-client worker env 链在容器内读这些键——缺透传则活体静默回落
+      # 单键（票 96 活体探针前补的缺口）。
+      JIAOTU_API_KEY_TRIAGE: ${JIAOTU_API_KEY_TRIAGE:-}
+      JIAOTU_API_KEY_INVESTIGATION: ${JIAOTU_API_KEY_INVESTIGATION:-}
+      JIAOTU_API_KEY_KNOWLEDGE: ${JIAOTU_API_KEY_KNOWLEDGE:-}
+      JIAOTU_API_KEY_CHAT: ${JIAOTU_API_KEY_CHAT:-}
       # LLM 客户端超时预算（llm-client 既有 env 链 LLM_TIMEOUT_MS_<NODE> > LLM_TIMEOUT_MS
       # > 60s 缺省）：空缺省 = 60s 不变；真网冒烟（票 59 --real-llm）注入更大值——实测
       # investigate_case 的真实 minimax 调用会超 60s，fail-closed 强杀是纪律不是故障。
