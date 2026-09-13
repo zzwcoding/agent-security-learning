@@ -19,7 +19,7 @@
 - **任务票（Ticket）**：L1 写工具的授权票据，统一 TTL 900s
 - **审批铸票（ApprovalToken）**：L2 高危工具经人工审批铸出的一次性票据
 - **不可信字段（untrusted）**：告警中攻击者可控的字段（`full_log`/`data.*`），入库即标记
-- **假设（hypothesis）**：分析师主动提出的待验证安全判断（如"内网有主机被植入 webshell"），编排循环的输入
+- **假设（hypothesis）**：主动提出的待验证安全判断（如"内网有主机被植入 webshell"）——提出者通常是分析师，紫队 eval 中由攻击 fixture 自动转出（actor=system）；编排循环的输入
 - **轮次（round）**：编排循环的一次"选组合→扇出→收敛"迭代，轮间由证据与缺口驱动换组合
 - **子 run（child run）**：一轮中被扇出拉起的独立取证 run，持本任务 narrow-scope 票，父 run 经事件唤醒回收
 - **业务模板（playbook template）**：假设句式族 + 默认菜单子集 + 轮次上限的内容层数据，零机制代码
@@ -39,7 +39,7 @@
 - **编排循环（orchestration loop）**：假设驱动的轮次机器——planner 选组合 → 扇出子 run → judge 裁决 → gap 缺口 → 再组合，直到证据收敛；循环拓扑落 dispatcher 层，LangGraph 串行链模型不动（m14 领地）
 - **能力菜单（capability menu）**：planner 可选工具与剧本的登记面 = tools.manifest + 剧本库，未登记一律 fail-closed；planner 只许从菜单选组合，不许创造组合外动作
 - **扇出/收敛（fan-out / converge）**：一轮内 N 个子 run 并行取证 / judge 汇总裁决；收敛判据是证据充分性，不是"该跑的跑完了"
-- **hunt_flow / hunt_task**：编排循环的 run kind 名——hunt_flow=假设的循环 run（一轮一条串行链，轮间 outbox 接力）；hunt_task=扇出的子 run（标准 run 机器，narrow-scope 票）
+- **hunt_flow / hunt_task**：编排循环的 run kind 名——hunt_flow=假设的循环 run（一轮一条串行链，轮间由 round_relay 事件经接力件拉起下一轮：agent 进程内事件总线消费 run_events，非 m2 outbox）；hunt_task=扇出的子 run（标准 run 机器，narrow-scope 票）
 
 ## 语义核心
 
