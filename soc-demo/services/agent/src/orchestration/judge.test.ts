@@ -141,13 +141,18 @@ interface Rig {
   stop(): void;
 }
 
-function rig(llm: LoopLlm, scan: ScanSeam = scanAllow): Rig {
+function rig(
+  llm: LoopLlm,
+  scan: ScanSeam = scanAllow,
+  hypothesisPort: FakeHypothesisPort = new FakeHypothesisPort(),
+  casePort: FakeCasePort = new FakeCasePort(),
+): Rig {
   const db = openDb(":memory:");
   const audit = new MemoryAuditSink();
   const bus = makeLoopEventBus();
   const ledger = new MemoryHuntLedger();
-  const port = new FakeHypothesisPort();
-  const cases = new FakeCasePort();
+  const port = hypothesisPort;
+  const cases = casePort;
   const register = new MemoryHypothesisRegister();
   const door = {
     post: async (payload: { kind: string; hypothesis_id?: string }): Promise<string> =>
@@ -450,5 +455,150 @@ describe("轮次转换（行为 9 后半：不充分 → gap → 再组合；降
     expect(rig1.port.status).toBe("hunting"); // 不收敛
     expect(rig1.cases.created).toHaveLength(0); // 无建案
     expect(eventsHas(rig1.db, done.id, "round_relay")).toBe(true); // 接力继续
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 票 93① 取消竞态不建孤儿案：converge 的落账顺序缺陷（票 84 附录①实测证据的复现靶）。
+//
+// 缺陷形态：converge 旧序 = 建案（cases.create）→ note → 假设迁移（port.transition）。
+// 取消竞态（轮次在途 POST cancel 抢先落 cancelled）下迁移 409（m2 状态机拒
+// cancelled→concluded）时案已建出：留下挂在已取消假设上的孤儿案，且 hunt_case_created
+// 审计还没写——案的存在无审计痕（INV-8 破口）。
+//
+// 修法（迁移先行）：结论迁移先过 m2 状态机闸再落任何案卷副作用——409 时零案卷痕迹
+// （无孤儿案、无 hunt_case_created，INV-8「没建案不能有」），假设留在其终态（INV-10
+// 「终态不可回退」）；迁移成功后建案审计紧跟建案成功（INV-8「案建了必有审计痕」，note/
+// register 半路失败也不出「有案无账」窗口）。
+describe("票 93① 取消竞态不建孤儿案（converge 迁移先行：INV-10 与 INV-8 同时成立）", () => {
+  /**
+   * 竞态复现布景（票 84 附录①窗口的确定性重放）：人取消走 m2 取消端点（不经编排
+   * port），在轮次在途时（judge 已裁、outcome 未到）把 m2 账面同事务推到 cancelled。
+   * converge 随后调 port.transition(concluded) → m2 状态机 409（cancelled→concluded
+   * 非法，INV-10 真闸）。注入点 = 脚本 judge（judge 裁完即「取消已落账」）。
+   */
+  class CancelRacePort extends FakeHypothesisPort {
+    /** true = 人取消已在 m2 侧落账（hunting→cancelled，终态；账面在 loop 外被改）。 */
+    cancelLanded = false;
+    /** converge 发起的迁移尝试（含被 409 拒的那次——顺序断言面）。 */
+    attempted: string[] = [];
+    async transition(id: string, to: "concluded" | "refuted" | "cancelled", opts?: { reason?: string }): Promise<void> {
+      this.attempted.push(`transition:${id}:${to}`);
+      if (this.cancelLanded) {
+        throw new Error(`InvalidTransition:409 hypothesis ${this.status} -> ${to}`);
+      }
+      await super.transition(id, to, opts);
+    }
+  }
+
+  /** 建案/时间线写半边的记账假件（含调用痕，与 port 共享 trace 做顺序断言）。 */
+  class TracedCasePort extends FakeCasePort {
+    constructor(private readonly trace: string[] = []) {
+      super();
+    }
+    async create(input: CaseCreateInput): Promise<string> {
+      this.trace.push(`create:${input.hypothesis_id}`);
+      return super.create(input);
+    }
+    async addNote(caseId: string, entry: { body: string; structured?: unknown }): Promise<void> {
+      this.trace.push(`note:${caseId}`);
+      await super.addNote(caseId, entry);
+    }
+  }
+
+  /** 与 port 共享 trace 的竞态 port：迁移尝试（含被 409 拒的）按序落 trace。 */
+  class TracedRacePort extends CancelRacePort {
+    constructor(private readonly trace: string[] = []) {
+      super();
+    }
+    async transition(id: string, to: "concluded" | "refuted" | "cancelled", opts?: { reason?: string }): Promise<void> {
+      this.trace.push(`transition:${to}`);
+      await super.transition(id, to, opts);
+    }
+  }
+
+  function raceRig(port: CancelRacePort, cases: FakeCasePort, inject: () => void): Rig {
+    const llm: LoopLlm = {
+      planner: (x) => new FakeLoopPlanner().plan(x),
+      judge: async () => {
+        inject(); // 竞态注入点：judge 已裁 = 轮次仍在途，取消此刻抢先落账
+        return verdictOf({});
+      },
+      gap: (x) => new FakeLoopGap().gap(x),
+    };
+    return rig(llm, scanAllow, port, cases);
+  }
+
+  test("取消竞态：converge 迁移遇 409 → 案未建、零 hunt_case_created，假设终态不可回退", async () => {
+    const port = new CancelRacePort();
+    const cases = new TracedCasePort();
+    const rig1 = raceRig(port, cases, () => {
+      port.cancelLanded = true; // m2 账面此刻已是 cancelled（终态）
+      port.status = "cancelled";
+    });
+    rig1.drive();
+    const done = await rig1.runRound(1);
+    await tick();
+    await rig1.pump();
+    rig1.stop();
+
+    // run 死在 outcome（票 84 同款：node_error:outcome），error 原样上抛不带病收敛
+    expect(done.status).toBe("failed");
+    expect(done.failReason).toBe("node_error:outcome");
+    // INV-10：假设仍在取消终态——迁移 409 后无任何回退/改写
+    expect(port.status).toBe("cancelled");
+    expect(port.attempted).toEqual([`transition:${HYP}:concluded`]);
+    // 孤儿案消失：迁移没过闸 → 零案卷副作用
+    expect(cases.created).toHaveLength(0);
+    expect(cases.notes).toHaveLength(0);
+    // INV-8：没建案就没有 hunt_case_created——审计与案的存在性一致
+    expect(rig1.audit.entries.some((e) => e.action === "hunt_case_created")).toBe(false);
+  });
+
+  test("迁移先行（成功路径顺序）：结论迁移过闸 → 建案 → note——迁移在案卷任何副作用之前", async () => {
+    const trace: string[] = [];
+    const port = new TracedRacePort(trace);
+    const cases = new TracedCasePort(trace);
+    const rig1 = raceRig(port, cases, () => {});
+    rig1.drive();
+    const done = await rig1.runRound(1);
+    await tick();
+    await rig1.pump();
+    rig1.stop();
+
+    expect(done.status).toBe("completed");
+    expect(port.status).toBe("concluded");
+    // 顺序钉死：迁移（过状态机闸）先于建案、先于 note——案卷副作用都在迁移之后
+    expect(trace.indexOf(`transition:concluded`)).toBeGreaterThanOrEqual(0);
+    expect(trace.indexOf(`transition:concluded`)).toBeLessThan(trace.indexOf(`create:${HYP}`));
+    expect(trace.indexOf(`create:${HYP}`)).toBeLessThan(trace.indexOf(`note:case_000001`));
+    // INV-8：建案审计在场且 case_id 与建的案一致
+    const caseAudit = rig1.audit.entries.find((e) => e.action === "hunt_case_created");
+    expect(caseAudit).toMatchObject({ objectId: HYP, objectType: "hypothesis", result: "SUCCESS" });
+    expect((caseAudit?.details as { case_id: string }).case_id).toBe("case_000001");
+  });
+
+  test("INV-8 防御半边：建案成功后 note 半路失败 → 案在、审计在（不出「有案无账」窗口），run 炸响", async () => {
+    const port = new CancelRacePort();
+    const cases = new TracedCasePort();
+    cases.addNote = async () => {
+      throw new Error("m2 timeline HTTP 500");
+    };
+    const rig1 = raceRig(port, cases, () => {});
+    rig1.drive();
+    const done = await rig1.runRound(1);
+    await tick();
+    await rig1.pump();
+    rig1.stop();
+
+    // run 炸响（fail-closed 不静默），但案与审计的存废一致：案建了 → hunt_case_created 在
+    expect(done.status).toBe("failed");
+    expect(cases.created).toHaveLength(1);
+    const caseAudit = rig1.audit.entries.find((e) => e.action === "hunt_case_created");
+    expect(caseAudit).toMatchObject({ objectId: HYP, result: "SUCCESS" });
+    expect((caseAudit?.details as { case_id: string }).case_id).toBe("case_000001");
+    // INV-10：结论迁移已成功落账（concluded 终态），半路失败不回退账面
+    expect(port.status).toBe("concluded");
+    expect(port.attempted).toEqual([`transition:${HYP}:concluded`]);
   });
 });

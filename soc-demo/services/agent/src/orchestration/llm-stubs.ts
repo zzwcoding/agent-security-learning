@@ -20,9 +20,17 @@ import type {
   LoopLlm,
   PlannedTask,
   PlannerInput,
+  RoundReport,
 } from "./ports.js";
 
 const TOKENS_PER_CALL = 24;
+
+/** failed 子报告形态判别（票 93②防御纵深；await-children.ts 的折账口径）：error 终局
+ *  折成 result_summary=`failed:<code>` + params_hash=""——judge 的判据不得把它当有效
+ *  证据（旧 allOk 只查非空，`failed:node_error` 恰好非空 → 零证据 hit 缺陷的判据半边）。 */
+export function isFailedReport(r: RoundReport): boolean {
+  return r.params_hash === "" || r.result_summary === "" || r.result_summary.startsWith("failed:");
+}
 
 export class FakeLoopPlanner {
   async plan(input: PlannerInput): Promise<{ tasks: PlannedTask[]; tokens: number }> {
@@ -58,7 +66,9 @@ export class FakeLoopPlanner {
 
 export class FakeLoopJudge {
   async judge(input: JudgeInput): Promise<JudgeOutput & { tokens: number }> {
-    const allOk = input.round_reports.length > 0 && input.round_reports.every((r) => r.result_summary !== "");
+    // 票 93②防御纵深：failed 子报告不是证据（isFailedReport）——不充分进 gap 接力，
+    // 绝不把 `failed:node_error` 的非空摘要当「有证据」收敛（宁可多轮不误收敛）。
+    const allOk = input.round_reports.length > 0 && input.round_reports.every((r) => !isFailedReport(r));
     const sufficient = allOk && (input.prior_rounds ?? 0) >= 1;
     return {
       sufficient,
@@ -92,9 +102,11 @@ export function makeFakeLoopLlm(): LoopLlm {
 }
 
 /** loop LLM 装配总口（票 74 建口，票 75 三件齐）：出网开关与四 worker 同一口径——
- *  AGENT_LLM=fake → 确定性桩（测试可复算）；其余值 → planner/judge/gap 全走 llm-client
- *  seam + 凭证代理（RealLoopPlanner/RealLoopJudge/RealLoopGap）。默认不显式传 mode 时
- *  读 AGENT_LLM env（缺省 fake——与 index.ts LLM_MODE 的 env 链同源，生产装配显式传）。 */
+ *  AGENT_LLM=fake → 确定性桩（机制缺省，测试可复算）；其余值 → planner/judge/gap 全走
+ *  llm-client seam + 凭证代理（RealLoopPlanner/RealLoopJudge/RealLoopGap）。票 93② 起
+ *  生产装配（index.ts）的 fake 档经内容层 makeHuntLoopLlm 换狩猎三件套（机制桩盲发 {q}
+ *  不合狩猎工具签名契约）——本口保留机制缺省形态：测试装配与 real 半边的唯一入口。
+ *  默认不显式传 mode 时读 AGENT_LLM env（缺省 fake）。 */
 export function makeLoopLlm(mode: string = process.env.AGENT_LLM ?? "fake"): LoopLlm {
   if (mode === "fake") return makeFakeLoopLlm();
   const seam = new GatewayLlmClient({ actor: "agent:hunt_flow" });

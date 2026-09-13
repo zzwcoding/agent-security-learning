@@ -16,7 +16,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_TEMPLATE } from "../../src/orchestration/template.js";
 import type { LoopLlm, LoopTemplate, TemplateSource } from "../../src/orchestration/ports.js";
-import { FakeLoopGap } from "../../src/orchestration/llm-stubs.js";
+import { FakeLoopGap, isFailedReport, makeLoopLlm } from "../../src/orchestration/llm-stubs.js";
 
 /** 模板数据目录（内容层位置：fixtures/hunt-templates/，票面钦点位之一）。 */
 export const HUNT_TEMPLATES_DIR = fileURLToPath(new URL("../../../../fixtures/hunt-templates/", import.meta.url));
@@ -129,7 +129,8 @@ function familyOfMenu(menu: readonly string[], families: HuntTemplateFixture[]):
   return families.find((f) => [...f.menu].sort().join("|") === key) ?? null;
 }
 
-/** 确定性 hunt 三件套（测试/e2e 用；真 adapter 票 81）：
+/** 确定性 hunt 三件套（票 93② 起生产 fake 档在用——经 makeHuntLoopLlm 接线；真 adapter
+ *  票 81）：
  *  · planner：族签名 → 模板既定查询计划。无 gap → wave[0]（剧本开局 + 首轮取证）；
  *    有 gap → waves[min(evidence_so_far.length, waves.length-1)]（换维度补查——相邻轮
  *    组合必不同，防转闸的机制保证）。
@@ -168,12 +169,16 @@ export function makeHuntFakeLoopLlm(families: HuntTemplateFixture[] = loadHuntTe
 
     async judge(input) {
       const reports = input.round_reports;
-      const forensicHit = reports.some(
+      // 票 93②防御纵深：failed 子报告不是证据（isFailedReport，与机制 FakeLoopJudge 同
+      // 判据）——全部/部分子 run failed(node_error:execute) 时按不充分进 gap 接力，绝不
+      // 折成 hit（零证据建案）也不折成 miss（零证据证伪）。
+      const allExecuted = reports.every((r) => !isFailedReport(r));
+      const forensicHit = allExecuted && reports.some(
         (r) =>
           FORENSIC_TOOLS.has(r.task.tool) &&
           Number(/total=(\d+)/.exec(r.result_summary)?.[1] ?? "0") > 0,
       );
-      const sufficient = (input.prior_rounds ?? 0) >= 1 && reports.length >= 2;
+      const sufficient = allExecuted && (input.prior_rounds ?? 0) >= 1 && reports.length >= 2;
       if (sufficient) {
         const verdict = forensicHit ? "hit" : "miss";
         // 遏制建议（票 80）：只在确认失陷（hit）半边附带，模板未带该字段 = 空建议——
@@ -224,4 +229,17 @@ export function renderContainmentSuggestions(f: HuntTemplateFixture): string[] {
     }
     return text;
   });
+}
+
+// ---------- 生产装配口（票 93②主修：index.ts 一行接的锁） ----------
+
+/** loop LLM 的狩猎侧生产选择面（hunt-pack.test「index.ts 一行接的锁」咬判据行为）：
+ *  AGENT_LLM=fake → 本内容层确定性三件套（makeHuntFakeLoopLlm——按模板 waves 渲染合法
+ *  参数、按取证面 total>0 判 hit/miss）。机制缺省桩 FakeLoopPlanner 对狩猎工具盲发
+ *  {q:假设句}，不合工具签名契约（playbook_lookup 需 tag/query、graph_query 需 entity，
+ *  weknora.ts）→ 子 run 全部 failed(node_error:execute)——票 84 附录②「零证据 hit 建案」
+ *  缺陷的参数半边，本换件即主修。其余值 → 机制 makeLoopLlm（real adapter，planner/
+ *  judge/gap 全走凭证代理，llm-stubs.ts 总口）。 */
+export function makeHuntLoopLlm(mode: string): LoopLlm {
+  return mode === "fake" ? makeHuntFakeLoopLlm() : makeLoopLlm(mode);
 }

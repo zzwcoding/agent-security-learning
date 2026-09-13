@@ -6,11 +6,13 @@ import {
   HuntTemplateSource,
   loadHuntTemplates,
   makeHuntFakeLoopLlm,
+  makeHuntLoopLlm,
   renderHypothesisText,
   toLoopTemplate,
   type HuntTemplateFixture,
 } from "./hunt-pack.js";
 import { DEFAULT_TEMPLATE, DefaultTemplateSource } from "../../src/orchestration/template.js";
+import { makeFakeLoopLlm } from "../../src/orchestration/llm-stubs.js";
 import { registeredTools, tierOf } from "../../src/tools-manifest.js";
 import { requireRunKind } from "../../src/run-kinds.js";
 import { MemoryAuditSink } from "../../src/audit.js";
@@ -318,5 +320,58 @@ describe("模板数据目录（内容层位置：fixtures/hunt-templates/，禁�
     ) as { template_id: string; menu: string[] };
     expect(raw.template_id).toBe("hunt_webshell");
     expect(raw.menu).not.toContain(REGISTER_TOOL);
+  });
+});
+
+describe("生产装配口 makeHuntLoopLlm（票 93②主修：index.ts 一行接的锁）", () => {
+  const plannerInput = (f: HuntTemplateFixture): PlannerInput => ({
+    hypothesis_text: renderHypothesisText(f),
+    evidence_so_far: [],
+    gap: null,
+    menu: [...f.menu],
+    template: { max_rounds: f.max_rounds, max_tasks: f.max_tasks },
+  });
+
+  test("fake 档接内容层三件套：族菜单出模板 waves 合法参数（非机制桩的盲发 {q}）", async () => {
+    const f = byId.get("hunt_webshell")!;
+    const { tasks } = await makeHuntLoopLlm("fake").planner(plannerInput(f));
+    expect(tasks.map((t) => t.tool)).toEqual(["playbook_lookup", "web_access_query"]);
+    // 签名契约合法（weknora.ts:lookup_requires_filter 的过滤维度在位）
+    expect(tasks[0]!.params).toMatchObject({ tag: "webshell" });
+    // 取证面任务带渲染后的槽位与强制 time_window
+    expect(tasks[1]!.params).toMatchObject({ url_pattern: "/uploads/sh.php", time_window: f.default_time_window });
+  });
+
+  test("对照面（缺陷形）：机制桩 FakeLoopPlanner 对同菜单盲发 {q}——playbook_lookup 必 lookup_requires_filter", async () => {
+    const f = byId.get("hunt_webshell")!;
+    const { tasks } = await makeFakeLoopLlm().planner(plannerInput(f));
+    expect(tasks[0]!.params).toEqual({ q: renderHypothesisText(f).slice(0, 64) }); // 无 tag/query → 契约违约
+  });
+
+  test("fake 档 judge 拒 failed 子报告（与机制 FakeLoopJudge 同判据）：failed 报告不构成证据", async () => {
+    const f = byId.get("hunt_webshell")!;
+    const llm = makeHuntLoopLlm("fake");
+    const { tasks } = await llm.planner(plannerInput(f));
+    const failedReports = tasks.map((t) => ({
+      task: t,
+      result_summary: "failed:node_error",
+      params_hash: "",
+    }));
+    const verdict = await llm.judge({
+      hypothesis_text: renderHypothesisText(f),
+      round_reports: failedReports,
+      prior_rounds: 1,
+    });
+    // 票 84 附录②缺陷形：全 failed 子报告不得判 sufficient+hit（也不得判 miss 证伪）
+    expect(verdict.sufficient).toBe(false);
+    expect(verdict.verdict).toBeNull();
+  });
+
+  test("real 档原样落机制 makeLoopLlm（真 adapter 走凭证代理——装配总口的分流语义）", () => {
+    // 只验分流不验出网：real 半边构造零网络副作用（GatewayLlmClient 构造期不出站）
+    const llm = makeHuntLoopLlm("real");
+    expect(typeof llm.planner).toBe("function");
+    expect(typeof llm.judge).toBe("function");
+    expect(typeof llm.gap).toBe("function");
   });
 });

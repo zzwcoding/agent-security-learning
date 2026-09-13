@@ -19,11 +19,13 @@
 //     消毒摘要（引用凭据是 hash，不是原文）；节点对 LLM 可触达的副本留底，调用后比对
 //     params_hash 前后一致，改写即裁决无效（降级不充分 + DENIED 审计）；审计留
 //     evidence_hashes 引用痕（INV-8）。
-//   收敛分岔（行为 9）——sufficient+hit → 建 Case 挂 hypothesis_id（复用 m2 建案公开
-//     路径，CasePort 缝）+ concluded；sufficient+miss → 归档案承载 note 结论 + refuted +
-//     hypothesis_register（register 缝，入图一律 proposed）。收敛结论一律落 note 型
-//     TimelineEntry（kind 枚举消费一个空位）；遏制建议只是文本建议进 note（INV-3/9：
-//     无签名 ApprovalToken 即无效，动作永远走人工审批回路）。
+//   收敛分岔（行为 9）——sufficient+hit → 假设迁移 concluded + 建 Case 挂 hypothesis_id
+//     （复用 m2 建案公开路径，CasePort 缝）+ hunt_case_created 审计；sufficient+miss →
+//     假设迁移 refuted + 归档案承载 note 结论 + hypothesis_register（register 缝，入图
+//     一律 proposed）。票 93① 迁移先行：先过 m2 状态机闸再落任何案卷副作用——取消竞态
+//     （迁移 409）时零案卷痕迹，案的存在性与 hunt_case_created 审计一致（INV-8/10）。
+//     收敛结论一律落 note 型 TimelineEntry（kind 枚举消费一个空位）；遏制建议只是文本
+//     建议进 note（INV-3/9：无签名 ApprovalToken 即无效，动作永远走人工审批回路）。
 // 边界红线：judge 不持 L2 通道；上游 timeout/unreachable 等基础设施病原样上抛交 runner
 // 强杀（INV-1，planner 同款），绝不带病裁决。
 import type { NodeCtx } from "../graph.js";
@@ -328,10 +330,15 @@ export async function judgeRound(deps: JudgeStageDeps, ctx: NodeCtx): Promise<vo
 
 // ---------- 收敛分岔（行为约定 9）：hit 建案 / miss 归档 + register ----------
 
-/** 收敛落账：建 Case（挂 hypothesis_id，复用 m2 建案公开路径）→ note 型 TimelineEntry
- *  （收敛结论；遏制建议只有文本）→ 假设迁移（concluded/refuted）→ miss 半边 register
- *  （入图一律 proposed）。建案/落账失败原样上抛 = fail-closed（不带病收敛，假设仍
- *  hunting 交人处理）。 */
+/** 收敛落账（票 93① 迁移先行）：假设迁移（concluded/refuted）→ 建 Case（挂
+ *  hypothesis_id，复用 m2 建案公开路径）→ hunt_case_created 审计（紧跟建案）→ note 型
+ *  TimelineEntry（收敛结论；遏制建议只有文本）→ miss 半边 register（入图一律 proposed）。
+ *  旧序（建案→note→迁移）在取消竞态下留孤儿案：迁移 409（m2 账面已 cancelled）时案已
+ *  落、审计还没写。迁移先行后——409 时零案卷副作用（无孤儿案、无审计痕，假设留在其
+ *  终态不可回退 INV-10），错误原样上抛 run 死在 outcome 交 runner 既有强杀口径；迁移
+ *  成功后的建案/落账失败原样上抛 = fail-closed（结论已过状态机闸，缺失半边由 run
+ *  failed 可回放交人处理，绝不带病静默——INV-8 的审计痕紧跟建案成功，note/register
+ *  半路失败也不出「有案无账」窗口）。 */
 export async function converge(deps: JudgeStageDeps, ctx: NodeCtx): Promise<void> {
   const { orch, audit, runId } = deps;
   const judge = ctx.state.judge as JudgeOutput;
@@ -342,12 +349,32 @@ export async function converge(deps: JudgeStageDeps, ctx: NodeCtx): Promise<void
   const containment = (ctx.state.containment as string[]) ?? [];
   const cases = orch.cases ?? defaultCasePort();
 
+  // 票 93① 迁移先行：m2 状态机是案卷副作用的闸。取消竞态（轮次在途 POST cancel 抢先
+  // 落 cancelled）下这里 409（cancelled→concluded 非法）原样上抛——此刻案还没建、审计
+  // 还没写（INV-10：假设留在其终态；INV-8：没建案就没有 hunt_case_created）。
+  await orch.port.transition(hypothesisId, verdict === "miss" ? "refuted" : "concluded");
+
   const input: CaseCreateInput = {
     title: `[hypothesis:${verdict}] ${hypothesisId}: ${String(ctx.state.hypothesis_text ?? "").slice(0, 80)}`,
     description: `编排循环收敛结论（round ${String(ctx.state.round_no)}）：${verdict}`,
     hypothesis_id: hypothesisId,
   };
   const caseId = await cases.create(input);
+  // 五要素审计（INV-8）紧跟建案成功：案的存在性 ≡ 审计痕——note/register 半路失败也
+  // 不出「有案无账」窗口（案建了必有审计痕，票 93① 的审计一致性半边）。
+  recordAudit(audit, runId, {
+    action: "hunt_case_created",
+    objectId: hypothesisId,
+    objectType: "hypothesis",
+    details: {
+      case_id: caseId,
+      verdict,
+      note_kind: "note",
+      evidence_hashes: evidenceHashes,
+      recommended_actions_count: containment.length,
+    },
+    result: "SUCCESS",
+  });
   const noteBody = [
     `假设 ${hypothesisId} 收敛结论：${verdict === "hit" ? "命中（concluded）" : "未命中（refuted）"}`,
     `confidence=${judge.confidence}`,
@@ -368,7 +395,6 @@ export async function converge(deps: JudgeStageDeps, ctx: NodeCtx): Promise<void
     },
   });
 
-  await orch.port.transition(hypothesisId, verdict === "miss" ? "refuted" : "concluded");
   if (verdict === "miss") {
     // hypothesis_register（行为 9/13）：入图一律 proposed；缺省内存桩，工具本体归票 79
     const record = await (orch.register ?? defaultHypothesisRegister())({
@@ -386,20 +412,6 @@ export async function converge(deps: JudgeStageDeps, ctx: NodeCtx): Promise<void
     });
   }
 
-  // 五要素审计（INV-8）：建案 + 结论条目（note 型，kind 枚举消费一个空位）可查可溯
-  recordAudit(audit, runId, {
-    action: "hunt_case_created",
-    objectId: hypothesisId,
-    objectType: "hypothesis",
-    details: {
-      case_id: caseId,
-      verdict,
-      note_kind: "note",
-      evidence_hashes: evidenceHashes,
-      recommended_actions_count: containment.length,
-    },
-    result: "SUCCESS",
-  });
   ctx.emit("audit", { action: "hunt_conclusion", case_id: caseId, verdict, evidence_hashes: evidenceHashes });
   ctx.state.case_id = caseId;
 }

@@ -41,7 +41,9 @@ import { makeFgaChecker } from "./fga-client.js";
 // 票 79（狩猎业务内容包）：三族模板登记面（HuntTemplateSource——三族优先、机制默认档
 // 兜底）、weknora 三工具 Memory stub（playbook/graph L0 只读 + hypothesis_register L1
 // 写）与 hunt_task 真执行体装配面——全部内容层/装配层落点，机制目录零触碰。
-import { HuntTemplateSource } from "../workers/investigation/hunt-pack.js";
+// 票 93②：makeHuntLoopLlm = loop LLM 的狩猎侧生产选择面（fake → 内容层确定性三件套，
+// 其余 → 机制 makeLoopLlm 真件——机制桩盲发 {q} 不合狩猎工具签名契约的主修换件口）。
+import { HuntTemplateSource, makeHuntLoopLlm } from "../workers/investigation/hunt-pack.js";
 import {
   MemoryPlaybookLibrary,
   MemoryWeknoraGraph,
@@ -58,7 +60,8 @@ import { HttpHypothesisPort } from "./orchestration/hypothesis-port.js";
 import { startRoundRelay } from "./orchestration/relay.js";
 import { makeHuntLauncher } from "./orchestration/launcher.js";
 import { DefaultTemplateSource } from "./orchestration/template.js";
-import { makeLoopLlm } from "./orchestration/llm-stubs.js";
+// 票 93②：loop LLM 的机制半边（real adapter 总口 makeLoopLlm）由内容层 makeHuntLoopLlm
+// 按档分流调用，本文件只接选择面——机制缺省桩的消费面归测试（llm-stubs.ts 口径）。
 import { makeLoopCancel, type LoopCancelReason } from "./orchestration/cancel.js";
 import type { OrchestrationDeps } from "./orchestration/flow.js";
 
@@ -164,8 +167,8 @@ const db = openDb(dbPath);
 // 票 73（m14 编排循环）真件装配：簿记落 agent 自持 SQLite（hunt_run_links）；m2 假设
 // 实体走公开 REST（CASE_BACKEND_URL）；拉起子 run/下一轮 run 打 m3 标准入口正门
 //（app.inject POST /internal/runs——铸票/组图/执行全在正门内，R11 铸票唯一通道不动）。
-// planner/judge/gap 走 makeLoopLlm 出网开关总口（票 74 建口、票 75 三件齐：AGENT_LLM=
-// fake → 确定性桩，其余 → ChatSeam 凭证代理真件）。
+// planner/judge/gap 走 makeHuntLoopLlm 出网开关总口（票 74 建口、票 75 三件齐；票 93②
+// 狩猎侧换件：AGENT_LLM=fake → 内容层 hunt 三件套，其余 → 机制 makeLoopLlm 凭证代理真件）。
 // 票 79（狩猎业务内容包）装配：模板登记面 = HuntTemplateSource（三族模板优先，机制
 // 默认档兜底）；register 缝 = weknora Memory stub（MemoryHypothesisRegister 缺省件退役
 // ——五要素审计在 seam 实现内落账，L0 裁定②）；huntExecutor = hunt_task 真执行体
@@ -190,7 +193,7 @@ const ORCH_DEPS: OrchestrationDeps = {
     },
   },
   templates: huntTemplates,
-  llm: makeLoopLlm(LLM_MODE), // 票 75 生产切换（74 移交）：AGENT_LLM 口径与四 worker 同一总口
+  llm: makeHuntLoopLlm(LLM_MODE), // 票 93②狩猎侧选择面：fake → 内容层 hunt 三件套；其余 → 机制 makeLoopLlm（真件）
   register: makeHuntRegisterSeam({ graph: huntGraph, audit }), // 票 79：converge 缝换真 stub（proposed-only + INV-8 审计）
 };
 RUN_KIND_DEPS.orchestration = ORCH_DEPS;
