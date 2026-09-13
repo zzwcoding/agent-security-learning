@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 10 大图 · 动态编排的权限学</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 10 大图 · 动态编排的权限学 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 10「动态编排的权限学」的代码落点索引：主视觉线是<b>票的流向</b>——父票（planner 只读面
+∪ 三族菜单 + register，10 件）铸于 run 起、随组图开跑；子票（该任务唯一工具）由 dispatch 逐任务
+过正门、经 <code>ticketSpecFor</code> 现铸并随 start 任务落盘，最后在子 run 执行时进验票闸。
+菜单围栏是图上的纵向红线：消毒占位（骗不进）→ 菜单闸（选不得）→ 铸票缝（签不出）→ 验票闸
+（执行不了），审计分痕（hunt_plan_suggest 建议 ≠ hunt_dispatch_decide 决定）是横向对账线。
+与场景 9 的呼应：S9 画的是循环怎么转（功能），S10 画同一循环里权限怎么管（安全）；与场景 5 的
+呼应：S5 打静态防线，S10 打动态防线。本场景数字：<b>5 步 / 18 个节点 / 7 道安全闸</b>（红描边 🛡️）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）； cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>事件 …</code> = 落盘事件总线扇出（禁轮询）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 10-0..10-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「两代票的出生时刻和票面宽度」→ <code>DISPATCH_LOOP → PARENT_MINT → REGISTRY</code> 与 <code>DISPATCH → CHILD_MINT → T_RUNJOBS</code>（10.1）。</li>
+  <li>想看「93 格 ×403 的机器证明怎么跑」→ <code>INV11_MATRIX</code>（10.2）。</li>
+  <li>想看「伪造超宽子票死在哪条缝」→ <code>CHILD_MINT</code> 的拒铸虚线（502 mint_failed）与 <code>VERIFY_GATE</code>（10.2 捣乱①）。</li>
+  <li>想看「菜单外选择怎么被 100% 拒」→ <code>SANITIZE → PLAN_LLM → MENU_GATE</code>（10.3）。</li>
+  <li>想看「建议与决定怎么分账对账」→ <code>MENU_GATE / DISPATCH → AUDIT_SPLIT → T_AUDIT</code>（10.4）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（18 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧值班长/紫队脚本：POST :3002/api/v1/hypotheses 发起怀疑书；本图从 dispatch 领任务接棒（拉起全链见 9-big-picture）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">S10 的主角不是发起而是"发起之后权限怎么发"——入场链一笔带过不重画</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH_LOOP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH_LOOP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">分发循环 100ms tick 从 run_jobs 领走 hunt_flow start 任务 → executeStartJob</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">202 秒回时还没有票——父票铸于"开工"那一刻而不是 202 那一刻（时序接缝）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PARENT_MINT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REGISTRY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run-kinds 注册表：kind → {intake/ticket/makeGraph} 一处注册；hunt_flow 票面 = huntFlowTicketFace()（run-kinds.ts:300）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">票面真相源唯一：铸票前查它、组图时查它、对账测试也查它——读的是同一份</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PARENT_MINT / CHILD_MINT / INV11_MATRIX（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PARENT_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">父票铸于 run 起：executeStartJob 内 preTicket 空 → ticketSpecFor 注册表票面 → mint → 立刻组图（app.ts:537-568）；🛡️ 防 决策面持 L2（INV-3：面 10 件全 L0/L1，register 只给归档步）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 开工前必须有"看菜单"的授权；票先于图（无票不组图）；父票不落盘</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT / SANITIZE（组图开跑）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">gateway POST /internal/mint：HMAC 三段任务票（父票/子票同口）；缺密钥 500 拒签（gateway/app.py:24-49）；🛡️ 防 fail-open 铸票（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">唯一签票方——agent 进程不持 HMAC 密钥（INV-4），LLM 产物造不出票</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PARENT_MINT / CHILD_MINT（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SANITIZE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 输入消毒 sanitizePlannerInput：假设文本=user_input 通道、证据/gap=tool_output 通道；非 allow 一律占位符、原文零进 prompt（planner.ts:113-149）；🛡️ 防 注入话术进决策面（INV-4，四道闸之①骗不进）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">prompt 是决策面不是证据面——flag 也占位；guards 不可达=fail_closed 也占位</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLAN_LLM / GU_SCAN（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLAN_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner LLM 出组合 C_k：{tasks:[{tool,params,rationale}]}；parsePlan 逐字段验型、坏形重试 1 次（planner.ts:202-231）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">格式病可重试（输出坏≠意图坏）；菜单外的意图病才零重试</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单归属 fail-closed：offMenu=tasks.filter(不在 raw.menu) → 不 retry 整轮终止 hunt_plan_denied（DENIED）、零子 run、run 不死（planner.ts:235-239）；超 max_tasks 截断不拒；hunt_plan_suggest 建议审计（:254-268）；🛡️ 防 菜单外组合（INV-11 第一道闸·选不得）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单真源=模板注入子集，机制不持第二份清单；对全量输出把关（截断丢弃的越界任务也先拒）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH / AUDIT_SPLIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">dispatch 逐任务 launchTask 过正门（flow.ts:171-189）；成功后落 hunt_dispatch_decide 决定审计（:194-200）+ hunt_children_declared 事件；planner_failed 轮空手返回=无决定即无 B 半边（:138-143）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">dispatch 不碰铸票客户端一个字节（R11）——任务递给门，票在门内现铸</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_MINT / T_LINKS / AUDIT_SPLIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子票现铸于正门内：ticketSpecFor(hunt_task, task) → allowedTools=[task.tool] 单工具（run-kinds.ts:342-354）；父菜单外拒铸抛错 → failed(mint_failed)+502（app.ts:374-394）；🛡️ 防 越界票签出（INV-11 第二道闸·铸票缝·签不出）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扇出 N 路 ≠ 发一张大票跑全程；窄票在铸票唯一通道上收窄，越界票物理不存在</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT（跨容器）/ T_RUNJOBS / CHILD_RUN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNJOBS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_jobs：子票随 start 任务落盘（payload={actor,ticket,task}，执行件直接用、不二次铸）；父票 start 载荷无 ticket 键（不落盘）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">dispatch 拉起时任务才存在——票必须跟任务走才能在异步队列里不丢、无悬置窗口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（领走开跑）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_LINKS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 hunt_run_links：role=round/task，parent_run_id+round_no+task 全文可查（ledger.ts:41-53）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run 家谱真相源：决定账 children 与簿记互为交叉证据（10.4 对账）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（对账面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt_task 子 run 四节点小图 intake→plan→execute→report（task-flow.ts:31-109）；独立 run 行/独立预算账；真执行体按观察折成 tool total=N hits=M</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">每路子 run 是独立人生：自己的状态机、预算、票据——并行不并权</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VERIFY_GATE / AUDIT_SPLIT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">VERIFY_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">验票闸 makeGatedCall 四步舞：paramsHash→verifyTicket→闸拒（DENIED+抛错强杀）→放行执行（gated-call.ts:66-97）；裁决序 签名→expired→used→scope_insufficient→run/case 绑定（verify-ticket.ts:211-224）；🛡️ 防 无票/超范围调用（INV-3/2·四道闸之④执行不了）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">闸只裁"持这张票能不能干这件事"——票面宽窄的执法者在上游三道闸；93 格矩阵吃的就是 220 行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（回写观察）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUDIT_SPLIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">m14 五要素审计出口 recordAudit：actor=agent:hunt_flow、requestId=hunt_&lt;runId&gt;（audit-log.ts:11-25）；A 建议 hunt_plan_suggest ≠ B 决定 hunt_dispatch_decide（审计分痕）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">建议（LLM 的嘴）与决定（代码的手）不是一个责任主体——混写无法对账、缺行即断点</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 表 audit_entries：HttpAuditSink POST /internal/audit 写半边；查询面 /api/v1/audit?objectId|requestId（case-backend app.ts:405-408,434）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">requestId 一条查询串起一个 run 的路由人生（suggest/decide/verdict/gap/outcome 五 action）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（查询面 10.4）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV11_MATRIX</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主 eval rig inv11_matrix（evals/src/rigs/hunting.ts:137-262）：真 buildApp+真注册表+真验票闸跑满两轮，每枚真铸子票 × 全仓 32 件在册工具逐格裁决</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">把"100%"变成可断言数字：93 格 403 scope_insufficient + 3 格放行正控 + 3 格过期拒 + 六检查点名（T13/T14）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REGISTRY / VERIFY_GATE（读票面语义）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GU_SCAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST :8001/scan/injection：planner 消毒的扫描后端（llm-guard 家族）；user_input/tool_output 通道策略；不可达=fail_closed 占位符</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">S5 同一个安检员换岗执勤：数据面（5.1）与决策面（10.3）共用公开扫描缝</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SANITIZE（响应）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["值班长 / 紫队脚本<br/>POST :3002/api/v1/hypotheses {text, template_id}<br/>（发起入口，拉起全链见 9-big-picture）"]
+        INV11_MATRIX["INV-11 遍历矩阵（evals rig）<br/>inv11_matrix: 真 buildApp+真注册表+真验票闸<br/>每枚子票 × 全仓 32 件工具逐格裁决<br/>93 格×403 + 3 格正控 + 3 格过期拒（T13/T14）"]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · LangGraph.js · better-sqlite3 · :3003）"]
+        subgraph S101["10.1 两票时序 · 进入:分发循环领走 hunt_flow start 任务 · 节拍:父票每轮一次 · 退出:父票先于组图、组图开跑"]
+            direction TB
+            DISPATCH_LOOP["分发循环 100ms tick<br/>run_jobs 领走 start 任务 → executeStartJob<br/>（202 秒回时还没有票）"]
+            REGISTRY["run-kinds 注册表<br/>kind → {intake/ticket/makeGraph} 一处注册<br/>hunt_flow 票面 = huntFlowTicketFace()<br/>run-kinds.ts:300"]
+            PARENT_MINT["父票铸于 run 起（T11）<br/>preTicket 空 → ticketSpecFor 注册表票面<br/>面 = planner 只读面∪三族菜单+register（10 件全 L0/L1）<br/>现铸 → 立刻组图（票先于图）· 不落盘<br/>app.ts:537-568<br/>🛡️ 防 决策面持 L2（INV-3）"]
+        end
+
+        subgraph S103["10.3 菜单围栏 · 进入:消毒输入就绪 · 节拍:每轮一次 · 退出:合法组合落交接态 或 hunt_plan_denied 整轮终止"]
+            direction TB
+            SANITIZE["planner 输入消毒 sanitizePlannerInput<br/>假设文本=user_input · 证据/gap=tool_output（上游 LLM 产物）<br/>非 allow 一律占位符 原文零进 prompt<br/>planner.ts:113-149<br/>🛡️ 防 注入话术进决策面（INV-4·闸①骗不进）"]
+            PLAN_LLM["planner LLM 出组合 C_k<br/>{tasks:[{tool,params,rationale}]}<br/>parsePlan 验型 · 坏形重试 1 次<br/>planner.ts:202-231"]
+            MENU_GATE["菜单归属 fail-closed<br/>offmenu → 不 retry 整轮终止 hunt_plan_denied(DENIED)<br/>零子 run · run 不死 · 超 max_tasks 只截不拒<br/>hunt_plan_suggest 建议审计（分痕 A）<br/>planner.ts:235-268<br/>🛡️ 防 菜单外组合（INV-11 第一道闸·闸②选不得）"]
+        end
+
+        subgraph S102["10.1/10.2 dispatch 扇出与铸票缝 · 进入:planner 组合落交接态 · 节拍:每任务一次 · 退出:窄票在册子 run 拉起 或 502 mint_failed"]
+            direction TB
+            DISPATCH["dispatch 逐任务 launchTask 过正门<br/>hunt_dispatch_decide 决定审计（分痕 B）<br/>planner_failed 轮空手返回 = 无决定即无 B<br/>flow.ts:138-200"]
+            CHILD_MINT["子票现铸于正门内（T12）<br/>ticketSpecFor(hunt_task, task)<br/>allowedTools = [该任务唯一工具]（窄票）<br/>父菜单外拒铸 → failed(mint_failed)+502<br/>run-kinds.ts:342-354 · app.ts:374-394<br/>🛡️ 防 越界票签出（INV-11 第二道闸·闸③签不出）"]
+            T_RUNJOBS[("表 run_jobs<br/>子票随 start 任务落盘<br/>payload={actor,ticket,task} 不二次铸<br/>父票载荷无 ticket 键")]
+            T_LINKS[("表 hunt_run_links<br/>role=task 行: parent_run_id+round_no+task 全文<br/>决定账 children 的簿记交叉证据")]
+        end
+
+        subgraph S104["子 run 执行 · 进入:窄票在手开跑 · 节拍:事件驱动 · 退出:report 终态事件（唤醒见 S9 9.4）"]
+            direction TB
+            CHILD_RUN["hunt_task 子 run 四节点小图<br/>intake(簿记恢复)→plan→execute→report<br/>独立 run 行 · 独立预算账 · 并行不并权<br/>task-flow.ts:31-109"]
+            VERIFY_GATE["验票闸 makeGatedCall 四步舞<br/>hash→verifyTicket→闸拒(DENIED+强杀)→执行<br/>裁决序: 签名→expired→used→scope→run/case 绑定<br/>gated-call.ts:66-97 · verify-ticket.ts:211-224<br/>🛡️ 防 无票/超范围调用（INV-3/2·闸④执行不了）"]
+        end
+
+        subgraph S105["10.4 审计分痕 · 进入:planner/dispatch 各自落账 · 节拍:逐条 · 退出:M2 audit_entries 可查可对账"]
+            direction TB
+            AUDIT_SPLIT["m14 五要素审计出口 recordAudit<br/>actor=agent:hunt_flow · requestId=hunt_&lt;runId&gt;<br/>A 建议 hunt_plan_suggest ≠ B 决定 hunt_dispatch_decide<br/>DENIED 家族: plan_denied/dispatch_mint_denied/spin_denied<br/>audit-log.ts:11-25"]
+        end
+    end
+
+    subgraph GW["容器 gateway（Python · FastAPI · :8002）"]
+        GW_MINT["gateway POST /internal/mint<br/>HMAC 三段任务票（父票/子票同口 · TTL 900s）<br/>缺密钥 500 拒签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+    end
+
+    subgraph GU["容器 guards（Python · FastAPI · :8001）"]
+        GU_SCAN["POST :8001/scan/injection<br/>user_input/tool_output 通道策略（llm-guard）<br/>不可达 = fail_closed 占位符<br/>🛡️ 防 注入话术进决策面（INV-4）"]
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        T_AUDIT[("M2 表 audit_entries<br/>POST /internal/audit 写半边<br/>查询面 /api/v1/audit?objectId|requestId<br/>app.ts:405-408,434")]
+    end
+
+    %% ===== 10.0 入场 =====
+    OPERATOR -. "读 outbox: hypothesis.created → autorun → 正门建 run<br/>（拉起全链见 9-big-picture）" .-> DISPATCH_LOOP
+
+    %% ===== 10.1 两票时序 =====
+    DISPATCH_LOOP -- "T+0: 领走 start 任务" --> PARENT_MINT
+    PARENT_MINT -. "读票面: ticketSpecFor(run.kind) 单一来源" .-> REGISTRY
+    PARENT_MINT -- "请求 POST :8002/internal/mint（父票面 10 件）<br/>跨容器→gateway:8002" --> GW_MINT
+    GW_MINT -. "响应 HMAC 父票 / 缺密钥 500 拒签" .-> PARENT_MINT
+    PARENT_MINT -- "组图 makeNodes(run, ticket) → 轮次链 intake→planner 开跑" --> SANITIZE
+
+    %% ===== 10.3 菜单围栏 =====
+    SANITIZE -- "请求 POST :8001/scan/injection<br/>跨容器→guards:8001" --> GU_SCAN
+    GU_SCAN -. "响应 allow/strip/block/fail_closed（非 allow → 占位符）" .-> SANITIZE
+    SANITIZE -- "消毒输入（原文零进 prompt）" --> PLAN_LLM
+    PLAN_LLM -- "组合 C_k 回包" --> MENU_GATE
+    MENU_GATE -- "通过: 合法组合落交接态" --> DISPATCH
+    MENU_GATE -. "菜单外: hunt_plan_denied（DENIED）零重试整轮终止" .-> AUDIT_SPLIT
+
+    %% ===== 10.1/10.2 扇出与铸票缝 =====
+    DISPATCH -- "逐任务 launchTask → 正门 POST /internal/runs {kind:hunt_task, task}（进程内）" --> CHILD_MINT
+    CHILD_MINT -. "读父票面: REGISTRY.hunt_flow.ticket.allowedTools" .-> REGISTRY
+    CHILD_MINT -- "请求 POST :8002/internal/mint（窄票 = 任务唯一工具）<br/>跨容器→gateway:8002" --> GW_MINT
+    GW_MINT -. "响应 HMAC 窄票（TTL 900s）" .-> CHILD_MINT
+    CHILD_MINT -. "伪造超宽子票: 父菜单外拒铸 → failed(mint_failed)+502<br/>（10.2 捣乱①·越界票物理不存在）" .-> DISPATCH
+    CHILD_MINT -- "子票落盘: enqueueRunJob payload={ticket,task}" --> T_RUNJOBS
+    DISPATCH -- "簿记 put（role=task, parent_run_id）" --> T_LINKS
+
+    %% ===== 子 run 执行 =====
+    T_RUNJOBS -. "分发循环领走 → 子 run 带票开跑" .-> CHILD_RUN
+    CHILD_RUN -- "execute: 亮票过闸 makeGatedCall（creds=窄票）" --> VERIFY_GATE
+    VERIFY_GATE -. "响应 allow → 执行 / 403 scope_insufficient → DENIED+强杀（93 格单格现场版）" .-> CHILD_RUN
+    CHILD_RUN -- "report: hunt_task_report + tool_call/tool_result 帧" --> AUDIT_SPLIT
+
+    %% ===== 10.4 审计分痕 =====
+    MENU_GATE -- "A 半边: hunt_plan_suggest 建议条目（INV-8）" --> AUDIT_SPLIT
+    DISPATCH -- "B 半边: hunt_dispatch_decide 决定条目（INV-8）" --> AUDIT_SPLIT
+    DISPATCH -. "铸票失败: hunt_dispatch_mint_denied（DENIED · T15）" .-> AUDIT_SPLIT
+    AUDIT_SPLIT -- "请求 POST :3002/internal/audit（五要素写半边）<br/>跨容器→case-backend:3002" --> T_AUDIT
+
+    %% ===== 10.2 遍历矩阵（宿主布景）=====
+    INV11_MATRIX -. "读票面真相源: requireRunKind(hunt_flow).ticket + registeredTools() 32 件" .-> REGISTRY
+    INV11_MATRIX -. "真闸裁决: 每枚真铸子票 × 全工具集 = 93 格×403 scope_insufficient<br/>+ 3 格放行正控 + 3 格 token_expired" .-> VERIFY_GATE
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 10.1：PARENT_MINT 防 决策面持 L2（INV-3）
+    %% 10.1/10.2：CHILD_MINT 防 越界票签出（INV-11 第二道闸·铸票缝）
+    %% 10.3：SANITIZE 防 注入话术进决策面（INV-4）/ MENU_GATE 防 菜单外组合（INV-11 第一道闸）
+    %% 子 run：VERIFY_GATE 防 无票/超范围调用（INV-3/2）
+    %% gateway：GW_MINT 防 fail-open 铸票（INV-1）/ guards：GU_SCAN 防 注入话术进决策面（INV-4）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class PARENT_MINT,SANITIZE,MENU_GATE,CHILD_MINT,VERIFY_GATE,GW_MINT,GU_SCAN guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
