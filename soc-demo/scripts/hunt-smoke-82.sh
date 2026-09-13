@@ -2,6 +2,7 @@
 # 票 82 冒烟：狩猎页的 curl 等价脚本——零特权原则（决策 #6 渠道平权）的机器核对。
 #
 # 狩猎页（票 71 页面映射节六行）每屏调用的公开面，curl 一一可演：
+#   模板下拉（票 92 补面） → GET  /api/v1/templates                     （m14 只读投影，票 92）
 #   假设列表（五态）      → GET  /api/v1/hypotheses[?status=]        （m2，票 73）
 #   发起假设              → POST /api/v1/hypotheses                  （m2；outbox 拉起 hunt_flow）
 #   轮次视图/judge/gap    → GET  /api/v1/hypotheses/:id（轮次归集段）+ GET /api/v1/audit?objectId=
@@ -36,6 +37,15 @@ wait_up() {
   done
   echo "FAIL: web 60s 未就绪"; exit 1
 }
+
+# ── 0 · 模板清单（狩猎页模板下拉的数据面，票 92 补卡）──────────────────
+say "0 模板清单：GET /api/v1/templates（m14 登记面只读投影，票 92）——下拉登记模板可见"
+TPLS=$(curl -s "$WEB/api/v1/templates")
+need "$TPLS" '"templates"' "0：响应缺 templates 键"
+for T in hunt_c2_beacon hunt_credential_leak hunt_webshell; do
+  printf '%s' "$TPLS" | grep -q "$T" || { echo "FAIL: 0：模板清单缺 $T（下拉应可见）"; exit 1; }
+done
+echo "下拉登记模板可见（票 79 三族；ir_host_compromise 票 80 同面出线）— PASS 0"
 
 # ── 1 · 发起假设（狩猎入口页表单的第一动作）──────────────────────────
 say "1 发起假设：POST /api/v1/hypotheses（201 proposed + outbox hypothesis.created）"
@@ -122,4 +132,4 @@ else
 fi
 
 echo
-echo "SMOKE PASS（票 82：狩猎页六行数据需求 curl 等价核对全通——零 Web 专属接口，渠道平权）"
+echo "SMOKE PASS（票 82：狩猎页六行数据需求 + 票 92 模板下拉面的 curl 等价核对全通——零 Web 专属接口，渠道平权）"

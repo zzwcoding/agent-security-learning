@@ -697,17 +697,41 @@ const HYP_AUDIT_R1: AuditEntryLike[] = [
   },
 ];
 
+// 票 92：模板清单面 wire（agent 登记面投影行，字段名照模板文件原样）——下拉数据源打桩
+const HUNT_TEMPLATES = [
+  {
+    template_id: "hunt_c2_beacon",
+    hypothesis_patterns: ["怀疑主机 {host} 存在 C2 心跳：外联目的 {dst_ip} 出现周期性信标。"],
+    menu: ["playbook_lookup", "graph_query"],
+    max_rounds: 6,
+  },
+  {
+    template_id: "hunt_webshell",
+    hypothesis_patterns: ["怀疑主机 {host} 存在 webshell 驻留。"],
+    menu: ["file_change_query"],
+    max_rounds: 4,
+  },
+];
+
 function mockHuntBase(overrides: {
   list?: unknown[];
   detail?: unknown;
   audit?: unknown[];
   detailUrl?: string;
+  /** 票 92：模板清单面（默认供双模板；"fail" = 面病了，页面按空清单如实降级）。 */
+  templates?: unknown[] | "fail";
 } = {}): void {
   const list = overrides.list ?? HYP_LIST;
   const detail = overrides.detail ?? HYP_DETAIL_HUNTING;
   const audit = overrides.audit ?? HYP_AUDIT_R1;
+  const templates = overrides.templates ?? HUNT_TEMPLATES;
   fetchMock.mockImplementation((url: string) => {
     const u = String(url);
+    if (u === "/api/v1/templates") {
+      return Promise.resolve(
+        templates === "fail" ? jsonRes2(500, { error: "internal_error" }) : jsonRes2(200, { templates }),
+      );
+    }
     if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: list }));
     if (u.startsWith("/api/v1/hypotheses/")) return Promise.resolve(jsonRes2(200, detail));
     if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, audit));
@@ -737,6 +761,7 @@ describe("HuntingPage（票 82）", () => {
         list = afterCreate;
         return Promise.resolve(jsonRes2(201, afterCreate.at(-1)));
       }
+      if (u === "/api/v1/templates") return Promise.resolve(jsonRes2(200, { templates: HUNT_TEMPLATES }));
       if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: list }));
       if (u.startsWith("/api/v1/hypotheses/hyp_new")) return Promise.resolve(jsonRes2(200, { ...afterCreate.at(-1), rounds: [] }));
       if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, []));
@@ -754,11 +779,57 @@ describe("HuntingPage（票 82）", () => {
     expect(screen.getByText("已命中")).toBeTruthy();
 
     fireEvent.change(await screen.findByPlaceholderText(/假设句/), { target: { value: "新假设句" } });
-    fireEvent.change(screen.getByPlaceholderText(/template_id/), { target: { value: "hunt_webshell" } });
+    // 票 92：模板选择 = 下拉（数据源 GET /api/v1/templates 打桩），自由文本退位
+    fireEvent.mouseDown(document.querySelector(".ant-select-selector")!);
+    fireEvent.click(await screen.findByText("hunt_webshell（上限 4 轮）"));
     fireEvent.click(screen.getByText("发起狩猎"));
 
     await waitFor(() => expect(screen.getByText("占位：新提出的假设")).toBeTruthy()); // 列表已刷新
     await waitFor(() => expect(screen.getByText("假设详情")).toBeTruthy()); // 详情已打开
+  });
+
+  it("模板下拉走只读面（票 92）：下拉项 = 登记面投影（template_id + 轮次上限）；留空发起 POST 不带 template_id", async () => {
+    let postBody: Record<string, unknown> | null = null;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u === "/api/v1/hypotheses" && init?.method === "POST") {
+        postBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+        return Promise.resolve(jsonRes2(201, { ...HYP_LIST[0], text: "默认档假设" }));
+      }
+      if (u === "/api/v1/templates") return Promise.resolve(jsonRes2(200, { templates: HUNT_TEMPLATES }));
+      if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: HYP_LIST }));
+      if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, []));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+    render(
+      <AuthProvider>
+        <HuntingPage />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("狩猎中")).toBeTruthy());
+    // 下拉打开：登记模板全量可见（数据源 = m14 只读面，票 92；文案带轮次上限）
+    fireEvent.mouseDown(document.querySelector(".ant-select-selector")!);
+    await screen.findByText("hunt_c2_beacon（上限 6 轮）");
+    expect(screen.getByText("hunt_webshell（上限 4 轮）")).toBeTruthy();
+    // 留空发起（模板可选）：POST 体不带 template_id = 机制默认档口径不变
+    fireEvent.change(await screen.findByPlaceholderText(/假设句/), { target: { value: "默认档假设" } });
+    fireEvent.click(screen.getByText("发起狩猎"));
+    await waitFor(() => expect(postBody).toEqual({ text: "默认档假设" }));
+  });
+
+  it("模板面病了 → 下拉空清单如实降级（不硬造数据源），列表与发起链路照常", async () => {
+    mockHuntBase({ templates: "fail" });
+    render(
+      <AuthProvider>
+        <HuntingPage />
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(screen.getByText("狩猎中")).toBeTruthy()); // 列表照常（面病只影响下拉）
+    fireEvent.mouseDown(document.querySelector(".ant-select-selector")!);
+    await screen.findByText(/模板清单不可用/); // 空清单占位如实说明，不猜数
+    fireEvent.change(await screen.findByPlaceholderText(/假设句/), { target: { value: "面病时的假设" } });
+    fireEvent.click(screen.getByText("发起狩猎"));
+    await screen.findByText("假设详情"); // 发起链路照常（留空 = 机制默认档）
   });
 
   it("轮次视图：详情轮次归集段装配成卡（组合/子 run/judge/gap）；SSE 按审计锚订阅", async () => {

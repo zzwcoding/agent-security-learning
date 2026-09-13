@@ -3,7 +3,7 @@ import { makeLangfuseMirror, TeeAuditSink } from "./langfuse.js";
 import { setEventTap } from "./events.js";
 import { mkdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { buildApp } from "./app.js";
+import { buildApp, toTemplateListRow } from "./app.js";
 import { openDb } from "./db.js";
 import { HttpUsedTokenReader } from "./token-ports.js";
 import {
@@ -173,6 +173,9 @@ const db = openDb(dbPath);
 const huntLedger = new SqliteHuntLedger(db);
 const huntPlaybooks = new MemoryPlaybookLibrary(WEKNORA_FIXTURES);
 const huntGraph = new MemoryWeknoraGraph(WEKNORA_GRAPH_FIXTURE);
+// 票 92：模板登记面提为具名单例——同一实例两路消费：编排循环（ORCH_DEPS.templates）
+// 与公开只读投影面（buildApp 的 templates seam → GET /api/v1/templates）。
+const huntTemplates = new HuntTemplateSource(new DefaultTemplateSource());
 const ORCH_DEPS: OrchestrationDeps = {
   port: new HttpHypothesisPort(),
   ledger: huntLedger,
@@ -186,7 +189,7 @@ const ORCH_DEPS: OrchestrationDeps = {
       return (res.json() as { run_id: string }).run_id;
     },
   },
-  templates: new HuntTemplateSource(new DefaultTemplateSource()),
+  templates: huntTemplates,
   llm: makeLoopLlm(LLM_MODE), // 票 75 生产切换（74 移交）：AGENT_LLM 口径与四 worker 同一总口
   register: makeHuntRegisterSeam({ graph: huntGraph, audit }), // 票 79：converge 缝换真 stub（proposed-only + INV-8 审计）
 };
@@ -234,6 +237,9 @@ const app = buildApp({
   audit,
   nodes,
   makeNodes,
+  // 票 92：模板清单只读面（GET /api/v1/templates）——登记面 .all 投影出线
+  //（零业务逻辑：字段名照模板文件原样，读出即返回）
+  templates: () => huntTemplates.all.map(toTemplateListRow),
   usedReader: JIAOTU_GATEWAY_URL
     ? new JiaoTuUsedTokenReader({ baseUrl: JIAOTU_GATEWAY_URL })
     : new HttpUsedTokenReader(),

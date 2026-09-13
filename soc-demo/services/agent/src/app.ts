@@ -22,6 +22,9 @@ import type { BurnRegistry } from "./verify-ticket.js";
 import { THIN_CHAT_FLOW } from "../workers/chat/flow.js";
 import { PRESET_IDENTITIES, SESSION_TTL_S, signSession, verifySession } from "../workers/chat/session.js";
 import { visibleTools } from "../workers/chat/visible-tools.js";
+// 票 92：模板 fixture 形状（workers/investigation 的内容层数据契约）——只 import 类型做
+// 投影函数入参（type-only，零运行时耦合）；登记面本体只在装配层 index.ts 消费。
+import type { HuntTemplateFixture } from "../workers/investigation/hunt-pack.js";
 import type { RunRow } from "./runs.js";
 import { requireRunKind, runKindOf, ticketSpecFor, type RunGraphFactory } from "./run-kinds.js";
 import { registerUnderPressure } from "./under-pressure.js";
@@ -45,6 +48,29 @@ import {
 export const CHAT_WIRE_TYPES = new Set([
   "token", "tool_call", "tool_result", "approval_required", "approval_decided", "denied", "done",
 ]);
+
+// 票 92（m14 公开接口补卡）：模板清单 wire 行——字段名照模板文件原样（template_id/
+// 假设句式族/菜单子集/轮次上限）。R10：清单数据不是狩猎业务逻辑，投影只挑票面四字段，
+// waves/example_slots 等内容层查询计划不外发（最小公开面）。
+export interface TemplateListRow {
+  template_id: string;
+  /** 假设句式族（{slot} 占位，实例槽位在模板文件的 example_slots）。 */
+  hypothesis_patterns: string[];
+  /** planner 能力子集（菜单）。 */
+  menu: string[];
+  /** 轮次上限。 */
+  max_rounds: number;
+}
+
+/** 票 92：fixture → 只读投影行（数据从登记面读出即返回，零业务分支）。 */
+export function toTemplateListRow(f: HuntTemplateFixture): TemplateListRow {
+  return {
+    template_id: f.template_id,
+    hypothesis_patterns: [...f.hypothesis_patterns],
+    menu: [...f.menu],
+    max_rounds: f.max_rounds,
+  };
+}
 
 // 票 47：分发循环与 SSE 实时推送的节拍。两者都是本地 SQLite 的便宜轮询（有索引），
 // 100ms 量级在演示里就是「实时」；不进 env（真要调走 opts，测试已经在用）。
@@ -93,6 +119,9 @@ export function buildApp(opts: {
    *  工具闸（A.2 四族装不下「PII 反查」，票面记票交 L0 追认），走下面的端点级
    *  角色白名单。 */
   revealPii?: (placeholder: string) => Promise<PiiRevealOutcome>;
+  /** 票 92：模板清单只读面（GET /api/v1/templates）的数据源 seam——生产装配
+   *  （index.ts）接 HuntTemplateSource.all 的投影。未传 = 空清单（未登记不报错）。 */
+  templates?: () => TemplateListRow[];
 } = {}) {
   const db = opts.db ?? openDb(":memory:");
   const audit = opts.audit ?? new MemoryAuditSink();
@@ -414,6 +443,13 @@ export function buildApp(opts: {
     }
     return { approvals: listApprovals(db, status).map(toWire) };
   });
+
+  // 票 92（m14 公开接口补卡）：模板登记面的公开只读投影——已登记模板清单
+  // （template_id/假设句式族/菜单子集/轮次上限，字段名照模板文件原样）。只读 L0 面：
+  // 数据从登记面读出即返回，零业务分支（R10：清单数据不是狩猎业务逻辑）；未登记 =
+  // 空数组（不报错）。鉴权口径与既有公开读面 /api/v1/approvals 一致（无中间件）。
+  // 数据源经 opts.templates seam 注入（生产装配 index.ts 接 HuntTemplateSource.all）。
+  app.get("/api/v1/templates", () => ({ templates: opts.templates?.() ?? [] }));
 
   /** 票 17：makeNodes 图的 resume 组图。拉起时 worker 图是按 run 组的（票 13 工厂），
    *  resume 若不带它，runOpts 的静态 nodes 会把图换成薄径——LangGraph 找不到挂起的

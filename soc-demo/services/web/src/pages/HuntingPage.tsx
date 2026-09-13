@@ -9,15 +9,15 @@
 //   ⑤ 收敛结论的 Case 链接     → 既有案件查询面按 hypothesis_id 客户端反查
 //   ⑥ 断线刷新重建             → m2 GET /api/v1/audit?objectId=<hyp>（父 run 锚）
 //
-// 模板选择口径（票面声明的偏差）：GET 模板清单的公开面不存在（票 79 的模板登记面是
-// agent 进程内 registry，页面映射六行亦无此查询面）——按「不硬造数据源」纪律，模板
-// 落为自由文本 template_id 经 POST 契约原样透传（后端语义：未登记 id 落机制默认档）。
-// 若要下拉式选择，需阶段 2 补卡加模板清单查询面，页面只换输入控件。
+// 模板选择口径（票 92 收口票 82 偏差①）：模板下拉数据源 = agent 只读投影面
+// GET /api/v1/templates（m14 HuntTemplateSource 登记面的公开读出，票 92 补卡）——
+// 票 82 施工期的自由文本 template_id 退位。下拉留空 = 机制默认档（后端语义不变）；
+// 清单为空/面不可达 = 下拉空清单如实占位、留空仍可发起（不硬造数据源，页面只降级不猜）。
 //
 // 实时推进分工：SSE（复用 ./sse 事件总线，INV-7 断线按游标补发）是「发生了什么」的
 // 信号帧；轮次账面一律以 m2 详情读面为准——关键帧（接力/回归/终态）后重取详情与审计，
 // 父 run 终态收流后按审计锚自动接上下一轮 run 的流（多轮推进）。
-import { Alert, Badge, Button, Card, Empty, Input, List, Popconfirm, Space, Spin, Table, Tag, Typography, message } from "antd";
+import { Alert, Badge, Button, Card, Empty, Input, List, Popconfirm, Select, Space, Spin, Table, Tag, Typography, message } from "antd";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ApiError,
@@ -27,8 +27,10 @@ import {
   getHypothesisDetail,
   listAudit,
   listCases,
+  listHuntTemplates,
   listHypotheses,
   type CaseRow,
+  type HuntTemplateRow,
   type HypothesisDetail,
   type HypothesisRow,
   type HuntChild,
@@ -147,6 +149,8 @@ export default function HuntingPage({ hypothesisId, go }: { hypothesisId?: strin
   const [rows, setRows] = useState<HypothesisRow[]>([]);
   const [text, setText] = useState("");
   const [templateId, setTemplateId] = useState("");
+  // 票 92：模板下拉数据源 = 只读面（GET /api/v1/templates）；空清单/面不可达 = 空下拉
+  const [templates, setTemplates] = useState<HuntTemplateRow[]>([]);
   const [creating, setCreating] = useState(false);
   const [detail, setDetail] = useState<HypothesisDetail | null>(null);
   const [views, setViews] = useState<HuntRoundView[]>([]);
@@ -168,6 +172,13 @@ export default function HuntingPage({ hypothesisId, go }: { hypothesisId?: strin
   useEffect(() => {
     refreshList();
   }, [refreshList]);
+
+  // 票 92：模板清单拉取（只读面）。面病了/未登记 = 空下拉如实降级，页面不炸不猜数。
+  useEffect(() => {
+    listHuntTemplates()
+      .then(setTemplates)
+      .catch(() => setTemplates([]));
+  }, []);
 
   useEffect(() => () => sseRef.current?.close(), []);
 
@@ -308,17 +319,26 @@ export default function HuntingPage({ hypothesisId, go }: { hypothesisId?: strin
             autoSize={{ minRows: 2, maxRows: 4 }}
           />
           <Space wrap>
-            <Input
-              style={{ width: 320 }}
-              placeholder="模板 template_id（可选，留空 = 机制默认档）"
-              value={templateId}
-              onChange={(e) => setTemplateId(e.target.value)}
+            {/* 票 92：模板选择 = 下拉（数据源 GET /api/v1/templates 只读面），自由文本退位。
+                留空 = 机制默认档；下拉项如实带登记面投影的轮次上限，句式族作悬浮提示。 */}
+            <Select
+              style={{ width: 340 }}
+              allowClear
+              placeholder="选择模板（可选，留空 = 机制默认档）"
+              value={templateId || undefined}
+              onChange={(v) => setTemplateId(v ?? "")}
+              options={templates.map((t) => ({
+                value: t.template_id,
+                label: `${t.template_id}（上限 ${t.max_rounds} 轮）`,
+                title: t.hypothesis_patterns[0],
+              }))}
+              notFoundContent="模板清单不可用（未登记/面不可达）— 留空走机制默认档"
             />
             <Button type="primary" disabled={!text.trim()} loading={creating} onClick={create}>
               发起狩猎
             </Button>
             <Typography.Text type="secondary">
-              登记即拉起编排循环（outbox → hunt_flow）；模板清单查询面未落卡，模板以 template_id 透传。
+              模板下拉走 m14 只读面（票 92）：template_id/句式族/菜单子集/轮次上限由登记面投影；留空 = 机制默认档。
             </Typography.Text>
           </Space>
         </Space>

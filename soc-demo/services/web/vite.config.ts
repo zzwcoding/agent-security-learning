@@ -56,6 +56,7 @@ export default defineConfig({
       "/api/v1/audit": { target: m2, changeOrigin: true },
       "/api/v1/kb": { target: m2, changeOrigin: true }, // 幕 5 KB 人审的 REST 面（curl 等价脚本用）
       "/api/v1/hypotheses": { target: m2, changeOrigin: true }, // 票 82：狩猎页假设 CRUD/轮次归集读面（票 73 落卡端点）
+      "/api/v1/templates": { target: agent, changeOrigin: true }, // 票 92：狩猎页模板下拉数据源（m14 登记面只读投影）
       "/api/v1/webhooks": { target: ingest, changeOrigin: true },
     },
   },

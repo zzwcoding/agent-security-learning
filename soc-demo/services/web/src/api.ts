@@ -363,6 +363,23 @@ export function getHypothesisDetail(id: string): Promise<HypothesisDetail> {
   }));
 }
 
+// ---- m14 模板清单（services/agent GET /api/v1/templates，票 92 补卡面）----
+// 狩猎页模板下拉的数据源。wire = 登记面只读投影行，字段名照模板文件原样（template_id/
+// 假设句式族/菜单子集/轮次上限）——薄客户端零加工（票 91 eval purple 同款「原样透传」）。
+
+/** 模板清单投影行（agent toTemplateListRow 出线；内容层查询计划不外发，见 agent app.ts）。 */
+export interface HuntTemplateRow {
+  template_id: string;
+  hypothesis_patterns: string[];
+  menu: string[];
+  max_rounds: number;
+}
+
+/** 模板清单（票 92 只读 L0 面）。未登记 = 空数组；面病了原样抛 ApiError（降级决策在页面）。 */
+export function listHuntTemplates(): Promise<HuntTemplateRow[]> {
+  return request<{ templates?: HuntTemplateRow[] }>("/api/v1/templates").then((r) => r.templates ?? []);
+}
+
 // ---- m9 PII 受控反查（services/agent POST /api/v1/pii/reveal，票 49·ADR 0004-3）----
 // 链路：本页按钮（duty_lead/admin 可见）→ agent 端点（会话 + 角色白名单 + INV-8
 // 审计，details 只记命中条数不记原文）→ guards /pii/reveal（mapstore 反查）。

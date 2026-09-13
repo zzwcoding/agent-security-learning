@@ -2,8 +2,8 @@
 // 与错误传播。Web 是薄客户端，它的 seam 就是这几个公开 REST 面（M2/M3/ingest）。
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  ApiError, decideApproval, fetchEvalReport, findCaseIdByAlert,
-  listAlerts, listApprovals, listAudit, login, replayAlert, startRun,
+  ApiError, decideApproval, fetchEvalReport, findCaseIdByAlert, listAlerts, listApprovals,
+  listAudit, listHuntTemplates, login, replayAlert, startRun,
 } from "./api";
 
 const fetchMock = vi.fn();
@@ -194,5 +194,35 @@ describe("api client · 审批卡/案件/Eval（票 21）", () => {
     // 票 29 契约形状（旧幽灵键 attack_block_rate 已删）：防线拦截率 + 成本口径可读
     expect(report.defense_interception?.by_face.alert_injection.rate).toBe(1);
     expect(report.costs?.csv).toBe("eval-results/cost_all.csv");
+  });
+});
+
+// ---- 票 92：模板清单只读面（services/agent GET /api/v1/templates）----
+// 狩猎页模板下拉的数据源；wire = 登记面投影行（字段名照模板文件原样，薄客户端零加工）。
+
+describe("api client · 模板清单（票 92）", () => {
+  it("listHuntTemplates：GET /api/v1/templates，投影行字段名照模板文件原样透传", async () => {
+    const rows = [
+      {
+        template_id: "hunt_c2_beacon",
+        hypothesis_patterns: ["怀疑主机 {host} 存在 C2 心跳：外联目的 {dst_ip} 出现周期性信标。"],
+        menu: ["playbook_lookup", "graph_query"],
+        max_rounds: 6,
+      },
+    ];
+    fetchMock.mockResolvedValueOnce(jsonRes(200, { templates: rows }));
+    const out = await listHuntTemplates();
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/templates");
+    expect(out).toEqual(rows); // 零加工：读出即透传（薄客户端）
+  });
+
+  it("listHuntTemplates：响应缺 templates 键 → 空数组（未登记 = 空清单口径，不报错）", async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes(200, {}));
+    expect(await listHuntTemplates()).toEqual([]);
+  });
+
+  it("listHuntTemplates：面病了原样抛 ApiError（降级决策在页面，不在客户端吞错）", async () => {
+    fetchMock.mockResolvedValueOnce(jsonRes(500, { error: "internal_error" }));
+    await expect(listHuntTemplates()).rejects.toBeInstanceOf(ApiError);
   });
 });
