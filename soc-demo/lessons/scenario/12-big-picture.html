@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 12 大图 · 紫队闭环：系统自证 2.0</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 12 大图 · 紫队闭环：系统自证 2.0 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 12「紫队闭环：系统自证 2.0」的代码落点索引：主视觉线是<b>攻击 fixture → 映射表 →
+循环 → ground truth 判定 → 发现率/盲区</b>——左侧数据面（11 例攻击现场 + 假设源映射表 +
+语料库），中间循环布景（runHuntScene 把 S9 轮次链真代码搬进进程，数据缝换内存件），
+右侧判卷面三道红闸：发现判定闸（judge hit ∧ 签名三重验，防 LLM 自评注水）、预算口径闸
+（轮数双取小 + token 档 + cancelled 不冒充发现，防"无限烧 token 必发现"）、复现闸（逐例
+双跑 digest 相等，防数字失真）；产出面四工件（purple-team.json/purple-cost.csv/latest.json
+紫队段/web Eval 页紫队小节）。成绩单数字：<b>自主发现率 5/11</b>（webshell 2/2 ·
+ir 2/2 · c2_beacon 1/3 · credential_leak 0/4 最弱）+ 盲区聚类 2 族 6 维（全是非 SIEM
+工具维度）。与 S8 的升级关系：S8 证"挨打能防"（33/33、拦截率 15/15），S12 证
+"主动能抓"。本场景数字：<b>5 步 / 17 个节点 / 4 道安全闸</b>（红描边 🛡️）。
+本图无跨容器红虚线——快道全程进程内（8.1 口径：eval/MCP CLI 不进 compose）。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；
+  cylinders（柱形）= 数据/产物文件。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 只读 / 回收 / 判定输入等非主流程。
+  本图无跨容器出站边（快道进程内），故无红虚线。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 发起执行；<code>读 …</code> = 只读依赖；
+  <code>T+…</code> = 时序前缀（落盘时刻）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 12-0..12-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「攻击怎么变成怀疑书」→ <code>ATTACK_FIXTURES → MAP → HYP</code>（12.1，逐例渲染实测）。</li>
+  <li>想看「5/11 怎么跑出来」→ <code>OPERATOR → RIG → ROUND_CHAIN → TABLE</code>（12.2，cli 入口真跑）。</li>
+  <li>想看「发现谁说了算」→ <code>GT_GATE</code> 的三重验三腿 + groundTruthOk 对账（12.3，捣乱①投毒当场红）。</li>
+  <li>想看「为什么烧 token 刷不了分」→ <code>BUDGET_GATE</code>（12.4，捣乱②注水 999999 行为零变化 digest 不变）。</li>
+  <li>想看「抓不到的去哪了」→ <code>TABLE</code> 的盲区聚类（2 族 6 维，credential_leak 0/4 最弱）与 <code>WEB_EVAL</code>（12.5 同屏对账）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（17 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">值班长/学习者：宿主侧一条命令 pnpm test:eval 起 40 测试（33 用例考区+紫队 6 测考区）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">快道口径与 8.1 同源：eval/MCP CLI 不进 compose，宿主进程跑完即拆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RIG</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ATTACK_FIXTURES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">攻击现场目录制 11 例（S6 同一批 test_case.yaml）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">紫队不复制现场、就地取材；目录录制只收目录=映射表塞进来零扰动 33 用例清单</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MAP（yaml attack 同源核对）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">假设源映射表 hypothesis-map.json：逐例七字段翻译 + ground_truth 三键（expected/signatures/blind_spot）= 判卷标准答案；装载 fail-closed（hit 必带签名、miss 必带盲区）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">映射错了=发现判定失真——标准答案落数据可评审可 diff 可投毒演练（12.3 捣乱①）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RIG（装载）/ HYP（槽位克隆渲染）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CORPUS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">语料库 fixtures/alerts/：攻击痕迹文件（被 FixtureSiem 查询、被 corpusHasTrace 独立读）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">三重验腿③与循环解耦的独立读口——「攻击痕迹在场」由原始数据确认</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（查询面）/ GT_GATE（腿③）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RIG</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">紫队 rig discovery_rate_ground_truth（spec T23）：逐例双跑→判定→聚类→8 项检查→两份工件</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">自主能力的成绩单必须判卷机器化+可复现——rig 把口径写成代码</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP→ROUND_CHAIN（布景）/ TABLE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">怀疑书 hyp-purple-&lt;fixture&gt;（actor=system）：预案卡句式族渲染、slots 覆盖克隆</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">提出者不止人（侦查怀疑书词条）：攻击现场自动立项；加攻击现场也只要数据（S11 镜像）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（拉起轮 1）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">六节点轮次链 intake→planner→dispatch→await→judge→outcome；11 例实测 2-4 轮收敛（远低于模板档 6）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">真注册表组图+真机制代码（布景只换数据缝）——被测对象不是复制品</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FAKE_LLM / MENU_GATE / CHILD_RUN / GT_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">FAKE_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">确定性三件套：planner 回族查 waves 渲槽位、judge 取证面 total&gt;0→hit、gap 结构化缺口；桩 24 tok/次</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">零 RNG 是复现的前提；确定性也让 11 例轨迹与真栈同构可对照（11.3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE / ROUND_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 菜单闸（INV-11 第一道闸）：菜单外组合零重试整轮终止 hunt_plan_denied；🛡️ 防 菜单外组合（INV-11）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">盲区六维=菜单取景框外的账本——收窄的边界被 12.4 盲区报告显式化</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（通过/拒绝）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt_task 单趟差：窄票现铸、FixtureSiem 查语料、hunt_task_report 审计真相源（total=N）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扇出 N 路 ≠ 一张大票；取证面 total 是三重验腿②的真相源（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（报告回收·事件唤醒）/ T_CORPUS（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GT_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">发现判定 = judge hit ∧ 签名三重验全过（轨迹执行/取证 total&gt;0/语料在场）+ groundTruthOk 逐例对账；🛡️ 防 LLM 自评比 LLM 好看（决策 10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">judge 只是半判据——判卷面没有一票由 LLM 独裁；标准答案失真必红（12.3 捣乱①实测）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CORPUS（腿③）/ TABLE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">BUDGET_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">预算口径闸：rounds ≤ min(硬顶 20 ∧ 模板档 6)、token ≤ 500k、cancelled 不冒充发现；口径逐字进报告；🛡️ 防「无限烧 token 必发现」注水</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">发现不奖励工时只认证据——12.4 捣乱②注水 999999 实测：行为零变化 digest 不变、口径留痕</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GT_GATE（withinBudget 判定输入）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REPRO</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">复现闸：逐例同 seed 双跑 digest 相等（决策字段 canonical 序列化、墙钟不进）；🛡️ 防 数字失真/不可复现</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">seed=布景版本常量非骰子；换 seed 重跑 digest 逐字节不变（12.2 实测）——决定论本身的机器证据</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RIG（双跑对账）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TABLE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">两份数字+八项检查：发现率表 11 例（5 discovered/6 refuted）+ 盲区聚类 2 族 6 维（最弱 credential_leak）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">数字与口径同出；阴性例必交盲区三件套（loopGap+缺失链+工具维度）——发现不了的也要有产出</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_PURPLE / T_LATEST</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_PURPLE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">purple-team.json（逐例全文：digest/签名/预算/盲区）+ purple-cost.csv（M507 口径+rounds）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">全量行只有这里有——latest.json 的 purple 段只是展示投影</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（对账/人审面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_LATEST</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">latest.json 的 purple 加性段（票 91）：purpleSummary 四格投影、既有字段一字不动</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">加性扩展兼容旧产物（缺省不产键）——升级是加法不是重构（S11 哲学）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_EVAL（读）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEB_EVAL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">web Eval 页紫队小节：45%（5/11）+ 最弱族 + 逐族盲区摘要（purpleView 纯投影）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">两代自证同屏（33/33 拦截率 15/15 vs 发现率 5/11）；展示层不重算判定只投影</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（展示面）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["值班长 / 学习者<br/>pnpm test:eval（宿主进程·快道不进容器）<br/>evals/src/cli.ts:21 起 suite + purple 两个考区"]
+    end
+
+    subgraph FIXTURES["12.1 数据面 fixtures/ · 进入:紫队 eval 装载 · 节拍:每跑一次装载一遍 · 退出:映射 11/11 对账入 rig"]
+        direction TB
+        ATTACK_FIXTURES["攻击现场目录制 fixtures/eval/attack/<br/>11 例 test_case.yaml（S6 攻击 eval 同一批现场）<br/>目录录制只收目录：hypothesis-map.json 文件天然不在清单（零扰动 33 用例）"]
+        MAP["假设源映射表 hypothesis-map.json（seed=purple-81-v1）<br/>逐例：fixture/attack/objective/family/template_id/pattern_idx/slots + ground_truth<br/>expected(hit|miss)/signatures(签名=机器证据清单)/blind_spot(缺失链+工具维度)<br/>装载 fail-closed：hit 必带签名 · miss 必带 blind_spot（purple.ts:107-112）"]
+        T_CORPUS[("语料库 fixtures/alerts/<br/>攻击植入痕迹文件（fim-554/conn-100200/proc-100300…）<br/>FixtureSiem 查询面 = corpusHasTrace 三重验腿③的独立读口")]
+    end
+
+    subgraph SCENE["12.2 循环布景 runHuntScene（hunting.ts:371·真注册表组图+真执行体·数据缝换内存件） · 进入:rig 逐例 runHuntScene · 节拍:轮间接力 round_relay 事件（禁轮询） · 退出:concluded/refuted/cancelled"]
+        direction TB
+        HYP["怀疑书 hyp-purple-&lt;fixture&gt;（actor=system）<br/>renderHypothesisText 按预案卡句式族渲染（hunt-pack.ts:212）<br/>slots 覆盖克隆：同一张卡换个槽位=另一个案发现场"]
+        ROUND_CHAIN["轮次链六节点 intake→planner→dispatch→await→judge→outcome<br/>gap 换组合 · 相邻指纹必不同（防转闸） · 11 例实测 2-4 轮收敛"]
+        FAKE_LLM["确定性三件套 makeHuntFakeLoopLlm（循环三件套 fake 档）<br/>planner 菜单签名回族→查 waves→槽位渲染 · judge 取证面 total&gt;0→hit<br/>桩 24 tok/次计费（成本 CSV 口径）"]
+        MENU_GATE["planner 菜单闸（INV-11 第一道闸·选不得）<br/>offMenu = tasks.filter(不在模板菜单) → 零重试整轮终止<br/>hunt_plan_denied · offmenu_tool（planner.ts:235-239）<br/>🛡️ 防 菜单外组合（INV-11）"]
+        CHILD_RUN["hunt_task 单趟差（窄票现铸·S10 两票制原样）<br/>真执行体 FixtureSiem 读语料库 · hunt_task_report 审计真相源（INV-8）"]
+    end
+
+    subgraph EVALS["12.2-12.4 判卷面 evals/src/rigs/purple.ts · 进入:11 例轨迹齐 · 节拍:每例一次判定+同 seed 双跑 · 退出:8 项场景专项检查全绿"]
+        direction TB
+        RIG["紫队 rig discovery_rate_ground_truth（spec T23 锚点·purple.ts:298）<br/>specs/orchestration-loop.md:97 · 逐例 runA/runB 双跑<br/>sceneDigest 只装决策字段（轮次/参数/judge/gap/子报告/token）· 墙钟不进"]
+        GT_GATE["发现判定 = judge hit ∧ 签名三重验全过（purple.ts:338-344）<br/>①轨迹执行了签名查询 ②取证面 total&gt;0（审计 INV-8）③语料在场（corpusHasTrace 独立读）<br/>groundTruthOk = discovered === (expected==hit) 逐例对账 · 失真点名到例<br/>🛡️ 防 LLM 自评比 LLM 好看（决策 10·judge 评分零进门槛）"]
+        BUDGET_GATE["预算口径闸（purple.ts:342-344·PURPLE_BUDGET:44-51）<br/>rounds ≤ min(硬顶20 ∧ 模板档6) · llmTokens ≤ run 档 500k（budget.ts:123-127）<br/>cancelled 不冒充发现也不冒充 refuted · 口径逐字进报告 budget.note<br/>🛡️ 防「无限烧 token 必发现」注水"]
+        REPRO["复现闸：逐例同 seed 双跑 digest 相等（purple_double_run_reproducible）<br/>布景零 RNG · seed=布景版本常量非骰子 · 换 seed 重跑 digest 逐字节不变<br/>🛡️ 防 数字失真 / 不可复现"]
+        TABLE["两份数字 + 八项场景专项检查进门槛（purple.test.ts:26-35）<br/>discovery_rate_table 11 例（5 discovered / 6 refuted 各带盲区三件套）<br/>blind_spot_clusters 2 族 6 维（credential_leak 0/4 最弱）+ purple_* 检查逐项点名"]
+    end
+
+    subgraph RESULTS["产物面 eval-results/ · 进入:afterAll writePurpleArtifacts · 节拍:每跑 test:eval 覆写 · 退出:四工件齐"]
+        direction TB
+        T_PURPLE[("purple-team.json + purple-cost.csv<br/>逐例全文：digest/signatures/预算明细/盲区三件套/成本（M507 口径+rounds 列）")]
+        T_LATEST[("latest.json 的 purple 加性段（票 91）<br/>purpleSummary 投影（report.ts:171）· 既有字段一字不动·缺省不产键")]
+    end
+
+    subgraph WEB["容器 web（Vite · React · antd5 · :5173）"]
+        WEB_EVAL["Eval 页「紫队闭环 · 自主发现率与盲区聚类」小节（票 91·EvalPage.tsx:118-145）<br/>purpleView 纯投影（eval.ts:119）· 45%（5/11）+ 最弱族 + 逐族盲区摘要<br/>旧产物无 purple 段→小节不渲染（加性兼容）"]
+    end
+
+    %% ===== 12.1 数据面装载 =====
+    OPERATOR -- "请求 pnpm test:eval（宿主进程起 40 测试·快道零容器）" --> RIG
+    ATTACK_FIXTURES -. "读逐例 test_case.yaml attack 标注<br/>（同源核对 attackMismatches=空）" .-> MAP
+    MAP -- "loadPurpleMap 逐例验型装载（fail-closed·不合规整体拒）" --> RIG
+    MAP -. "withSlots 槽位覆盖克隆 + renderHypothesisText 渲染怀疑书" .-> HYP
+
+    %% ===== 12.2 循环布景 =====
+    RIG -- "逐例 runHuntScene（11 例·每例双跑 runA/runB）" --> HYP
+    HYP -- "提交怀疑书（proposed→hunting）· 拉起轮 1" --> ROUND_CHAIN
+    ROUND_CHAIN -- "拟单/拍板/找缺口 三决策面调用" --> FAKE_LLM
+    FAKE_LLM -- "组合 C_k（波表+槽位确定性渲染）" --> MENU_GATE
+    MENU_GATE -- "通过: 组合落 dispatch" --> ROUND_CHAIN
+    MENU_GATE -. "拒绝样本: offmenu_tool 零重试<br/>（菜单外组合物理不产生子 run）" .-> ROUND_CHAIN
+    ROUND_CHAIN -- "扇出: hunt_task 窄票单趟差" --> CHILD_RUN
+    CHILD_RUN -. "回收: hunt_task_report（total=N·审计真相源）<br/>事件唤醒·父不盯表" .-> ROUND_CHAIN
+    CHILD_RUN -. "读 查询语料（SIEM 取证面）" .-> T_CORPUS
+
+    %% ===== 12.3/12.4 判卷 =====
+    ROUND_CHAIN -- "收敛终态 + 轨迹（rounds_full/taskReports/gapRecords）" --> GT_GATE
+    GT_GATE -. "腿③ corpusHasTrace 读痕迹文件原文<br/>（与循环执行解耦的独立复核）" .-> T_CORPUS
+    BUDGET_GATE -. "withinBudget 逐例判定（budgetDetail 如实记账）" .-> GT_GATE
+    REPRO -. "digestA == digestB（同 seed 双跑逐字节相等）" .-> RIG
+    GT_GATE -- "判定+盲区聚类过 8 项检查（judge 评分零进门槛）" --> TABLE
+
+    %% ===== 产物与展示 =====
+    TABLE -. "T+afterAll: 全量行落盘（digest/signatures/盲区全文）" .-> T_PURPLE
+    TABLE -. "T+afterAll: purpleSummary 加性投影（旧字段零变化）" .-> T_LATEST
+    T_LATEST -. "读 /eval-results/latest.json（构建时 COPY 进镜像的静态文件）" .-> WEB_EVAL
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV/决策/口径
+    %% 12.1/12.2：MENU_GATE 防 菜单外组合（INV-11 第一道闸·选不得）
+    %% 12.3：GT_GATE 防 LLM 自评比 LLM 好看（决策 10·签名三重验）
+    %% 12.3：BUDGET_GATE 防「无限烧 token 必发现」注水（预算内口径）
+    %% 12.2：REPRO 防 数字失真/不可复现（双跑 digest 断言）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class MENU_GATE,GT_GATE,BUDGET_GATE,REPRO guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
