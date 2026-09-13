@@ -94,6 +94,46 @@ export function costTotals(report: EvalReport): CostTotals {
   );
 }
 
+// 票 91：紫队闭环加性段（latest.json.purple，evals rigs/purple.ts 投影并入）——
+// 「有什么渲染什么」：字段缺席（旧产物 / rig 没跑）返回 null，页面标未产出不猜数。
+export interface PurpleBlindSpotView {
+  family: string;
+  misses: number;
+  /** 该族未发现的 fixture 名（rig 盲区聚类原样）。 */
+  fixtures: string[];
+  /** 该补的工具维度（映射表标注 + 循环 gap 口径，rig 原样）。 */
+  missingDimensions: string[];
+}
+
+export interface PurpleView {
+  discovered: number;
+  fixtures: number;
+  /** "5/11" 形态（页面直挂）。 */
+  fraction: string;
+  pct: string | null;
+  weakestFamily: string | null;
+  blindSpots: PurpleBlindSpotView[];
+}
+
+/** latest.json.purple → 页面视图模型（自主发现率 + 盲区聚类摘要）。 */
+export function purpleView(report: EvalReport): PurpleView | null {
+  const p = report.purple;
+  if (!p) return null;
+  return {
+    discovered: p.discovered,
+    fixtures: p.fixtures,
+    fraction: `${p.discovered}/${p.fixtures}`,
+    pct: pct(p.discovery_rate),
+    weakestFamily: p.weakest_family ?? null,
+    blindSpots: (p.blind_spots ?? []).map((c) => ({
+      family: c.family,
+      misses: c.misses,
+      fixtures: c.fixtures,
+      missingDimensions: c.missing_dimensions,
+    })),
+  };
+}
+
 export interface EvalView {
   runAt: string;
   lane: string;
@@ -108,11 +148,13 @@ export interface EvalView {
   hasAttackData: boolean;
   cost: CostTotals;
   costs?: EvalReport["costs"];
+  /** 票 91：紫队闭环（自主发现率 + 盲区聚类）；null = 旧产物没有这段。 */
+  purple: PurpleView | null;
   cases: EvalReport["cases"];
   judgeNote: string;
 }
 
-/** latest.json → 页面视图模型（三维：准确率 / 防线拦截 / 成本耗时）。 */
+/** latest.json → 页面视图模型（三维：准确率 / 防线拦截 / 成本耗时；票 91 起加紫队段）。 */
 export function evalView(report: EvalReport): EvalView {
   const faces = attackFaces(report);
   return {
@@ -129,6 +171,7 @@ export function evalView(report: EvalReport): EvalView {
     hasAttackData: faces.length > 0,
     cost: costTotals(report),
     costs: report.costs,
+    purple: purpleView(report),
     cases: report.cases,
     judgeNote: report.judge?.note ?? "",
   };

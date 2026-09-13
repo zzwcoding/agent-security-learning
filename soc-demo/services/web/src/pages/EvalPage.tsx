@@ -2,6 +2,8 @@
 // 成本耗时。数据源 = m11 产物 eval-results/latest.json（vite 静态面，URL 与磁盘路径
 // 一致；m11 卡公开接口就是「产出这个文件」，Web 只读产物，无任何后端端点）。
 // 票 22 之前的产物没有攻击面分面——页面如实标「未产出」，绝不合成数字（eval.ts）。
+// 票 91：latest.json 带紫队加性段（purple）时加一小节展示自主发现率（5/11 形态）+
+// 盲区聚类摘要；旧产物没有这段就不渲染该小节，同样不合成数字。
 import { Alert, Button, Card, Space, Statistic, Table, Tag, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useCallback, useEffect, useState } from "react";
@@ -112,6 +114,39 @@ export default function EvalPage() {
               </Typography.Text>
             </Card>
           </Space>
+
+          {view.purple && (
+            <Card size="small" title="紫队闭环 · 自主发现率与盲区聚类" style={{ marginBottom: 16 }}>
+              <Space size={24} wrap>
+                <Statistic
+                  title="自主发现率（紫队闭环）"
+                  value={view.purple.pct ?? "—"}
+                  suffix={`（${view.purple.fraction}）`}
+                />
+                {view.purple.weakestFamily && (
+                  <Statistic title="最弱假设族" value={view.purple.weakestFamily} />
+                )}
+              </Space>
+              <div style={{ marginTop: 8 }}>
+                {view.purple.blindSpots.map((b) => (
+                  <div key={b.family} style={{ marginBottom: 8 }}>
+                    <Typography.Text strong>盲区聚类 {b.family}</Typography.Text>
+                    <Typography.Text type="secondary">
+                      ：{b.misses} 例未发现{b.fixtures.length > 0 ? `（${b.fixtures.join("、")}）` : ""}
+                    </Typography.Text>
+                    {b.missingDimensions.map((m, i) => (
+                      <Typography.Paragraph key={i} type="secondary" style={{ marginBottom: 2, fontSize: 12 }}>
+                        该补工具维度：{m}
+                      </Typography.Paragraph>
+                    ))}
+                  </div>
+                ))}
+                <Typography.Text type="secondary">
+                  发现判定 = 狩猎循环预算内收敛 ∧ judge hit ∧ ground truth 签名三重验（非 LLM 自评）；全量逐例表见 eval-results/purple-team.json
+                </Typography.Text>
+              </div>
+            </Card>
+          )}
 
           {view.judgeNote && (
             <Alert

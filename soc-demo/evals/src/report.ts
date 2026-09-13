@@ -37,7 +37,22 @@ export interface RunReport {
   costs: { csv: string; rows: number; note: string };
   /** judge 汇总：只进报告不进门禁（决策 #7）；not_evaluable 不计入平均（ASP 口径）。 */
   judge: { evaluable_cases: number; avg_score: number | null; note: string };
+  /** 票 91：紫队闭环加性字段（票 81 rig 的两份数字投影，purpleSummary 装配）——
+   *  可选 = 紫队 rig 没跑就没有（票 19 时代产物），缺席不冒充零分。 */
+  purple?: PurpleLatestSummary;
   cases: CaseResult[];
+}
+
+/** 票 91：latest.json 的紫队加性段（rigs/purple.ts PurpleReport 的展示投影——
+ *  字段名照 PurpleReport/PurpleFixtureResult/PurpleCluster 原样，不自造第二套词表；
+ *  逐例行只投影发现判定四格，digest/signatures 全文仍归 purple-team.json 工件）。 */
+export interface PurpleLatestSummary {
+  discovered: number;
+  fixtures: number;
+  discovery_rate: number;
+  per_fixture: { fixture: string; family: string; expected: "hit" | "miss"; discovered: boolean }[];
+  blind_spots: { family: string; misses: number; discovered: number; fixtures: string[]; missing_dimensions: string[] }[];
+  weakest_family: string | null;
 }
 
 export interface DefenseInterception {
@@ -117,7 +132,10 @@ export function costCsv(rows: CostCsvRow[]): string {
   return [COST_CSV_HEADER, ...lines].join("\n") + "\n";
 }
 
-export function buildReport(results: CaseResult[], meta: { tags: string[]; judgeModel: string | null }): RunReport {
+export function buildReport(
+  results: CaseResult[],
+  meta: { tags: string[]; judgeModel: string | null; purple?: PurpleLatestSummary | null },
+): RunReport {
   const ran = results.filter((r) => r.ran);
   const passed = ran.filter((r) => r.passed);
   const skipped = results.filter((r) => !r.ran);
@@ -149,6 +167,8 @@ export function buildReport(results: CaseResult[], meta: { tags: string[]; judge
         : judged.reduce((acc, r) => acc + (r.judge?.evaluable ? r.judge.score : 0), 0) / judged.length,
       note: "judge 分数不进门禁（PRD 决策 #7）；不可用计数走 not_evaluable 不算失败",
     },
+    // 票 91：紫队数字加性并入（meta.purple 缺席 → 字段不出线，JSON.stringify 落盘即无此键）
+    ...(meta.purple ? { purple: meta.purple } : {}),
     cases: results,
   };
 }

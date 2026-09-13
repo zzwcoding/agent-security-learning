@@ -11,6 +11,7 @@ import { filterByTags, listCases, selectedTags } from "./loader.js";
 import { runCase } from "./runner.js";
 import { selectJudge, type Judge } from "./judge.js";
 import { buildReport, writeCostCsv, writeReport } from "./report.js";
+import { discovery_rate_ground_truth, purpleSummary } from "./rigs/purple.js";
 import type { CaseResult } from "./types.js";
 
 const TAGS = selectedTags();
@@ -57,10 +58,15 @@ for (const c of CASES) {
   });
 }
 
-afterAll(() => {
+afterAll(async () => {
+  // 票 91：紫队数字并线——rig 在装配前重算（进程内确定性桩 LLM，同 seed 双跑，
+  // ~1s），投影 purpleSummary 进 buildReport 的加性字段 purple。发现判定本体与
+  // ground truth 断言仍在 rigs/purple.ts（决策 10 口径不动），这里只接数据不碰判定。
+  const purple = purpleSummary((await discovery_rate_ground_truth()).report);
   const report = buildReport(results, {
     tags: TAGS,
     judgeModel: judge === null ? null : judge.model,
+    purple,
   });
   const path = writeReport(report);
   const csvPath = writeCostCsv(results);
@@ -72,7 +78,8 @@ afterAll(() => {
     ` / ${report.totals.skipped} skipped；triage_accuracy=${report.triage_accuracy?.toFixed(3) ?? "n/a"}` +
     `；拦截率 ${faces || "n/a"}（分面 ${JSON.stringify(di.by_facet)}）` +
     `；cost rows=${report.costs.rows}` +
-    `；judge=${report.judge_model ?? "not_evaluable"}（avg=${report.judge.avg_score?.toFixed(2) ?? "n/a"}，不进门禁）`,
+    `；judge=${report.judge_model ?? "not_evaluable"}（avg=${report.judge.avg_score?.toFixed(2) ?? "n/a"}，不进门禁）` +
+    `；purple discovery_rate=${purple.discovered}/${purple.fixtures}（盲区聚类 ${purple.blind_spots.length} 族，最弱=${purple.weakest_family ?? "n/a"}）`,
   );
   if (di.skipped.length > 0) console.log(`[eval] 攻击用例 skip：${di.skipped.join("; ")}`);
   console.log(`[eval] 报告已落 ${path} + ${csvPath}`);

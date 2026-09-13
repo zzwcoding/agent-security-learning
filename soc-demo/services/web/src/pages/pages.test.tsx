@@ -591,6 +591,51 @@ describe("EvalPage", () => {
     expect(screen.getByText(/judge 分数不进门禁/)).toBeTruthy();
   });
 
+  it("票 91：latest.json 带紫队加性段 → 页面小节展示自主发现率（5/11 形态）+ 盲区聚类摘要", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      expect(String(url)).toBe("/eval-results/latest.json");
+      return Promise.resolve(
+        jsonRes2(200, {
+          run_at: "2026-09-09T00:02:06.390Z",
+          lane: "unit-injected",
+          totals: { cases: 33, ran: 33, passed: 33, failed: 0, skipped: 0 },
+          triage_accuracy: 1,
+          judge: { evaluable_cases: 0, avg_score: null, note: "" },
+          cases: [],
+          purple: {
+            discovered: 5,
+            fixtures: 11,
+            discovery_rate: 5 / 11,
+            per_fixture: [
+              { fixture: "02_inject_full_log_tp", family: "ir_host_compromise", expected: "hit", discovered: true },
+            ],
+            blind_spots: [
+              {
+                family: "credential_leak",
+                misses: 4,
+                discovered: 0,
+                fixtures: ["01_inject_srcuser_uncertain", "05_rag_poison_rejected"],
+                missing_dimensions: ["auth 探测维缺失：5710/5712 失败登录聚源查询。"],
+              },
+            ],
+            weakest_family: "credential_leak",
+          },
+        }),
+      );
+    });
+    render(<EvalPage />);
+    // 自主发现率 5/11 形态 + 百分比
+    await waitFor(() => expect(screen.getByText("自主发现率（紫队闭环）")).toBeTruthy());
+    expect(screen.getByText("45%")).toBeTruthy();
+    expect(screen.getByText("（5/11）")).toBeTruthy();
+    // 盲区聚类摘要：最弱族 + 逐族 miss 数 + 未发现例 + 该补的工具维度
+    expect(screen.getByText("credential_leak")).toBeTruthy();
+    expect(screen.getByText(/最弱假设族/)).toBeTruthy();
+    expect(screen.getByText(/盲区聚类 credential_leak/)).toBeTruthy();
+    expect(screen.getByText(/4 例未发现/)).toBeTruthy();
+    expect(screen.getByText(/auth 探测维缺失/)).toBeTruthy();
+  });
+
   it("旧产物没有 defense_interception：攻击面如实标未产出，不猜数", async () => {
     fetchMock.mockImplementation(() =>
       Promise.resolve(

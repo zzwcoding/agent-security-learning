@@ -104,3 +104,25 @@ describe("judge 分数进报告不进门禁（决策 #7 复核：票 22 验收�
     expect(rep.totals.failed).toBe(0);
   });
 });
+
+describe("紫队加性字段（票 91：rig 两份数字并入报告装配）", () => {
+  const purple = {
+    discovered: 5,
+    fixtures: 11,
+    discovery_rate: 5 / 11,
+    per_fixture: [{ fixture: "02_inject_full_log_tp", family: "ir_host_compromise", expected: "hit" as const, discovered: true }],
+    blind_spots: [{ family: "credential_leak", misses: 4, discovered: 0, fixtures: ["01_inject_srcuser_uncertain"], missing_dimensions: ["auth 探测维缺失"] }],
+    weakest_family: "credential_leak",
+  };
+
+  test("meta.purple 原样并入报告（投影在 rig 侧做好，装配处不二次加工）", () => {
+    const rep = buildReport([r({ fullName: "triage/01" })], { tags: [], judgeModel: null, purple });
+    expect(rep.purple).toEqual(purple);
+  });
+
+  test("不传 purple 不长该键：既有字段形状零变化（票 29 双端契约兼容扩展）", () => {
+    const rep = buildReport([r({ fullName: "triage/01" })], { tags: [], judgeModel: null });
+    expect(rep.purple).toBeUndefined();
+    expect(JSON.parse(JSON.stringify(rep))).not.toHaveProperty("purple");
+  });
+});

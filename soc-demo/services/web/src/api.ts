@@ -414,6 +414,32 @@ export interface EvalDefenseInterception {
   note: string;
 }
 
+/** 票 91：紫队闭环加性段（evals rigs/purple.ts PurpleReport 的展示投影，字段名照
+ *  rig 结果对象原样——per_fixture=逐 fixture 发现率表、blind_spots=盲区聚类）。 */
+export interface EvalPurpleFixtureRow {
+  fixture: string;
+  family: string;
+  expected: "hit" | "miss";
+  discovered: boolean;
+}
+
+export interface EvalPurpleCluster {
+  family: string;
+  misses: number;
+  discovered: number;
+  fixtures: string[];
+  missing_dimensions: string[];
+}
+
+export interface EvalPurpleSummary {
+  discovered: number;
+  fixtures: number;
+  discovery_rate: number;
+  per_fixture: EvalPurpleFixtureRow[];
+  blind_spots: EvalPurpleCluster[];
+  weakest_family: string | null;
+}
+
 export interface EvalReport {
   run_at: string;
   lane: string;
@@ -427,6 +453,8 @@ export interface EvalReport {
   /** 成本口径（CSV 落 eval-results/cost_all.csv，这里带口径说明与行数）。 */
   costs?: { csv: string; rows: number; note: string };
   judge: { evaluable_cases: number; avg_score: number | null; note: string };
+  /** 票 91：紫队闭环加性段（票 29 契约的兼容扩展）；可选 = 紫队 rig 没跑的旧产物。 */
+  purple?: EvalPurpleSummary;
   cases: EvalCaseRow[];
 }
 

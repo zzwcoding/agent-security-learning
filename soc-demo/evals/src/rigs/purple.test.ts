@@ -7,7 +7,7 @@
 // 映射表（fixtures/eval/attack/hypothesis-map.json）本身是测试资产：映射错了 =
 // 发现判定失真——这里对映射逐例对账（fixture 目录/yaml attack 标注/模板登记面）。
 import { afterAll, describe, expect, test } from "vitest";
-import { discovery_rate_ground_truth, writePurpleArtifacts, type PurpleEvalOutcome } from "./purple.js";
+import { discovery_rate_ground_truth, purpleSummary, writePurpleArtifacts, type PurpleEvalOutcome } from "./purple.js";
 
 // 布景 11 例 × 双跑（同 seed 复现断言）一次跑完，跨 test 共享（suite.test.ts results 同款）
 let cached: PurpleEvalOutcome | null = null;
@@ -128,5 +128,26 @@ describe("票 81 紫队闭环（T23）：映射完备与发现判定（ground tr
     }
     // token 口径注在报告里（防误读为真 LLM 用量——桩 24 tok/次，77 回测同口径）
     expect(o.report.costs.note).toContain("24 tok/次");
+  });
+});
+
+describe("票 91 紫队数字并入 latest.json：rig 结果 → 加性投影（purpleSummary）", () => {
+  test("投影字段名照 PurpleReport/PurpleFixtureResult/PurpleCluster 原样，两份数字对账一致", async () => {
+    const o = await outcome();
+    const p = purpleSummary(o.report);
+    // 头部两份数字：5/11 发现率（票 81 钉死的紫队结论，投影不得变形）
+    expect(p.discovered).toBe(5);
+    expect(p.fixtures).toBe(11);
+    expect(p.discovery_rate).toBeCloseTo(5 / 11, 12);
+    // 逐 fixture 发现率表：与 discovery_rate_table 逐行对账（同名同值投影）
+    expect(p.per_fixture).toHaveLength(11);
+    for (const [i, row] of o.report.discovery_rate_table.entries()) {
+      expect(p.per_fixture[i]).toEqual({
+        fixture: row.fixture, family: row.family, expected: row.expected, discovered: row.discovered,
+      });
+    }
+    // 盲区聚类原样透传 + 最弱族（credential_leak 最弱，票 81 结论）
+    expect(p.blind_spots).toEqual(o.report.blind_spot_clusters);
+    expect(p.weakest_family).toBe("credential_leak");
   });
 });

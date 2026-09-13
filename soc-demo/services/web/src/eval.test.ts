@@ -6,7 +6,7 @@
 import { describe, expect, it } from "vitest";
 import fixtureRaw from "../../../fixtures/eval-report/latest.json?raw";
 import type { EvalReport } from "./api";
-import { attackFaces, attackSkipped, costTotals, evalView, interceptFacets, pct } from "./eval";
+import { attackFaces, attackSkipped, costTotals, evalView, interceptFacets, pct, purpleView } from "./eval";
 
 const BASE: EvalReport = {
   run_at: "2026-09-09T00:02:06.390Z",
@@ -97,6 +97,55 @@ describe("evalView", () => {
   });
 });
 
+describe("purpleView（票 91 紫队闭环加性段：自主发现率 + 盲区聚类）", () => {
+  it("purple 缺席（票 19 时代旧产物 / rig 没跑）→ null：页面标未产出，不猜数", () => {
+    expect(purpleView(BASE)).toBeNull();
+    expect(evalView(BASE).purple).toBeNull();
+  });
+
+  it("purple 在场：5/11 形态 + 百分比 + 盲区聚类摘要 + 最弱族（字段名照 rig 原样）", () => {
+    const v = purpleView({
+      ...BASE,
+      purple: {
+        discovered: 5,
+        fixtures: 11,
+        discovery_rate: 5 / 11,
+        per_fixture: [
+          { fixture: "02_inject_full_log_tp", family: "ir_host_compromise", expected: "hit", discovered: true },
+          { fixture: "01_inject_srcuser_uncertain", family: "credential_leak", expected: "miss", discovered: false },
+        ],
+        blind_spots: [
+          {
+            family: "credential_leak",
+            misses: 4,
+            discovered: 0,
+            fixtures: ["01_inject_srcuser_uncertain", "05_rag_poison_rejected"],
+            missing_dimensions: ["auth 探测维缺失：5710/5712 失败登录聚源查询。"],
+          },
+          { family: "c2_beacon", misses: 2, discovered: 1, fixtures: ["09_sandbox_poisoned_analyzer"], missing_dimensions: [] },
+        ],
+        weakest_family: "credential_leak",
+      },
+    });
+    expect(v).toEqual({
+      discovered: 5,
+      fixtures: 11,
+      fraction: "5/11",
+      pct: "45%",
+      weakestFamily: "credential_leak",
+      blindSpots: [
+        {
+          family: "credential_leak",
+          misses: 4,
+          fixtures: ["01_inject_srcuser_uncertain", "05_rag_poison_rejected"],
+          missingDimensions: ["auth 探测维缺失：5710/5712 失败登录聚源查询。"],
+        },
+        { family: "c2_beacon", misses: 2, fixtures: ["09_sandbox_poisoned_analyzer"], missingDimensions: [] },
+      ],
+    });
+  });
+});
+
 describe("双端契约：fixtures/eval-report/latest.json（evals 产出 → web 消费两端共读）", () => {
   // 票 29：样例由 evals 生产端 buildReport 生成并被 report.contract.test.ts 钉死；
   // 这里走消费路径读同一份——evals 改形状而 web 没跟，必在这边红（A1 三方漂移的闸）。
@@ -127,5 +176,16 @@ describe("双端契约：fixtures/eval-report/latest.json（evals 产出 → web
     expect(v.skipped).toEqual(["attack/05_sandbox_msb_down: msb 不可用"]);
     expect(v.defenseNote).toContain("不计入分母");
     expect(v.costs?.rows).toBe(1);
+  });
+
+  it("票 91：消费端跟得上生产端的紫队加性段——5/11 发现率 + 盲区聚类（同一样例共读锁定）", () => {
+    const v = evalView(FIXTURE);
+    expect(v.purple).not.toBeNull();
+    expect(v.purple!.fraction).toBe("5/11");
+    expect(v.purple!.pct).toBe("45%");
+    expect(v.purple!.weakestFamily).toBe("credential_leak");
+    // 逐 fixture 发现率表与 rig 表逐行同源（样例 purple 段 = 票 81 真实产出的投影）
+    expect(v.purple!.blindSpots.map((b) => `${b.family}:${b.misses}`)).toEqual(["credential_leak:4", "c2_beacon:2"]);
+    expect(v.purple!.blindSpots[0]!.missingDimensions.length).toBeGreaterThan(0);
   });
 });

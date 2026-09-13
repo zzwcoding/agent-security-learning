@@ -23,7 +23,7 @@ import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "n
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse } from "yaml";
-import { EVAL_RESULTS_DIR, PRICE_PER_M } from "../report.js";
+import { EVAL_RESULTS_DIR, PRICE_PER_M, type PurpleLatestSummary } from "../report.js";
 import type { CheckResult } from "../types.js";
 import { check } from "./shared.js";
 import {
@@ -510,9 +510,35 @@ export async function discovery_rate_ground_truth(): Promise<PurpleEvalOutcome> 
 
 // ---------- 产物落盘（eval-results/ 工件族：latest.json 同目录，不动 latest.json 本体） ----------
 
+/** 票 91：PurpleReport → latest.json 加性段 purple 的投影（字段名照上面三个结果对象
+ *  原样；逐例行只取发现判定四格——digest/signatures 全文仍归 purple-team.json）。
+ *  纯函数无副作用，装配处（report.buildReport meta.purple）只原样嵌入不二次加工。 */
+export function purpleSummary(report: PurpleReport): PurpleLatestSummary {
+  return {
+    discovered: report.totals.discovered,
+    fixtures: report.totals.fixtures,
+    discovery_rate: report.totals.discovery_rate,
+    per_fixture: report.discovery_rate_table.map((r) => ({
+      fixture: r.fixture,
+      family: r.family,
+      expected: r.expected,
+      discovered: r.discovered,
+    })),
+    blind_spots: report.blind_spot_clusters.map((c) => ({
+      family: c.family,
+      misses: c.misses,
+      discovered: c.discovered,
+      fixtures: [...c.fixtures],
+      missing_dimensions: [...c.missing_dimensions],
+    })),
+    weakest_family: report.weakest_family,
+  };
+}
+
 /** 写 eval-results/purple-team.json + purple-cost.csv（M507 口径 + rounds 列）。
- *  latest.json 不动：票 29 双端契约把 buildReport 形状钉死在共享样例（web 消费端共读），
- *  紫队数字以同目录同口径工件族并列——并入 latest.json 属形状变更，归 L0 裁定。 */
+ *  latest.json 的并入走加性字段 purple（票 91 已裁定，投影见 purpleSummary →
+ *  suite.test.ts 装配进 buildReport）——本件仍写并列工件：全量行（digest/signatures/
+ *  成本逐行）只有这里有，latest.json 的 purple 段只是展示投影。 */
 export function writePurpleArtifacts(outcome: PurpleEvalOutcome): { json: string; csv: string } {
   mkdirSync(EVAL_RESULTS_DIR, { recursive: true });
   const json = EVAL_RESULTS_DIR + "purple-team.json";
