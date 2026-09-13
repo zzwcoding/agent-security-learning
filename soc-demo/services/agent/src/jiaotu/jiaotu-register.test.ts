@@ -2,7 +2,14 @@ import { afterEach, describe, expect, test } from "vitest";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { registerJiaotuAgent, upsertEnvKey } from "../../../../scripts/jiaotu-register.js";
+import {
+  JIAOTU_WORKERS,
+  jiaotuWorkerEnvKey,
+  registerJiaotuAgent,
+  registerJiaotuWorkers,
+  upsertEnvKey,
+} from "../../../../scripts/jiaotu-register.js";
+import { JIAOTU_WORKERS as JIAOTU_WORKERS_LLM, jiaotuWorkerEnvKey as jiaotuWorkerEnvKeyLlm } from "../llm-client.js";
 
 // 狗粮票 62：scripts/jiaotu-register.ts 的跨仓契约锁。该脚本是 soc-demo → 椒图的注册
 // 正门（GET /api/v1/agents?q= 查重 + POST /api/v1/agents 注册 + .env upsert），椒图侧
@@ -183,5 +190,125 @@ describe("upsertEnvKey 三态（JIAOTU_API_KEY 落盘形态）", () => {
     expect(readFileSync(noNl, "utf8")).toBe(
       "TAIL=no-trailing-newline\nJIAOTU_API_KEY=ajt_glue62\n",
     );
+  });
+});
+
+// ---------- 分账模式（狗粮票 18·Q4）：--workers 四 worker 各一 agent + .env 四键 ----------
+
+/** 有状态 stub 网关：GET 按 q 子串过滤（同椒图列表公开面），POST 注册即入账回 201——
+ *  重跑查重命中（agent_id 唯一、重名不冲突的椒图语义在 stub 内可复算）。 */
+function gatewayStub(seed: Array<{ agent_id: string; name: string }> = []): {
+  impl: typeof fetch;
+  registered: Array<{ name: string; agent_id: string; api_key: string }>;
+} {
+  const agents = [...seed];
+  const registered: Array<{ name: string; agent_id: string; api_key: string }> = [];
+  const impl = (async (url: unknown, init?: RequestInit) => {
+    const u = String(url);
+    if ((init?.method ?? "GET") === "GET") {
+      const q = decodeURIComponent(u.split("q=")[1] ?? "");
+      return jsonResponse(200, { agents: agents.filter((a) => a.name.includes(q)) });
+    }
+    const body = JSON.parse(String(init?.body)) as { name: string };
+    const agent = {
+      agent_id: `agent_${body.name.replaceAll("-", "_")}`,
+      name: body.name,
+      api_key: `ajt_${body.name.replaceAll("-", "_")}`,
+    };
+    agents.push(agent);
+    registered.push(agent);
+    return jsonResponse(201, agent);
+  }) as typeof fetch;
+  return { impl, registered };
+}
+
+describe("registerJiaotuWorkers 契约（票 18：--workers 分账注册，幂等重跑不吐新 key）", () => {
+  const tmpDirs: string[] = [];
+  const makeEnvPath = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), "jiaotu-workers-test-"));
+    tmpDirs.push(dir);
+    return join(dir, ".env");
+  };
+
+  test("四 worker 各一 agent：名字 soc-demo-<worker>、先查后建各一轮、q 按各自 worker 名过滤", async () => {
+    const envFile = makeEnvPath();
+    const { impl, registered } = gatewayStub();
+    const results = await registerJiaotuWorkers({ baseUrl: JT_BASE, fetchImpl: impl, envFile });
+
+    // 四 worker 各得一个 agent，agent_id/api_key 互不相同（四把独立身份）
+    expect(Object.keys(results).sort()).toEqual([...JIAOTU_WORKERS].sort());
+    expect(registered.map((a) => a.name)).toEqual([
+      "soc-demo-triage", "soc-demo-investigation", "soc-demo-knowledge", "soc-demo-chat",
+    ]);
+    for (const worker of JIAOTU_WORKERS) {
+      expect(results[worker].created).toBe(true);
+      expect(results[worker].agentId).toMatch(/^agent_soc_demo_/);
+      expect(results[worker].apiKeyOnce).toMatch(/^ajt_soc_demo_/);
+    }
+  });
+
+  test("env 四键落盘：JIAOTU_API_KEY_<WORKER大写> 各写各的明文；分账键互不串行", async () => {
+    const envFile = makeEnvPath();
+    const { impl } = gatewayStub();
+    const results = await registerJiaotuWorkers({ baseUrl: JT_BASE, fetchImpl: impl, envFile });
+
+    const content = readFileSync(envFile, "utf8");
+    for (const worker of JIAOTU_WORKERS) {
+      // 明文 = 注册响应那把（created 才写；注释行标注来源可回放）
+      expect(content).toContain(`${jiaotuWorkerEnvKey(worker)}=${results[worker].apiKeyOnce}\n`);
+      expect(content).toContain(`狗粮票 18：椒图网关 ${worker} worker 分账 api_key`);
+    }
+    // 单键 JIAOTU_API_KEY 绝不被分账注册碰到（服务级身份与分账键互不污染）
+    expect(content).not.toMatch(/^JIAOTU_API_KEY=/m);
+  });
+
+  test("重跑幂等：查重命中 → 不 POST、不吐新 key、.env 逐字节不变（重跑不换 key 承诺）", async () => {
+    const envFile = makeEnvPath();
+    const { impl, registered } = gatewayStub();
+    const first = await registerJiaotuWorkers({ baseUrl: JT_BASE, fetchImpl: impl, envFile });
+    const afterFirst = readFileSync(envFile, "utf8");
+    const firstKeys = registered.map((a) => a.api_key);
+
+    const results2 = await registerJiaotuWorkers({ baseUrl: JT_BASE, fetchImpl: impl, envFile });
+    expect(registered).toHaveLength(JIAOTU_WORKERS.length); // 第二轮零新增注册
+    for (const worker of JIAOTU_WORKERS) {
+      // agent_id 与首轮相同（同一身份），无 apiKeyOnce（不重吐 key）
+      expect(results2[worker]).toEqual({ created: false, agentId: first[worker].agentId });
+      expect(results2[worker].apiKeyOnce).toBeUndefined();
+    }
+    expect(readFileSync(envFile, "utf8")).toBe(afterFirst); // .env 一字节不动
+    expect(firstKeys).toHaveLength(JIAOTU_WORKERS.length); // 全程只有第一批 key
+  });
+
+  test("部分已注册（换网重跑）：命中的 worker 跳过且其 env 键不被碰，缺的照常补注册", async () => {
+    const envFile = makeEnvPath();
+    writeFileSync(envFile, "# header\nJIAOTU_API_KEY=jt_service_level\n", "utf8");
+    const preexisting = { agent_id: "agent_triage_pre18", name: "soc-demo-triage" };
+    const { impl, registered } = gatewayStub([preexisting]);
+    const results = await registerJiaotuWorkers({ baseUrl: JT_BASE, fetchImpl: impl, envFile });
+
+    expect(results.triage).toEqual({ created: false, agentId: "agent_triage_pre18" });
+    expect(registered.map((a) => a.name)).toEqual([
+      "soc-demo-investigation", "soc-demo-knowledge", "soc-demo-chat",
+    ]);
+    const content = readFileSync(envFile, "utf8");
+    expect(content).toContain("# header\n"); // 原内容一字不动
+    expect(content).toContain("JIAOTU_API_KEY=jt_service_level\n"); // 服务级单键不被分账注册触碰
+    expect(content).not.toContain("JIAOTU_API_KEY_TRIAGE="); // 已存在者无新 key，不写其分账键
+    for (const worker of ["investigation", "knowledge", "chat"] as const) {
+      expect(content).toContain(`${jiaotuWorkerEnvKey(worker)}=${results[worker].apiKeyOnce}\n`);
+    }
+  });
+});
+
+// ---------- 跨面契约锁（票 18）：脚本与 llm-client 的分账口径同源，改一边不改另一边必红 ----------
+
+describe("分账口径跨面契约锁（scripts/jiaotu-register.ts ↔ src/llm-client.ts）", () => {
+  test("worker 名单与 env 键推导两侧逐字一致（脚本独立不在模块图内，靠本锁咬合）", () => {
+    expect([...JIAOTU_WORKERS]).toEqual([...JIAOTU_WORKERS_LLM]);
+    for (const worker of JIAOTU_WORKERS) {
+      expect(jiaotuWorkerEnvKey(worker)).toBe(jiaotuWorkerEnvKeyLlm(worker));
+      expect(jiaotuWorkerEnvKey(worker)).toBe(`JIAOTU_API_KEY_${worker.toUpperCase()}`);
+    }
   });
 });

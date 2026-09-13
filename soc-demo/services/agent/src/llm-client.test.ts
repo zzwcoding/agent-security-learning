@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test } from "vitest";
 import { fileURLToPath } from "node:url";
 import {
   GatewayLlmClient,
+  JIAOTU_WORKERS,
   LlmUpstreamError,
+  jiaotuWorkerEnvKey,
   llmSmokeProbe,
   unwrapJsonText,
 } from "./llm-client.js";
@@ -221,6 +223,78 @@ describe("狗粮形态条件鉴权头（票 57：JIAOTU_API_KEY 设了附 Bearer
     const injected = mockFetch(() => openAiReply("ok"));
     await makeClient(injected.impl, { apiKey: "jt-opt-key-57" }).chat("hi", { node: "verdict_llm" });
     expect(injected.seen[0].headers["authorization"]).toBe("Bearer jt-opt-key-57");
+  });
+});
+
+// ---------- 狗粮分账（票 18·Q4：per-worker 椒图身份，出站 Bearer 各吃各的分账键） ----------
+
+describe("狗粮分账（票 18：worker 声明 → JIAOTU_API_KEY_<WORKER> 优先，缺省回落单键）", () => {
+  test("四 worker 各吃各的分账键：出站 Bearer 恰为自己的 JIAOTU_API_KEY_<WORKER>（椒图 actor 分列的依据）", async () => {
+    const keys = {
+      triage: "ajt_tri18",
+      investigation: "ajt_inv18",
+      knowledge: "ajt_kb18",
+      chat: "ajt_chat18",
+    } as const;
+    for (const [worker, key] of Object.entries(keys)) {
+      setEnv(jiaotuWorkerEnvKey(worker), key);
+    }
+    for (const worker of JIAOTU_WORKERS) {
+      const { impl, seen } = mockFetch(() => openAiReply("ok"));
+      await makeClient(impl, { actor: `agent:${worker}`, worker }).chat("hi", { node: "verdict_llm" });
+      // 各 worker 的 Bearer 互不串（椒图 llm_call 审计 actor = api_key 解析，按 key 分列）
+      expect(seen[0].headers["authorization"]).toBe(`Bearer ${keys[worker]}`);
+      expect(seen[0].headers["x-actor-id"]).toBe(`agent:${worker}`);
+    }
+  });
+
+  test("分账键缺省 → 回落单键 JIAOTU_API_KEY（回落路径与票 57 同一条，四 worker 同验）", async () => {
+    setEnv("JIAOTU_API_KEY", "jt-single18");
+    for (const worker of JIAOTU_WORKERS) {
+      setEnv(jiaotuWorkerEnvKey(worker), undefined);
+      const { impl, seen } = mockFetch(() => openAiReply("ok"));
+      await makeClient(impl, { worker }).chat("hi", { node: "verdict_llm" });
+      expect(seen[0].headers["authorization"]).toBe("Bearer jt-single18");
+    }
+  });
+
+  test("单键模式逐字节回归：分账键全不设，worker 声明不改变头集合与路径（最高约束）", async () => {
+    for (const worker of JIAOTU_WORKERS) setEnv(jiaotuWorkerEnvKey(worker), undefined);
+    setEnv("JIAOTU_API_KEY", "jt-env-key-57");
+    const { impl, seen } = mockFetch(() => openAiReply("ok"));
+    await makeClient(impl, { requestId: "req-18a", actor: "agent:triage", worker: "triage" })
+      .chat("hi", { node: "verdict_llm" });
+    expect(seen).toHaveLength(1);
+    // 头集合深等：与票 57 单键形态逐字节相同（多 worker 声明不添一字节）
+    expect(seen[0].headers).toEqual({
+      "content-type": "application/json",
+      "x-actor-id": "agent:triage",
+      "x-request-id": "req-18a",
+      authorization: "Bearer jt-env-key-57",
+    });
+    expect(seen[0].url).toBe(`${PROXY_BASE}/v1/chat/completions`);
+
+    // 单键也没设 = 内部网关形态：一个 authorization 键都不多（票 57 原样，worker 声明不破坏）
+    setEnv("JIAOTU_API_KEY", undefined);
+    const bare = mockFetch(() => openAiReply("ok"));
+    await makeClient(bare.impl, { worker: "knowledge" }).chat("hi", { node: "verdict_llm" });
+    expect(bare.seen[0].headers).toEqual({ "content-type": "application/json" });
+  });
+
+  test("opts.apiKey 仍最高优先；未声明 worker 的构造点（hunt loop / evals judge）不读分账键", async () => {
+    setEnv("JIAOTU_API_KEY_TRIAGE", "ajt_tri18");
+    setEnv("JIAOTU_API_KEY", undefined);
+    const explicit = mockFetch(() => openAiReply("ok"));
+    await makeClient(explicit.impl, { worker: "triage", apiKey: "jt-opt-18" }).chat("hi", { node: "verdict_llm" });
+    expect(explicit.seen[0].headers["authorization"]).toBe("Bearer jt-opt-18");
+
+    // 无 worker 声明：分账键在 env 也不看——单键未设 = 内部网关形态逐字节现状
+    const noWorker = mockFetch(() => openAiReply("ok"));
+    await makeClient(noWorker.impl, { actor: "agent:hunt_flow" }).chat("hi", { node: "verdict_llm" });
+    expect(noWorker.seen[0].headers).toEqual({
+      "content-type": "application/json",
+      "x-actor-id": "agent:hunt_flow",
+    });
   });
 });
 

@@ -9,6 +9,12 @@
 // 狗粮形态（票 57·CONTEXT.md「狗粮接入」）：JIAOTU_API_KEY 设了 = 出站经椒图网关
 // （soc-demo 是它的第一个外部客户），chat() 请求头附 `authorization: Bearer <api_key>`；
 // 未设 = 内部网关形态，请求与现状逐字节相同（不落 authorization 键）。
+// 狗粮分账（票 18·狗粮裁决 Q4/M2#9）：worker 构造点可声明自己的名字（JIAOTU_WORKERS），
+// 出站鉴权 env 链前置该 worker 的分账键 JIAOTU_API_KEY_<WORKER>（scripts/jiaotu-register.ts
+// --workers 注册 soc-demo-<worker> 时落盘），未设回落单键 JIAOTU_API_KEY——单键模式与
+// 现状逐字节一致。椒图 llm_call 审计的 actor（api_key 解析）由此按 worker 分列，与
+// soc-demo 内部 actor 归因（M2 审计）可交叉验证。分账只做 LLM 出站面：mint/焚毁/审批
+// 四件 seam（index.ts 票 57/58）保持服务级单键身份不动。
 // fail-closed 纪律（INV-1·验收④）：超时/限流/上游不可达/回包坏形一律映射成带 reason code
 // 的 LlmUpstreamError，绝不裸抛原始 fetch 错误；上游/代理的错误正文（provider 可控文本）
 // 一个字都不进 error 消息——它不许流入我们的审计与 SSE 事件面（INV-4 邻域卫生）。
@@ -21,6 +27,23 @@ import { budgetFromEnv } from "./budget.js";
 import { isOutboundTimeout, smokeHttpProbe, timeoutSignal, type ProbeResult } from "./outbound.js";
 
 export type { ProbeResult };
+
+// ---------- 狗粮分账（票 18·Q4）：per-worker 椒图身份的 env 契约 ----------
+
+/** 四个 worker 的 LLM 出站各持一把椒图分账键（狗粮裁决 Q4/M2#9）：椒图侧 agent 名
+ *  soc-demo-<worker>（scripts/jiaotu-register.ts --workers 注册），api_key 落 .env 的
+ *  JIAOTU_API_KEY_<WORKER大写>。全不设 = 单键模式（服务级身份，逐字节回归）。
+ *  hunt 编排循环不在列：Q4 只裁四 worker，loop 出站维持单键（实现记录有留痕）。 */
+export const JIAOTU_WORKERS = ["triage", "investigation", "knowledge", "chat"] as const;
+
+export type JiaotuWorker = (typeof JIAOTU_WORKERS)[number];
+
+/** worker → 分账键 env 名（triage → JIAOTU_API_KEY_TRIAGE）。与 scripts/jiaotu-register.ts
+ *  --workers 的落盘键名同一口径——脚本保持独立（scripts 不在模块图内，R4），两端由
+ *  jiaotu-register.test.ts 的跨面契约锁咬合（改一边不改另一边必红）。 */
+export function jiaotuWorkerEnvKey(worker: string): string {
+  return `JIAOTU_API_KEY_${worker.toUpperCase()}`;
+}
 
 /** adapter 依赖的窄缝（票 43·F5 收敛：triage/investigation/knowledge 三份手抄上提至此，
  *  chat 侧经 triage 再出口的引用也回到这一份）：只要会 chat——生产 GatewayLlmClient
@@ -62,6 +85,11 @@ export interface GatewayLlmClientOpts {
   /** 狗粮形态（票 57·G1）出站鉴权：默认 env JIAOTU_API_KEY；未设 = 不带鉴权头（内部
    *  网关形态，请求逐字节现状）。值是椒图发给本 agent 的 api_key，不进任何出站体。 */
   apiKey?: string;
+  /** 狗粮分账形态（票 18·Q4）：worker 名（JIAOTU_WORKERS 之一），由 worker 构造点声明
+   *  （生产装配唯一口 = src/run-kinds.ts 的 workerLlmClient，四 worker 图工厂共用）。
+   *  声明后出站鉴权 env 链 = opts.apiKey → JIAOTU_API_KEY_<WORKER大写> → JIAOTU_API_KEY；
+   *  分账键未设（单键模式）行为与现状逐字节一致（含请求头字节）。 */
+  worker?: string;
   /** 出站 seam：测试注入 mock 捕获请求；生产用全局 fetch */
   fetchImpl?: typeof fetch;
 }
@@ -81,7 +109,12 @@ export class GatewayLlmClient {
     this.requestId = opts.requestId;
     this.actor = opts.actor;
     this.fixedTimeoutMs = opts.timeoutMs;
-    this.apiKey = opts.apiKey ?? process.env.JIAOTU_API_KEY;
+    // 狗粮分账（票 18）：worker 构造点声明了自己的名字 → 该 worker 的分账键优先；
+    // 未设回落单键 JIAOTU_API_KEY（单键模式逐字节回归——env 链走 ??，分账键不存在
+    // 时取值与改动前完全同一路径）。opts.apiKey 仍是最高优先（测试/显式装配）。
+    this.apiKey = opts.apiKey
+      ?? (opts.worker !== undefined ? process.env[jiaotuWorkerEnvKey(opts.worker)] : undefined)
+      ?? process.env.JIAOTU_API_KEY;
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 

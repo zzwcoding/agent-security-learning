@@ -46,7 +46,11 @@ import { FakeChatLlm } from "../workers/chat/llm.js";
 import { RealChatLlm } from "../workers/chat/llm-real.js";
 import { FakeKnowledgeLlm } from "../workers/knowledge/llm.js";
 import { RealKnowledgeLlm } from "../workers/knowledge/llm-real.js";
-import { GatewayLlmClient } from "./llm-client.js";
+// 票 18（狗粮 Q4 分账）：四 worker 的 real LLM client 装配唯一口是下方 workerLlmClient——
+// actor 与分账 worker 名一处声明，四处图工厂不得绕过（run-kinds.test 有单构造点契约锁）。
+// hunt 编排循环的 loop 出站（orchestration/llm-stubs.ts makeLoopLlm）不在此列：Q4 只裁
+// 四 worker，loop 维持单键。
+import { GatewayLlmClient, type JiaotuWorker } from "./llm-client.js";
 import { scanInjection } from "./guards-client.js";
 import type { FgaChecker } from "./fga-client.js";
 import { makeHuntFlow, type OrchestrationDeps } from "./orchestration/flow.js";
@@ -135,7 +139,7 @@ function makeCaseChain(deps: RunKindGraphDeps, runId: string, ticket: string): F
       kb: deps.kb,
       llm: deps.llmMode === "fake"
         ? new FakeInvestigationLlm()
-        : new RealInvestigationLlm(new GatewayLlmClient({ requestId, actor: "agent:investigation" })),
+        : new RealInvestigationLlm(workerLlmClient("investigation", requestId)),
       scan: scanInjection,
       audit: deps.audit,
     },
@@ -169,6 +173,14 @@ function requireOrchestration(deps: RunKindGraphDeps): OrchestrationDeps {
   return deps.orchestration;
 }
 
+/** 四 worker 的 real LLM client 装配唯一口（票 18·狗粮 Q4 分账）：actor（代理审计
+ *  x-actor-id，agent:<worker>）与 worker（出站鉴权 env 链前置 JIAOTU_API_KEY_<WORKER>，
+ *  未设回落单键 JIAOTU_API_KEY——单键模式逐字节回归，见 llm-client.ts）同源一处声明。
+ *  requestId 恒为 launch_<runId> 口径（四处图工厂原样）。 */
+export function workerLlmClient(worker: JiaotuWorker, requestId: string): GatewayLlmClient {
+  return new GatewayLlmClient({ requestId, actor: `agent:${worker}`, worker });
+}
+
 const REGISTRY: Record<string, RunKindDescriptor> = {
   alert_flow: {
     intake: "alert",
@@ -196,7 +208,7 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
         kb: deps.kb,
         llm: deps.llmMode === "fake"
           ? new FakeTriageLlm()
-          : new RealTriageLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:triage" })),
+          : new RealTriageLlm(workerLlmClient("triage", `launch_${run.id}`)),
         audit: deps.audit,
       }),
       ...makeCaseChain(deps, run.id, ticket),
@@ -215,7 +227,7 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
         store: deps.kbStore,
         llm: deps.llmMode === "fake"
           ? new FakeKnowledgeLlm()
-          : new RealKnowledgeLlm(new GatewayLlmClient({ requestId: `launch_${run.id}`, actor: "agent:knowledge" })),
+          : new RealKnowledgeLlm(workerLlmClient("knowledge", `launch_${run.id}`)),
         audit: deps.audit,
       }),
   },
@@ -243,7 +255,7 @@ const REGISTRY: Record<string, RunKindDescriptor> = {
         kb: deps.kb,
         llm: deps.llmMode === "fake"
           ? new FakeChatLlm()
-          : new RealChatLlm(new GatewayLlmClient({ requestId, actor: "agent:chat" })),
+          : new RealChatLlm(workerLlmClient("chat", requestId)),
         fga: deps.fga,
         audit: deps.audit,
       });

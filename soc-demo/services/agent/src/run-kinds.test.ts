@@ -1,7 +1,8 @@
-import { describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { RUN_KIND_IDS, requireRunKind, runKindOf, type RunKindGraphDeps } from "./run-kinds.js";
+import { JIAOTU_WORKERS, jiaotuWorkerEnvKey, type JiaotuWorker } from "./llm-client.js";
+import { RUN_KIND_IDS, requireRunKind, runKindOf, workerLlmClient, type RunKindGraphDeps } from "./run-kinds.js";
 import type { RunRow } from "./runs.js";
 import { MemoryAuditSink } from "./audit.js";
 import { MemoryKb } from "../workers/triage/kb.js";
@@ -139,5 +140,72 @@ describe("run kind 注册表完整性（票 44：一处注册处处消费）", (
     // 分诊六节点（预置骨架）在前，链上两交接节点（case_flow 骨架）在后
     expect(alertNodes.slice(0, 6).map((n) => n.name)).toEqual([...requireRunKind("alert_flow").pipelineNodes!]);
     expect(alertNodes.slice(6).map((n) => n.name)).toEqual([...requireRunKind("case_flow").pipelineNodes!]);
+  });
+});
+
+// ---------- 票 18（狗粮 Q4 分账）：四 worker real LLM client 的装配契约 ----------
+
+describe("workerLlmClient（票 18：分账装配唯一口，各 worker 出站 Bearer 各吃各的分账键）", () => {
+  // env 保存/恢复（llm-client.test.ts 同款纪律：绝不漏出测试进程）
+  const savedEnv: Record<string, string | undefined> = {};
+  afterEach(() => {
+    for (const [k, v] of Object.entries(savedEnv)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+      delete savedEnv[k];
+    }
+    vi.unstubAllGlobals();
+  });
+  const setEnv = (k: string, v: string | undefined): void => {
+    savedEnv[k] = process.env[k];
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  };
+
+  /** stub global fetch（GatewayLlmClient 缺省 fetchImpl 惰性引全局——构造后 stub 仍拦得住）：
+   *  捕获出站头，回 OpenAI 形态固定包。 */
+  const stubFetch = (): Record<string, string> => {
+    const headers: Record<string, string> = {};
+    vi.stubGlobal("fetch", (async (_url: unknown, init?: RequestInit) => {
+      for (const [k, v] of new Headers(init?.headers).entries()) headers[k] = v;
+      return new Response(
+        JSON.stringify({ choices: [{ message: { role: "assistant", content: "ok" } }], usage: { total_tokens: 1 } }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
+    }) as typeof fetch);
+    return headers;
+  };
+
+  test("四 worker 各取各的分账键；actor/requestId 口径不变（agent:<worker> / launch_<runId>）", async () => {
+    const keys: Record<JiaotuWorker, string> = {
+      triage: "ajt_tri18",
+      investigation: "ajt_inv18",
+      knowledge: "ajt_kb18",
+      chat: "ajt_chat18",
+    };
+    for (const w of JIAOTU_WORKERS) setEnv(jiaotuWorkerEnvKey(w), keys[w]);
+    for (const w of JIAOTU_WORKERS) {
+      const headers = stubFetch();
+      await workerLlmClient(w, "launch_run-18").chat("hi", { node: "verdict_llm" });
+      expect(headers.authorization, `${w} 的分账 Bearer`).toBe(`Bearer ${keys[w]}`);
+      expect(headers["x-actor-id"], `${w} 的代理审计 actor`).toBe(`agent:${w}`);
+      expect(headers["x-request-id"]).toBe("launch_run-18");
+    }
+  });
+
+  test("分账键缺省 → 回落单键 JIAOTU_API_KEY（run-kinds 装配面的回落回归）", async () => {
+    setEnv("JIAOTU_API_KEY", "jt-single18");
+    for (const w of JIAOTU_WORKERS) setEnv(jiaotuWorkerEnvKey(w), undefined);
+    const headers = stubFetch();
+    await workerLlmClient("triage", "launch_run-18").chat("hi", { node: "verdict_llm" });
+    expect(headers.authorization).toBe("Bearer jt-single18");
+  });
+
+  test("构造点唯一：run-kinds 内 real client 只经 workerLlmClient 装配（图工厂不得绕过分账声明；hunt loop 归 orchestration 单键）", () => {
+    const src = readFileSync(new URL("./run-kinds.ts", import.meta.url), "utf8");
+    expect(src.match(/new GatewayLlmClient\(/g)).toHaveLength(1); // 唯一构造点在 workerLlmClient 内
+    for (const w of JIAOTU_WORKERS) {
+      expect(src).toContain(`workerLlmClient("${w}"`); // 四 worker 全走唯一口
+    }
   });
 });
