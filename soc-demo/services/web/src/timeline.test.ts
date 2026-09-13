@@ -11,6 +11,7 @@ function detail(over: Partial<CaseDetail> = {}): CaseDetail {
     description: "", severity: 3, tlp: 2, pap: 2, status: "Open",
     verdict: null, verdictNote: null, assignee: null, tags: [],
     linkedAlerts: ["al_1"], startDate: 100, endDate: null, intakeSource: "auto_pipeline",
+    hypothesisId: null, // 票 82：m2 cases wire 新增的假设锚（本件无锚）
     observables: [], timeline: [],
     ...over,
   };

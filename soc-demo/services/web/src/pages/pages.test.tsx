@@ -4,10 +4,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, STORAGE_KEY } from "../auth";
+import type { AuditEntryLike } from "../hunting";
 import AlertsPage from "../pages/AlertsPage";
 import ApprovalsPage from "../pages/ApprovalsPage";
 import CasePage from "../pages/CasePage";
 import EvalPage from "../pages/EvalPage";
+import HuntingPage from "../pages/HuntingPage";
 import LoginPage from "../pages/LoginPage";
 import App from "../App";
 
@@ -608,8 +610,280 @@ describe("EvalPage", () => {
   });
 });
 
+// ---- 票 82：狩猎页（假设 CRUD + 轮次视图实时推进 + 断线重建）----
+
+// wire 照 case-backend mapHypothesis/mapRound + orchestration/audit-log 五要素条目
+const HYP_LIST = [
+  {
+    id: "hyp_p", hypothesis_id: "hyp_p", template_id: "", text: "占位：新提出的假设", status: "proposed",
+    proposed_by: "soc1@soc.local", cancel_reason: null, created_at: 10, decided_at: null,
+  },
+  {
+    id: "hyp_h", hypothesis_id: "hyp_h", template_id: "hunt_webshell", text: "攻击者已建立 webshell 驻留", status: "hunting",
+    proposed_by: "soc1@soc.local", cancel_reason: null, created_at: 20, decided_at: null,
+  },
+  {
+    id: "hyp_c", hypothesis_id: "hyp_c", template_id: "hunt_c2_beacon", text: "C2 信标外连", status: "concluded",
+    proposed_by: "soc1@soc.local", cancel_reason: null, created_at: 30, decided_at: 90,
+  },
+];
+
+const HYP_DETAIL_HUNTING = {
+  ...HYP_LIST[1],
+  rounds: [
+    {
+      round_no: 1,
+      tasks: [{ tool: "playbook_lookup", params: { q: "webshell" }, rationale: "首轮" }],
+      children: [{ run_id: "run_c1", status: "completed" }],
+      judge: { sufficient: false, verdict: null, confidence: 0.4, gap_description: "证据不足" },
+      gap: { gap_description: "证据不足", unknown: "驻留是否仍在", suggested_focus: ["web_access_query"] },
+      created_at: 40,
+    },
+  ],
+};
+
+// 审计锚：audit-log.ts requestId = hunt_<run_id>，outcome 五要素 details.run_id
+const HYP_AUDIT_R1: AuditEntryLike[] = [
+  {
+    id: "a2", action: "hunt_round_outcome", actor: { type: "agent", id: "agent:hunt_flow" },
+    objectType: "hypothesis", objectId: "hyp_h",
+    details: { round_no: 1, run_id: "run_r1", relayed: false },
+    requestId: "hunt_run_r1", result: "SUCCESS", createdAt: 50,
+  },
+];
+
+function mockHuntBase(overrides: {
+  list?: unknown[];
+  detail?: unknown;
+  audit?: unknown[];
+  detailUrl?: string;
+} = {}): void {
+  const list = overrides.list ?? HYP_LIST;
+  const detail = overrides.detail ?? HYP_DETAIL_HUNTING;
+  const audit = overrides.audit ?? HYP_AUDIT_R1;
+  fetchMock.mockImplementation((url: string) => {
+    const u = String(url);
+    if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: list }));
+    if (u.startsWith("/api/v1/hypotheses/")) return Promise.resolve(jsonRes2(200, detail));
+    if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, audit));
+    return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+  });
+}
+
+describe("HuntingPage（票 82）", () => {
+  beforeEach(() => {
+    FakeES.instances = [];
+    vi.stubGlobal("EventSource", FakeES as unknown as typeof EventSource);
+    primeRoleSession("soc1", "soc1@soc.local", "SOC1 分析师");
+  });
+
+  it("假设列表五态 Tag 渲染；发起假设 → POST 正门带发起人头，落表刷新并打开详情", async () => {
+    const afterCreate = [...HYP_LIST, {
+      id: "hyp_new", hypothesis_id: "hyp_new", template_id: "hunt_webshell",
+      text: "新假设", status: "proposed", proposed_by: "soc1@soc.local",
+      cancel_reason: null, created_at: 40, decided_at: null,
+    }];
+    let list = HYP_LIST;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u === "/api/v1/hypotheses" && init?.method === "POST") {
+        expect(init.headers).toMatchObject({ "x-actor-id": "soc1@soc.local" });
+        expect(JSON.parse(String(init.body))).toEqual({ text: "新假设句", template_id: "hunt_webshell" });
+        list = afterCreate;
+        return Promise.resolve(jsonRes2(201, afterCreate.at(-1)));
+      }
+      if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: list }));
+      if (u.startsWith("/api/v1/hypotheses/hyp_new")) return Promise.resolve(jsonRes2(200, { ...afterCreate.at(-1), rounds: [] }));
+      if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, []));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+
+    render(
+      <AuthProvider>
+        <HuntingPage />
+      </AuthProvider>,
+    );
+    // 五态里的三态如实成牌（五态全集映射在 hunting.test.ts 锁）
+    await waitFor(() => expect(screen.getByText("狩猎中")).toBeTruthy());
+    expect(screen.getByText("待开跑")).toBeTruthy();
+    expect(screen.getByText("已命中")).toBeTruthy();
+
+    fireEvent.change(await screen.findByPlaceholderText(/假设句/), { target: { value: "新假设句" } });
+    fireEvent.change(screen.getByPlaceholderText(/template_id/), { target: { value: "hunt_webshell" } });
+    fireEvent.click(screen.getByText("发起狩猎"));
+
+    await waitFor(() => expect(screen.getByText("占位：新提出的假设")).toBeTruthy()); // 列表已刷新
+    await waitFor(() => expect(screen.getByText("假设详情")).toBeTruthy()); // 详情已打开
+  });
+
+  it("轮次视图：详情轮次归集段装配成卡（组合/子 run/judge/gap）；SSE 按审计锚订阅", async () => {
+    mockHuntBase();
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_h" />
+      </AuthProvider>,
+    );
+    await screen.findByText("假设详情");
+    // 轮次卡：组合 C_k（工具名）、子 run 状态、judge、gap、父 run 锚
+    await waitFor(() => expect(screen.getByText("第 1 轮")).toBeTruthy());
+    expect(screen.getByText("playbook_lookup")).toBeTruthy();
+    expect(screen.getByText("run_c1 completed")).toBeTruthy();
+    expect(screen.getAllByText(/证据不足/).length).toBeGreaterThanOrEqual(1); // judge/gap 双处如实渲染
+    // SSE 复用事件总线：按审计锚找到父 run（run 行+审计重建的实时半边）
+    await waitFor(() => expect(FakeES.instances.some((es) => es.url.includes("run_id=run_r1"))).toBe(true));
+  });
+
+  it("SSE 实时推进：declared/joined/relay 帧落卡；INV-7 同 id 重放恰一次", async () => {
+    mockHuntBase();
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_h" />
+      </AuthProvider>,
+    );
+    await waitFor(() =>
+      expect(FakeES.instances.some((x) => x.url.includes("run_id=run_r1"))).toBe(true),
+    );
+    const es = FakeES.instances.find((x) => x.url.includes("run_id=run_r1"))!;
+    es.onopen?.();
+    // 轮间接力：下一轮占位卡（详情归集段未到，如实标 pending）
+    es.emit("audit", 5, { action: "round_relay", hypothesis_id: "hyp_h", next_round: 2, parent_run_id: "run_r1" });
+    await screen.findByText("第 2 轮（接力中）");
+    // 组合声明 → 占位卡出现声明中的子 run（running）
+    es.emit("audit", 6, { action: "hunt_children_declared", round_no: 2, children: ["run_c9"] });
+    await screen.findByText("run_c9 running");
+    // 子 run 回归 → 状态翻面
+    es.emit("audit", 7, { action: "hunt_children_joined", round_no: 2, children: [{ run_id: "run_c9", status: "completed" }] });
+    await waitFor(() => expect(screen.getByText("run_c9 completed")).toBeTruthy());
+    // INV-7 恰一次：同 id 重放不二次应用（日志/卡不重复翻面）
+    es.emit("audit", 6, { action: "hunt_children_declared", round_no: 2, children: ["run_c9"] });
+    await waitFor(() => expect(screen.getAllByText("run_c9 completed")).toHaveLength(1));
+    expect(screen.getAllByText(/组合已扇出/)).toHaveLength(1);
+  });
+
+  it("断线补发（INV-7）：断线后按游标重连，URL 带 after=<最后事件 id>", async () => {
+    mockHuntBase();
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_h" />
+      </AuthProvider>,
+    );
+    await waitFor(() =>
+      expect(FakeES.instances.some((x) => x.url.includes("run_id=run_r1&after=0"))).toBe(true),
+    );
+    const es = FakeES.instances.find((x) => x.url.includes("run_id=run_r1&after=0"))!;
+    es.onopen?.();
+    es.emit("audit", 5, { action: "round_relay", hypothesis_id: "hyp_h", next_round: 2, parent_run_id: "run_r1" });
+    es.onerror?.(); // 断线（页面 retryMs=300，快退避只为演示窗；补发语义在 ./sse 单测锁）
+    await waitFor(() => expect(FakeES.instances).toHaveLength(2));
+    expect(FakeES.instances[1].url).toBe("/api/v1/events/stream?run_id=run_r1&after=5");
+  });
+
+  it("多轮推进：父 run 终态收流后按审计重建，发现新轮锚自动接上新 run 的流", async () => {
+    let audit = HYP_AUDIT_R1;
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: HYP_LIST }));
+      if (u.startsWith("/api/v1/hypotheses/hyp_h")) return Promise.resolve(jsonRes2(200, HYP_DETAIL_HUNTING));
+      if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, audit));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_h" />
+      </AuthProvider>,
+    );
+    await waitFor(() =>
+      expect(FakeES.instances.some((x) => x.url.includes("run_id=run_r1"))).toBe(true),
+    );
+    const es1 = FakeES.instances.find((x) => x.url.includes("run_id=run_r1"))!;
+    es1.onopen?.();
+    // round 2 的 run 已起（审计重建源更新）但旧流未关；旧 run 终态 → 页面重取审计 → 接上 run_r2
+    audit = [
+      ...audit,
+      { id: "a3", action: "hunt_round_outcome", actor: { type: "agent", id: "agent:hunt_flow" },
+        objectType: "hypothesis", objectId: "hyp_h", details: { round_no: 2, run_id: "run_r2" },
+        requestId: "hunt_run_r2", result: "SUCCESS", createdAt: 60 },
+    ];
+    es1.emit("audit", 9, { status: { from: "running", to: "completed" } });
+    await waitFor(() => expect(FakeES.instances.some((x) => x.url.includes("run_id=run_r2"))).toBe(true));
+  });
+
+  it("取消狩猎（仅 hunting 态出按钮）：确认 → POST :id/cancel 带发起人；409 人话提示", async () => {
+    mockHuntBase();
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_h" />
+      </AuthProvider>,
+    );
+    await screen.findByText("假设详情");
+    fireEvent.click(screen.getByText("取消狩猎"));
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.endsWith("/cancel")) {
+        expect(JSON.parse(String(init!.body))).toEqual({ by: "soc1@soc.local", reason: "user_cancelled" });
+        return Promise.resolve(jsonRes2(409, { error: "InvalidTransition" }));
+      }
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+    fireEvent.click(await screen.findByText("确认取消"));
+    // 断言点名本页的文案（审批页 409 message 的 DOM 残留不参与匹配）
+    await screen.findByText(/取消失败（409）/);
+  });
+
+  it("收敛结论：concluded 反查 Case 链接（既有案件查询面，按 hypothesis_id）", async () => {
+    mockHuntBase({
+      detail: { ...HYP_LIST[2], rounds: [{
+        round_no: 2,
+        tasks: [{ tool: "graph_query" }],
+        children: [{ run_id: "run_c5", status: "completed" }],
+        judge: { sufficient: true, verdict: "hit", confidence: 0.8, gap_description: null },
+        gap: null,
+        created_at: 80,
+      }] },
+    });
+    fetchMock.mockImplementation((url: string) => {
+      const u = String(url);
+      if (u === "/api/v1/cases") {
+        return Promise.resolve(jsonRes2(200, [
+          { id: "case_000002", number: 2, title: "C2 外连案", severity: 3, status: "Open", linkedAlerts: [], startDate: 90, hypothesisId: "hyp_c" },
+        ]));
+      }
+      if (u === "/api/v1/hypotheses") return Promise.resolve(jsonRes2(200, { hypotheses: HYP_LIST }));
+      if (u.startsWith("/api/v1/hypotheses/hyp_c")) {
+        return Promise.resolve(jsonRes2(200, { ...HYP_LIST[2], rounds: [{
+          round_no: 2, tasks: [{ tool: "graph_query" }], children: [{ run_id: "run_c5", status: "completed" }],
+          judge: { sufficient: true, verdict: "hit", confidence: 0.8, gap_description: null }, gap: null, created_at: 80,
+        }] }));
+      }
+      if (u.startsWith("/api/v1/audit?")) return Promise.resolve(jsonRes2(200, HYP_AUDIT_R1));
+      return Promise.resolve(jsonRes2(404, { error: "not_found" }));
+    });
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_c" />
+      </AuthProvider>,
+    );
+    await screen.findByText("假设详情");
+    await screen.findByText("第 2 轮");
+    expect(screen.getByText("hit")).toBeTruthy();
+    await screen.findByText(/case_000002/); // Case 链接（复用既有查询面，无新端点）
+  });
+
+  it("非 hunting 态不出取消按钮（状态机口径在页面如实呈现）", async () => {
+    // 列表里也不放 hunting 行：取消按钮只挂在 hunting 态行上（proposed 不能取消）
+    mockHuntBase({ list: [HYP_LIST[0]], detail: { ...HYP_LIST[0], rounds: [] }, audit: [] });
+    render(
+      <AuthProvider>
+        <HuntingPage hypothesisId="hyp_p" />
+      </AuthProvider>,
+    );
+    await screen.findByText("假设详情");
+    expect(screen.queryByText("取消狩猎")).toBeNull();
+  });
+});
+
 describe("App 壳（路由快照兜底）", () => {
-  it("菜单恰好六项（由 ROUTES 生成）；表外 hash 兜底回告警列表", async () => {
+  it("菜单恰好七项（由 ROUTES 生成；表外 hash 兜底回告警列表）", async () => {
     primeSession();
     fetchMock.mockImplementation(() => Promise.resolve(jsonRes2(200, [])));
     window.location.hash = "#/no_such_page";
@@ -620,11 +894,11 @@ describe("App 壳（路由快照兜底）", () => {
       </AuthProvider>,
     );
 
-    // 菜单六项一字不差（六页面之外无路由的 UI 面）
+    // 菜单七项一字不差（路由表之外无路由的 UI 面；第七页狩猎页 = 票 71 页面映射节/票 82）
     const items = container.querySelectorAll<HTMLLIElement>(".ant-menu-item");
-    expect(items).toHaveLength(6);
+    expect(items).toHaveLength(7);
     expect([...items].map((li) => li.textContent)).toEqual([
-      "告警列表", "流水线视图", "审批卡", "案件时间线", "审计流", "Eval 结果",
+      "告警列表", "流水线视图", "审批卡", "案件时间线", "审计流", "Eval 结果", "狩猎假设",
     ]);
 
     // 表外名字不是路由：渲染的是告警列表（兜底），不是 404 页、更不是别的页面

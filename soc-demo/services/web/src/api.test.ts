@@ -166,8 +166,8 @@ describe("api client · 审批卡/案件/Eval（票 21）", () => {
 
   it("findCaseIdByAlert：在 linkedAlerts 里反查案件 id；找不到返回 null", () => {
     const cases = [
-      { id: "case_000001", number: 1, title: "t", severity: 2, status: "Open", linkedAlerts: ["al_1"], startDate: 1 },
-      { id: "case_000002", number: 2, title: "t", severity: 3, status: "Open", linkedAlerts: ["al_2", "al_3"], startDate: 2 },
+      { id: "case_000001", number: 1, title: "t", severity: 2, status: "Open", linkedAlerts: ["al_1"], startDate: 1, hypothesisId: null },
+      { id: "case_000002", number: 2, title: "t", severity: 3, status: "Open", linkedAlerts: ["al_2", "al_3"], startDate: 2, hypothesisId: null },
     ];
     expect(findCaseIdByAlert(cases, "al_3")).toBe("case_000002");
     expect(findCaseIdByAlert(cases, "al_404")).toBeNull();

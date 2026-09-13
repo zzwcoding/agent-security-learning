@@ -210,6 +210,9 @@ export interface CaseRow {
   status: string;
   linkedAlerts: string[];
   startDate: number;
+  /** 票 73/75：命中建案回填的假设锚（m2 cases.hypothesis_id 列；狩猎页收敛结论的
+   *  Case 链接就靠它反查——页面映射「收敛结论」行的既有案件查询面）。 */
+  hypothesisId: string | null;
 }
 
 export interface TimelineEntry {
@@ -250,6 +253,114 @@ export function listCases(): Promise<CaseRow[]> {
  *  案件的 linkedAlerts 数组里有它就是）。找不到返回 null（告警还没建案）。 */
 export function findCaseIdByAlert(cases: CaseRow[], alertId: string): string | null {
   return (cases.find((c) => c.linkedAlerts.includes(alertId)) ?? null)?.id ?? null;
+}
+
+/** 假设 → 案件反查（票 75 命中建案回填 hypothesis_id；票 82 收敛结论的 Case 链接）。
+ *  同为既有案件查询面的客户端过滤，无新端点。 */
+export function findCaseIdByHypothesis(cases: CaseRow[], hypothesisId: string): string | null {
+  return (cases.find((c) => c.hypothesisId === hypothesisId) ?? null)?.id ?? null;
+}
+
+// ---- m2 假设（services/case-backend，票 73 落卡面；票 82 狩猎页数据源）----
+// 页面映射「狩猎页」六行的全部读/写都落在这里：列表（五态）/ 发起 / 取消 / 详情
+// （内嵌轮次归集段）；收敛结论的 Case 链接复用上面的既有案件查询面。零 Web 专属接口。
+
+export type HypothesisStatusWire = "proposed" | "hunting" | "concluded" | "refuted" | "cancelled";
+
+/** wire = case-backend mapHypothesis()（snake_case，hypothesis_id/id 双键出线）。 */
+export interface HypothesisRow {
+  id: string;
+  hypothesisId: string;
+  templateId: string;
+  text: string;
+  status: HypothesisStatusWire;
+  proposedBy: string;
+  cancelReason: string | null;
+  createdAt: number;
+  decidedAt: number | null;
+}
+
+/** 子 run 簿记的假设侧视图（m14 dispatch/join 上报，形状照 flow.ts children）。 */
+export interface HuntChild {
+  run_id: string;
+  status: string;
+}
+
+/** 轮次归集段（m2 hypothesis_rounds）：{round_no, tasks[], children[], judge, gap}。 */
+export interface HypothesisRoundWire {
+  round_no: number;
+  tasks: unknown[];
+  children: HuntChild[];
+  judge: unknown;
+  gap: unknown;
+  created_at: number;
+}
+
+/** 详情 = 账面行 + 轮次归集段（页面映射「轮次视图/judge+gap/收敛结论」三行的读面）。 */
+export interface HypothesisDetail extends HypothesisRow {
+  rounds: HypothesisRoundWire[];
+}
+
+function toHypothesis(w: Record<string, unknown>): HypothesisRow {
+  return {
+    id: String(w.id ?? ""),
+    hypothesisId: String(w.hypothesis_id ?? w.id ?? ""),
+    templateId: String(w.template_id ?? ""),
+    text: String(w.text ?? ""),
+    status: (w.status as HypothesisStatusWire) ?? "proposed",
+    proposedBy: String(w.proposed_by ?? ""),
+    cancelReason: typeof w.cancel_reason === "string" ? w.cancel_reason : null,
+    createdAt: Number(w.created_at ?? 0),
+    decidedAt: typeof w.decided_at === "number" ? w.decided_at : null,
+  };
+}
+
+export function listHypotheses(status?: HypothesisStatusWire): Promise<HypothesisRow[]> {
+  return request<{ hypotheses: Record<string, unknown>[] }>(
+    `/api/v1/hypotheses${status ? `?status=${status}` : ""}`,
+  ).then((r) => (r.hypotheses ?? []).map(toHypothesis));
+}
+
+/** 发起假设（POST /api/v1/hypotheses → 201 proposed + outbox hypothesis.created 同事务，
+ *  agent autorun 消费它拉起 hunt_flow）。发起人走 x-actor-id 头（票 39 同款：取消的
+ *  「仅发起人」比对锚在 INV-8 审计可回放）。template_id 缺省 = 机制默认档。 */
+export function createHypothesis(d: { text: string; templateId?: string; actorId?: string }): Promise<HypothesisRow> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (d.actorId) headers["x-actor-id"] = d.actorId;
+  return request<Record<string, unknown>>("/api/v1/hypotheses", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ text: d.text, ...(d.templateId ? { template_id: d.templateId } : {}) }),
+  }).then(toHypothesis);
+}
+
+/** 人取消（POST :id/cancel，行为约定 12）：仅发起人 + 仅 hunting 态 + 四因枚举；
+ *  后到者/非发起人 409/403 原样抛 ApiError。 */
+export function cancelHypothesis(
+  id: string,
+  d: { by?: string; reason?: string; actorId?: string } = {},
+): Promise<HypothesisRow> {
+  const headers: Record<string, string> = { "content-type": "application/json" };
+  if (d.actorId) headers["x-actor-id"] = d.actorId;
+  return request<Record<string, unknown>>(`/api/v1/hypotheses/${encodeURIComponent(id)}/cancel`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ ...(d.by ? { by: d.by } : {}), ...(d.reason ? { reason: d.reason } : {}) }),
+  }).then(toHypothesis);
+}
+
+export function getHypothesisDetail(id: string): Promise<HypothesisDetail> {
+  return request<Record<string, unknown>>(`/api/v1/hypotheses/${encodeURIComponent(id)}`).then((w) => ({
+    ...toHypothesis(w),
+    rounds: (Array.isArray(w.rounds) ? (w.rounds as Record<string, unknown>[]) : []).map((r) => ({
+      round_no: Number(r.round_no ?? 0),
+      tasks: Array.isArray(r.tasks) ? r.tasks : [],
+      children: (Array.isArray(r.children) ? r.children : []) as HuntChild[],
+      judge: r.judge ?? null,
+      gap: r.gap ?? null,
+      created_at: Number(r.created_at ?? 0),
+    })),
+  }));
 }
 
 // ---- m9 PII 受控反查（services/agent POST /api/v1/pii/reveal，票 49·ADR 0004-3）----

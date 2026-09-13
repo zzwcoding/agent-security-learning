@@ -1,6 +1,7 @@
 // Web 演示窗（m10）：薄客户端壳 = hash 路由 + 登录闸 + 布局菜单。
-// 路由范围锁死（m10 卡·决策 #6）：六个路由（ROUTES 唯一事实来源，routes.ts），
-// 之外不会有任何路由——菜单由表生成、页面开关由表驱动、快照断言在 routes.test.ts。
+// 路由范围锁死（m10 卡·决策 #6）：路由表之外无任何路由（ROUTES 唯一事实来源，
+// routes.ts）——菜单由表生成、页面开关由表驱动、快照断言在 routes.test.ts。
+// 票 82：表增第七页 hunting（狩猎页，页面映射节/PRD §13.7 落卡行），既有六页不动。
 // 不引路由库/状态库（2026-09-08 拍板）：hash 解析 20 行 + React context 就够，
 // 演示窗的复杂度必须留在后端。
 import { Button, Layout, Menu, Space, Tooltip, Typography } from "antd";
@@ -11,6 +12,7 @@ import ApprovalsPage from "./pages/ApprovalsPage";
 import AuditPage from "./pages/AuditPage";
 import CasePage from "./pages/CasePage";
 import EvalPage from "./pages/EvalPage";
+import HuntingPage from "./pages/HuntingPage";
 import LoginPage from "./pages/LoginPage";
 import PipelinePage from "./pages/PipelinePage";
 import { isRouteName, parseHash, ROUTES, type RouteName } from "./routes";
@@ -78,13 +80,14 @@ function Shell() {
         {active === "audit" && <AuditPage />}
         {active === "eval" && <EvalPage />}
         {active === "alerts" && <AlertsPage go={go} />}
+        {active === "hunting" && <HuntingPage hypothesisId={param("hypothesis_id")} go={go} />}
       </Layout.Content>
     </Layout>
   );
 }
 
 // 阶段 21 跑通：登录 → 六页面全齐（告警/流水线/审批卡/案件时间线/审计流/Eval），
-// 数据全部来自公开 REST + SSE + 静态产物，无 Web 特权接口
+// 数据全部来自公开 REST + SSE + 静态产物，无 Web 特权接口。票 82 起加第七页狩猎页。
 export default function App() {
   return (
     <AuthProvider>
