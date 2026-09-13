@@ -78,8 +78,9 @@ const isObj = (v: unknown): v is Record<string, unknown> =>
 const nonEmpty = (v: unknown): v is string => typeof v === "string" && v.length > 0;
 
 /** time_window 把关：必须有、必须 from/to 都是非空可解析时刻、from ≤ to。
- *  「无默认值」是契约（PRD §6-M5）：缺了就报 time_window_required，绝不替 LLM 补。 */
-function checkTimeWindow(tw: unknown): ToolCallVerdict {
+ *  「无默认值」是契约（PRD §6-M5）：缺了就报 time_window_required，绝不替 LLM 补。
+ *  票 78：hunt.ts 的狩猎四工具共用本函数（同一口径，不复制第二份时间窗规则）。 */
+export function checkTimeWindow(tw: unknown): ToolCallVerdict {
   if (tw === undefined || tw === null) return { ok: false, error: "time_window_required" };
   if (!isObj(tw)) return { ok: false, error: "bad_time_window" };
   const { from, to } = tw as { from?: unknown; to?: unknown };

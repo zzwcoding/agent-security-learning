@@ -69,8 +69,9 @@ def test_tool_manifest_matches_matrix_families():
     """票 48（ADR 0004-2）：fixtures/tools.manifest.json 是工具分级/族的登记单一来源；
     matrix.json 是族→角色的 FGA 授权面。两个机读面的族归属与分级必须逐字一致：
     矩阵里的每个工具在 manifest 同名同族同级；manifest 比矩阵多出的登记必须单独
-    点名（当前两个：get_case，票 17 引入的沉淀读案工具；list_approvals，场景 7 的
-    审批台账读口——两者都是「登记先行、矩阵暂未收」的点名例外）。"""
+    点名（get_case，票 17 引入的沉淀读案工具；list_approvals，场景 7 的审批台账读口；
+    票 78 的狩猎查询工具 ×4——file_change_query/outbound_conn_query/web_access_query/
+    proc_lineage_query——六者都是「登记先行、矩阵暂未收」的点名例外，收编归 L0 记票）。"""
     entries = {t["name"]: t for t in load_tool_manifest()["tools"]}
     fams = load_matrix()["families"]
     matrix_tools = {t for fam in fams.values() for t in fam["tools"]}
@@ -80,7 +81,11 @@ def test_tool_manifest_matches_matrix_families():
             assert entries[tool]["family"] == fam, f"{tool} family 与矩阵漂移"
             assert entries[tool]["tier"] == spec["tier"], f"{tool} tier 与矩阵漂移"
     extra = set(entries) - matrix_tools
-    assert extra == {"get_case", "list_approvals"}, f"manifest 比矩阵多出的登记须点名复核：{sorted(extra)}"
+    assert extra == {
+        "get_case", "list_approvals",
+        # 票 78 狩猎查询工具 ×4（L0 readonly_query，owner m5——登记先行，矩阵收编记票）
+        "file_change_query", "outbound_conn_query", "web_access_query", "proc_lineage_query",
+    }, f"manifest 比矩阵多出的登记须点名复核：{sorted(extra)}"
 
 
 def test_no_direct_grant_on_l2_anywhere():

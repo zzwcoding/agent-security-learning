@@ -1,0 +1,21 @@
+{
+  "timestamp": "2023-04-25T16:36:00.000000Z",
+  "id": "1682435760.0507",
+  "rule": {
+    "id": "100210",
+    "level": 8,
+    "description": "Outbound connection to a resolved known-bad domain.",
+    "groups": ["ossec", "firewall", "custom"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "002", "name": "centos7" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "kernel" },
+  "data": {
+    "dstip": "203.0.113.66",
+    "dstport": "443",
+    "dns": "c2.evil-baseline.example"
+  },
+  "full_log": "kernel: OUTBOUND conn src=centos7 dst=203.0.113.66:443 dns=c2.evil-baseline.example (resolved lookup)",
+  "location": "/var/log/firewall"
+}

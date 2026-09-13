@@ -1,0 +1,25 @@
+{
+  "timestamp": "2023-04-25T16:30:00.000000Z",
+  "id": "1682435400.0501",
+  "rule": {
+    "id": "554",
+    "level": 7,
+    "description": "File added to the system.",
+    "groups": ["ossec", "syscheck", "syscheck_entry_added"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "001", "name": "web-01" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "syscheck_db" },
+  "syscheck": {
+    "path": "/var/www/html/uploads/sh.php",
+    "mode": "add",
+    "size_after": "418",
+    "uname_after": "www-data",
+    "md5_after": "3f2a9c1d7b8e4a605c9d1e2f3a4b5c6d",
+    "sha1_after": "11aa22bb33cc44dd55ee66ff77008899aabbccd1",
+    "sha256_after": "f1e2d3c4b5a6978877665544332211aabbccddeeff0011223344556677889900"
+  },
+  "full_log": "File '/var/www/html/uploads/sh.php' added\nMode: add\nUser: www-data\nHashes: md5=3f2a9c1d7b8e4a605c9d1e2f3a4b5c6d sha256=f1e2d3c4b5a6978877665544332211aabbccddeeff0011223344556677889900",
+  "location": "syscheck"
+}

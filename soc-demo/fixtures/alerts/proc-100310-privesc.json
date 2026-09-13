@@ -1,0 +1,21 @@
+{
+  "timestamp": "2023-04-25T16:33:00.000000Z",
+  "id": "1682435580.0504",
+  "rule": {
+    "id": "100310",
+    "level": 10,
+    "description": "Suspicious privilege escalation lineage: sudo spawned a root shell.",
+    "groups": ["ossec", "auditd", "custom"],
+    "firedtimes": 1
+  },
+  "agent": { "id": "002", "name": "centos7" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "auditd" },
+  "data": {
+    "process_name": "bash",
+    "parent_process_name": "sudo",
+    "user": "root"
+  },
+  "full_log": "auditd: parent_process=sudo child_process=bash user=root cmdline=/bin/bash -p",
+  "location": "/var/log/audit/audit.log"
+}

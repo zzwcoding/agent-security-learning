@@ -26,7 +26,7 @@ describe("INV-11 两票制遍历矩阵（票 76：父票 planner 面 + 子票 na
     expect(m.parentFace.length).toBe(3); // 父票面 = planner 只读菜单三件
     expect(m.childFaces).toHaveLength(3); // 每类任务一枚子票
     expect(m.childFaces.map((f) => f.allowed_tools[0]).sort()).toEqual(["kb_lookup", "related_alerts", "siem_query"]);
-    expect(m.denials.length).toBe(3 * 24); // 3 类任务 × 24 个票面外工具（25 在册工具全集）
+    expect(m.denials.length).toBe(3 * 28); // 3 类任务 × 28 个票面外工具（29 在册工具全集 = 25 + 票 78 四工具）
     expect(m.allows.length).toBe(3);
     expect(m.expiredReplays.length).toBe(3);
   });

@@ -19,6 +19,7 @@ import { verifyTicket } from "./verify-ticket.js";
 import { RUN_KIND_IDS, requireRunKind } from "./run-kinds.js";
 import { TRIAGE_TOOLS } from "../workers/triage/prompt.js";
 import { INVESTIGATION_TOOLS } from "../workers/investigation/prompt.js";
+import { HUNT_QUERY_TOOLS } from "../workers/investigation/hunt.js";
 import { ENRICHMENT_TOOLS } from "../workers/enrichment/tools.js";
 import { KNOWLEDGE_TOOLS } from "../workers/knowledge/prompt.js";
 import { CHAT_READONLY_TOOLS } from "../workers/chat/flow.js";
@@ -62,8 +63,15 @@ function parsePrdA1(): A1Row[] {
 }
 
 // ADR 0004-2 已知偏差（记票 48 出入①，2026-09-12 票 63 收回）：get_case 已补列 PRD
-// A.1（L1，沉淀读案），具名偏差清零——列表保留作未来偏差的登记位，非空即红。
-const KNOWN_NOT_IN_A1: string[] = [];
+// A.1（L1，沉淀读案）。票 78（2026-09-13）：狩猎查询工具 ×4 登记先行——manifest 既有
+// 口径（先登记后持票），PRD A.1 表与 gateway FGA 矩阵的收编归 L0 记票（list_approvals
+// 首例同款）；在收编落地前，四个名字逐个点名在此，多一个没记票的 → 红。
+const KNOWN_NOT_IN_A1: string[] = [
+  "file_change_query",
+  "outbound_conn_query",
+  "web_access_query",
+  "proc_lineage_query",
+];
 
 describe("ToolManifest ≡ PRD A.1（文档面：漂移必红）", () => {
   const manifest = loadToolsManifest().tools.map((t) => ({ name: t.name, tier: t.tier }));
@@ -106,9 +114,10 @@ describe("ToolManifest ≡ worker 工具面（代码面：先登记后持票）"
     ["ENRICHMENT_TOOLS（票 15）", ENRICHMENT_TOOLS],
     ["KNOWLEDGE_TOOLS（票 17）", KNOWLEDGE_TOOLS],
     ["CHAT_READONLY_TOOLS（票 18）", CHAT_READONLY_TOOLS],
+    ["HUNT_QUERY_TOOLS（票 78）", HUNT_QUERY_TOOLS],
   ];
 
-  test("六个来源的工具面全部已登记（worker 加工具不登记 → 红）", () => {
+  test("七个来源的工具面全部已登记（worker 加工具不登记 → 红）", () => {
     for (const [label, face] of FACES) {
       for (const tool of face) {
         expect(names.has(tool), `${label} 的 ${tool} 未在 manifest 登记`).toBe(true);

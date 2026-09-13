@@ -1,0 +1,20 @@
+{
+  "timestamp": "2023-04-25T16:35:00.000000Z",
+  "id": "1682435700.0506",
+  "rule": {
+    "id": "100200",
+    "level": 10,
+    "description": "Possible C2 beacon: repeated outbound connection to a known-bad IP.",
+    "groups": ["ossec", "firewall", "custom"],
+    "firedtimes": 2
+  },
+  "agent": { "id": "002", "name": "centos7" },
+  "manager": { "name": "wazuh-manager" },
+  "decoder": { "name": "kernel" },
+  "data": {
+    "dstip": "203.0.113.66",
+    "dstport": "443"
+  },
+  "full_log": "kernel: OUTBOUND conn src=centos7 dst=203.0.113.66:443 proto=TCP (beacon #2, interval 60s)",
+  "location": "/var/log/firewall"
+}
