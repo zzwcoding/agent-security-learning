@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 9 大图 · 一个假设的一生</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 9 大图 · 一个假设的一生 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 9「一个假设的一生」全链的代码落点索引：一张 <code>POST /api/v1/hypotheses</code> 发起的
+侦查怀疑书（hypothesis），由 autorun 拉起 <code>hunt_flow</code> 轮 1 run——六节点轮次链
+（intake→planner→dispatch→await_children→judge→outcome）跑完一轮；judge 判不充分就经 gap
+翻译缺口、relay 接力下一轮（组合 C₂≠C₁ 画在轮次归集上），判充分就走收敛分岔（hit 建案挂
+hypothesis_id / miss 证伪归档）。取消与预算烧光走同一条停止链，账面落 cancelled 不冒充 refuted。
+与场景 1 的结构呼应：S1 是被动链（告警进门一路走到建案），S9 是主动环（自己立项、一轮轮选组合→扇出→收敛）。
+本场景数字：<b>6 步 / 40 个节点 / 15 道安全闸</b>（红描边 🛡️）。（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）； cylinders（柱形）= 存储表。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；<b>红虚线 = 跨容器出站调用</b>（标签带 <code>跨容器→服务:端口</code>；进程内/同容器调用不出红）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 出站 HTTP；<code>响应 …</code> = 回包；<code>读 …</code> = 只读依赖；<code>事件 …</code> = 落盘事件总线扇出（禁轮询）。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 9-1..9-6（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「怀疑书怎么立、轮 1 谁拉起、五态门口怎么过」→ <code>OPERATOR → HYP_CREATE → AUTORUN_HUNT → RUN_GATE_HUNT</code>（9.1）。</li>
+  <li>想看「planner 怎么照菜单点菜、建议和决定为什么是两笔账」→ <code>INTAKE → SANITIZE → PLAN_LLM → MENU_GATE → DISPATCH</code>（9.2）。</li>
+  <li>想看「两路子 run 怎么并行不并权、越界任务死在哪条缝」→ <code>DISPATCH → CHILD_MINT → TASK_FLOW / GATED_HUNT</code>（9.3）。</li>
+  <li>想看「环怎么转、C₂≠C₁ 和防转指纹在哪」→ <code>JUDGE_SCHEMA → OUTCOME → GAP → RECORD_ROUND → RELAY</code>（回 RUN_GATE_HUNT 成环）与 <code>SPIN_GATE</code>（9.5）。</li>
+  <li>想看「取消/预算烧光怎么安全停、为什么不冒充 refuted」→ <code>CANCEL_CHAIN</code> 与 <code>EVENT_TAP → CANCEL_CHAIN</code>、<code>HYP_CANCEL_EP</code>（9.6）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（40 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">宿主侧值班长/紫队脚本/eval fixture：POST :3002/api/v1/hypotheses 发起怀疑书</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">提出者不止人：紫队攻击 fixture 也能自动转出（actor=system，S12 的接口）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_CREATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_CREATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 建档 POST /api/v1/hypotheses：hypotheses 表 INSERT proposed；同事务 create 审计 + outbox hypothesis.created（hypotheses.ts:107-125）；🛡️ 防 账面与拉起信号分家（INV-6/8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">提出即落账、信号同事务——「账还没立信号先飞」的中间态不存在（行为约定 1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYPS / AUTORUN_HUNT（经 outbox）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_FSM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">五态状态机 proposed→hunting→concluded/refuted/cancelled；表外迁移 409、终态不可回退（statemachine.ts:27-33）；🛡️ 防 表外迁移与终态复活（INV-10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「谁能在什么状态干什么」查表不散装 if；取消六因只是 cancelled 的原因标注不是独立状态</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INTAKE（轮1前置 hunting）/ CONVERGE / CANCEL_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_CANCEL_EP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST /api/v1/hypotheses/:id/cancel：仅发起人 + 仅 hunting + 四因枚举；同事务发 hypothesis.cancelled（hypotheses.ts:159-190）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">账面落终态与拉起停止信号原子（hypothesis.created 的镜像口径）；proposed/终态取消 409</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_FSM / AUTORUN_CANCEL（经 outbox）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYPS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 hypotheses + hypothesis_rounds：(hypothesis_id, round_no) 唯一，重放幂等替换（db.ts:147/163）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">轮次归集的账面事实源——轮次视图/狩猎页读它；at-least-once 消费靠唯一约束兜底</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECORD_ROUND（写）/ INTAKE（读 gap）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CASES</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 cases：hypothesis_id 可空列（票 73 补列），hit/miss 收敛建案时回填</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">案卷是两条路共同的汇点：S1 被动链建案与 S9 主动环 hit 建案同一张表</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（S2 调查链的入口）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTORUN_HUNT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">看板的 autorun 2s tick 消费 hypothesis.created → hunt_flow 轮 1；防重三闸 dup_batch/run_exists/round_exists（autorun.ts:222-248）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">事件重放不重复起轮；runs 行挡进行中、簿记锚挡游标丢失重放，两把锁各管各的</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LAUNCH_ROUND / RUN_GATE_HUNT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AUTORUN_CANCEL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">autorun 消费 hypothesis.cancelled → requestCancel（m14 取消机制唯一入口）；重放幂等 cancel_dup（autorun.ts:249-276）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人取消的生产接续——停止链不能丢，失败不动游标下轮重试（at-least-once）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CANCEL_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_GATE_HUNT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">正门 POST :3003/internal/runs：intake=hypothesis 校验 hypothesis_id 必填；runs.hypothesis_id 专用列（票 90）+ 202 秒回（app.ts:309-327,345-351,400-405）；🛡️ 防 非法拉起（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt 两 kind 与旧 kind 同权走 m3 run 机器——202/分发循环时序接缝零特判</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNS_HUNT / INTAKE（分发循环领走后）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LAUNCH_ROUND</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">拉起件 launchRound/launchTask：door 正门 + hunt_run_links 簿记锚紧跟落账（launcher.ts:21-52）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">autorun 轮 1 与 relay 轮间接力共用同一 launcher——「先有轮号，后有轮」</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RUN_GATE_HUNT / T_LINKS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_LINKS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 hunt_run_links：role=round/task，parent_run_id+round_no+task 可查（ledger.ts:41-53）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">run 家谱真相源：防重闸、relay 幂等锚、子 run intake 的任务恢复全查它</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TASK_FLOW（读任务）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNS_HUNT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 runs/run_jobs：hunt 行 hypothesis_id 有值 case_id 恒空；父子 run 各自独立状态机与预算账</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">并行不并权：父 500k/200 步、子默认档、轮级 30k/10 步/120s 三本账分开</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（观察面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_RUNEVENTS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表 run_events：audit/node_enter/tool_call/error 帧落盘——事件总线与 SSE 同源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">表是事实：await_children/relay/取消机制的信号全部来自落盘事件，不是内存消息</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVENT_TAP</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">EVENT_TAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">落盘事件总线扇出点：events.ts eventTap → loopBus.publish；Langfuse 镜像同吃一份，订阅者抛错不传染写表主链路（events.ts:36-55 · index.ts:118-132）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">tap 单槽变扇出点——等待/接力/取消三类订阅者与可观测旁路互不阻塞</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT_CHILDREN / RELAY / CANCEL_CHAIN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INTAKE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">intake 装配交接态：轮号从簿记推导、模板菜单注入、gap/防转原料读出；轮 1 前置 hunting、轮 2+ 要求 hunting 否则 hypothesis_inactive 拒开（flow.ts:74-124）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 只消费交接态不自己找数据——六节点可单测的前提；账面是终局裁决者</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SANITIZE / HYP_FSM（前置迁移，跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_BUDGET</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">轮级预算账 RoundBudget：每轮独立步数/墙钟/token 三闸（10 步/120s/30k token）+ max_rounds 硬顶开跑前拒（budget.ts:122-169,209-213）；🛡️ 防 单轮烧穿与超顶轮起跑（预算双闸）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">防 planner 拆一条任务耗光父 run 预算的偏科；档位数字可 env 覆写（budget.ts:120-121）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（节点包装层逐节点调用）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SANITIZE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 输入消毒：假设文本走 user_input、证据/gap 走 tool_output；非 allow 一律占位符、原文零进 prompt，hunt_prompt_sanitized 事件只记字段（planner.ts:113-149）；🛡️ 防 注入话术进决策面（INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 的 prompt 是决策面不是证据面——flag 也算命中，与调查 observe() 的证据保全刻意不同</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLAN_LLM / GU_SCAN（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLAN_LLM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner LLM 出任务组合 C_k：{tasks:[{tool,params,rationale}]}；parsePlan 逐字段验型、坏形重试 1 次、再败 hunt_plan_denied 整轮终止（planner.ts:162-231）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">fail-closed 不编造：宁可空轮也不让 planner 编一个像样的组合；fake/real 共用消费契约</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">能力菜单 fail-closed：菜单外工具不 retry、整轮终止 hunt_plan_denied（planner.ts:235-239）；超 max_tasks 截断不拒整轮；hunt_plan_suggest 建议审计；🛡️ 防 菜单外组合（INV-11 第一道闸）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单真源是模板注入子集，机制不持第二份工具清单——「选不得」与「签不出」（CHILD_MINT）两道独立成立</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SPIN_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">防转指纹对比：相邻轮「任务集+gap 摘要」双双原地踏步 → hunt_round_spin_denied + cancelled(spin)（flow.ts:150-170 · llm-stubs.ts:122-126）；🛡️ 防 原地空转烧预算</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「换轮必须换组合」是闸不是建议；gap hash 在指纹内=实质变化豁免；spin 是 cancelled 不冒充 refuted</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_FSM（spin 迁移，跨容器红虚线）/ OUTCOME（空轮归集）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">DISPATCH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">dispatch 逐任务 launchTask 扇出；hunt_dispatch_decide 路由决定审计（与 planner 建议分痕）+ hunt_children_declared 事件；铸票失败先落 DENIED 再上抛（flow.ts:136-207）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">建议（hunt_plan_suggest）与决定（hunt_dispatch_decide）两个 action 可对账；无半拉子 run</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_MINT / AWAIT_CHILDREN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子票现铸 ticketSpecFor：allowed_tools=该任务唯一工具；父菜单外拒铸抛错 → run failed(mint_failed) + 502（run-kinds.ts:342-354 · app.ts:375-397）；🛡️ 防 越界票签出（INV-11 第二道闸·铸票缝）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">扇出 N 路 ≠ 发一张大票跑全程；窄票在铸票唯一通道上收窄，验票闸本地验</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT（跨容器红虚线）/ TASK_FLOW</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TASK_FLOW</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子 run 四节点小图：intake（簿记恢复任务）→plan（唯一任务一步）→execute→report（hunt_task_finished 终态事件 + hunt_task_report 审计）（task-flow.ts:31-109）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">任务交接靠簿记不靠消息（dispatch 拉起前任务不可知）；report 事件是 await_children 唯一正常唤醒源</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SIG_HUNT / T_RUNEVENTS</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SIG_HUNT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子 run 签名契约+真执行体：参数违约不执行不烧后端（hunt_tool_signature:*）；观察折成 tool total=N hits=M 确定性格式（hunt-executor.ts:58-89,108-155）；🛡️ 防 违约查询执行</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">真执行体经注册表缝换件注入（机制目录零改动）；摘要是 judge 引用痕的原料</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_HUNT</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GATED_HUNT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子 run 验票闸 makeGatedCall：narrow-scope 子票 亮票→验票→执行→记账；闸拒=DENIED 审计+抛错强杀（hunt-executor.ts:121-134）；🛡️ 防 无票/超范围调用（INV-3）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">安全语义全系统只此一份（票 43 共享闸体）——子 run 不自建第二套</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TASK_FLOW（观察回写）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">AWAIT_CHILDREN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">await_children 事件唤醒：构造即订阅（早于派工）、终局两形态（hunt_task_finished/error）、幂等折一次；无定时器无轮询（await-children.ts:38-70）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">禁轮询铁律：进程内等待一律事件——「子 run 秒完」的事件不丢在订阅空档</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE_SAN</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE_SAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">judge 输入消毒：子报告摘要过扫描占位、task 整体深拷贝与原件零共享引用（judge.ts:133-161）；🛡️ 防 注入话术进裁决面（INV-4）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">judge 的 prompt 是裁决面；深拷贝是防合谋消毒面的第一层</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE_SCHEMA / GU_SCAN（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">JUDGE_SCHEMA</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">判据 schema 化 parseJudgeVerdict：sufficient⟺verdict 非 null 一致性双检；坏形重试 1 次、再败降级不收敛（judge.ts:91-120,234-256）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">不许自由文本裁决；judge 出错降级方向是「不收敛」不是「收敛为 miss」——宁可多轮不冤案</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TAMPER</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TAMPER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">防改写留底比对：LLM 只按 params_hash 引用；调用前后对可触达副本快照比对，改写即裁决无效 report_mutated（judge.ts:196-199,262-270）；🛡️ 防 judge 改写子报告（T17 防合谋）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">子报告是上游 LLM 产物、judge 也是 LLM——引用凭据是 hash，想改也没语法</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CONF_FLOOR</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CONF_FLOOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">置信度地板 0.7（env JUDGE_CONFIDENCE_FLOOR）：sufficient 但低于地板强制降级不充分（judge.ts:53-56,272-277）；hunt_judge_verdict 审计带 evidence_hashes + low_confidence_downgrade</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">把「把握不足宁可多轮」从 prompt 嘱咐变成机器闸——模型的自律过不了地板</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUTCOME</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OUTCOME</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">outcome 轮次收口：spin/planner_failed 分支空轮归集（无接力）；hunt_round_outcome 五要素审计（sufficient/relayed/fingerprint/children 可回放）（flow.ts:237-346）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">拒组合/拟单失败是「有语义的空轮」不是脏数据——连续两轮 planner 失败 → cancelled(planner_broken)</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GAP（不充分）/ RECORD_ROUND</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GAP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">gap 翻译缺口 analyzeGap：{gap_description,unknown,suggested_focus} 结构化验型；坏形降级机制档缺口不停摆（gap.ts:121-193）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">gap 是轮与轮之间的接力棒不是日志——下一轮 planner 的输入面；翻译失败由防转闸兜底</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECORD_ROUND</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RECORD_ROUND</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">recordRound 轮次归集：POST /api/v1/hypotheses/:id/rounds（R1 公开面），(hypothesis_id,round_no) 唯一幂等替换（flow.ts:300-306 · hypotheses.ts:204-239）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">at-least-once 消费下同轮重放不长第二行；children 是父子簿记的假设侧视图</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYPS / RELAY / CONVERGE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">RELAY</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">轮间接力：订阅 round_relay 事件 → launchRound 拉起轮 k+1；幂等双保险 findByRound 簿记锚 + 在途集合（relay.ts:26-55）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">循环性在 dispatcher 层（ADR 0005）：图内永远一轮一条串行链，每轮吃全套既有 run 机器</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">LAUNCH_ROUND（成环回 RUN_GATE_HUNT）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CONVERGE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">收敛分岔：hit→concluded / miss→refuted；状态迁移 409 原样上抛=不带病收敛（judge.ts:335-405）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">m2 状态机是最后一句台词——cancelled 的假设不可能被事后 concluded</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_CREATE / REGISTER / HYP_FSM（迁移，跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CASE_CREATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">建案+结论 note：POST /api/v1/cases 挂 hypothesis_id；note 带 confidence+evidence_hashes+遏制建议文本（case-port.ts:30-56）；hunt_case_created 审计</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">miss 也建案（归档案承载结论）；遏制建议只有文本（INV-3/9）——动作永远走人工审批回路</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CASES（跨容器红虚线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REGISTER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hypothesis_register（miss 半边）：假设-证据-结论关系入图，一律 proposed 态；hunt_register 审计（register.ts:14）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">入图一律 proposed（INV-5 口径）——人审前不进检索面，票 83 对接人审通道</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（S13 剧本库记忆的伏笔）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CANCEL_CHAIN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">取消停止链 requestCancel：信号板首写 wins + m2 PATCH 写半边 + hunt_cancel 审计；预算强杀事件订阅（role=round 过滤）（cancel.ts:49-167）；🛡️ 防 取消后新增取证工作（T10）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">人取消与预算触发共用一套停止链；强杀不自建第二套（BudgetExceededError 既有路径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">HYP_FSM（PATCH cancelled，跨容器红虚线）/ 各 run 节点包装层</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GW_MINT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">gateway /internal/mint：HMAC 三段任务票（含 hunt_task 窄票）；缺密钥 500 拒签（gateway/app.py）；🛡️ 防 fail-open 铸票（INV-1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">唯一签票方——agent 不持签名密钥（INV-4 凭证边界）；铸票失败=任务不执行无悬置</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_MINT（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">GU_SCAN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POST :8001/scan/injection：planner/judge/gap 三决策面消毒的扫描后端（guards-client）；不可达=fail_closed 占位符（planner/judge/gap sanitize 缺省口径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">三面同一公开缝——安检员病了决策面拿占位符而不是原文，fail-closed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SANITIZE / JUDGE_SAN / GAP（响应）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["值班长 / 紫队脚本 / eval fixture<br/>POST :3002/api/v1/hypotheses<br/>声明 {text, template_id}<br/>（怀疑书发起入口）"]
+    end
+
+    subgraph CB["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        subgraph S91["9.1 发起假设与五态门口 · 进入:POST /api/v1/hypotheses · 节拍:请求一次性 + autorun 2s tick · 退出:轮 1 hunt_flow run 拉起"]
+            direction TB
+            HYP_CREATE["M2 建档 POST /api/v1/hypotheses<br/>hypotheses 表 INSERT proposed<br/>同事务: create 审计 + outbox hypothesis.created<br/>hypotheses.ts:107-125<br/>🛡️ 防 账面与拉起信号分家（INV-6/8）"]
+            HYP_FSM["五态状态机<br/>proposed→hunting→concluded/refuted/cancelled<br/>表外迁移 409 · 终态不可回退<br/>statemachine.ts:27-33<br/>🛡️ 防 表外迁移与终态复活（INV-10）"]
+            HYP_CANCEL_EP["POST /api/v1/hypotheses/:id/cancel<br/>仅发起人 + 仅 hunting + 四因枚举<br/>同事务发 hypothesis.cancelled<br/>hypotheses.ts:159-190"]
+            T_HYPS[("表 hypotheses / hypothesis_rounds<br/>(hypothesis_id, round_no) 唯一<br/>重放幂等替换（INV-6 同族）")]
+            T_CASES[("表 cases<br/>hypothesis_id 可空列（收敛建案回填）")]
+        end
+    end
+
+    subgraph AGENT["容器 agent（Fastify · LangGraph.js · better-sqlite3 · :3003）"]
+        subgraph AUTO["autorun 消费 · 进入:M2 outbox 新事件 · 节拍:2s tick · 退出:拉起 hunt_flow 轮 1 / 折成取消停止链"]
+            direction TB
+            AUTORUN_HUNT["autorun 2s tick 消费 hypothesis.created<br/>折成 hunt_flow 轮 1 拉起<br/>防重三闸: dup_batch/run_exists/round_exists<br/>autorun.ts:222-248"]
+            AUTORUN_CANCEL["autorun 消费 hypothesis.cancelled<br/>→ requestCancel（停止链唯一入口）<br/>重放幂等 cancel_dup<br/>autorun.ts:249-276"]
+        end
+
+        RUN_GATE_HUNT["拉起正门 POST /internal/runs<br/>intake=hypothesis → hypothesis_id 必填 400<br/>runs.hypothesis_id 专用列（票 90）<br/>202 {run_id,status:queued} 秒回<br/>app.ts:309-327,345-351,400-405<br/>🛡️ 防 非法拉起（INV-1）"]
+        LAUNCH_ROUND["拉起件 launchRound / launchTask<br/>door 正门 + hunt_run_links 簿记锚落账<br/>autorun 轮 1 与 relay 接力共用<br/>launcher.ts:21-52"]
+        T_LINKS[("表 hunt_run_links<br/>role=round/task · parent_run_id+round_no<br/>ledger.ts:41-53")]
+        T_RUNS_HUNT[("表 runs / run_jobs<br/>hunt 行 hypothesis_id 有值 case_id 恒空<br/>父子 run 各自独立状态机与预算账")]
+        T_RUNEVENTS[("表 run_events<br/>audit/node_enter/tool_call/error 帧<br/>事件总线与 SSE 同源")]
+        EVENT_TAP["落盘事件总线扇出点<br/>eventTap → loopBus.publish<br/>Langfuse 镜像同吃一份 · 订阅者抛错不传染<br/>events.ts:36-55 · index.ts:118-132"]
+
+        subgraph S92["9.2 planner 选组合 · 进入:分发循环领走轮 k start 任务 · 节拍:请求一次性（每轮一条 run）· 退出:任务组合 C_k 落交接态"]
+            direction TB
+            INTAKE["intake 装配交接态<br/>轮号从簿记推导 · 模板菜单注入<br/>gap/防转原料从上轮归集读出<br/>轮 1 前置 hunting · 轮 2+ 要求 hunting<br/>flow.ts:74-124"]
+            ROUND_BUDGET["轮级预算账 RoundBudget<br/>每轮独立 步数/墙钟/token 三闸<br/>max_rounds 硬顶开跑前即拒<br/>budget.ts:122-169,209-213<br/>🛡️ 防 单轮烧穿/超顶轮起跑（预算双闸）"]
+            SANITIZE["planner 输入消毒 sanitizePlannerInput<br/>假设文本=user_input · 证据/gap=tool_output<br/>非 allow 一律占位符 原文零进 prompt<br/>planner.ts:113-149<br/>🛡️ 防 注入话术进决策面（INV-4）"]
+            PLAN_LLM["planner LLM 出组合 C_k<br/>{tasks:[{tool,params,rationale}]}<br/>parsePlan 验型 · 坏形重试 1 次<br/>再败 hunt_plan_denied 整轮终止<br/>planner.ts:162-231"]
+            MENU_GATE["能力菜单 fail-closed<br/>菜单外工具不 retry → hunt_plan_denied<br/>超 max_tasks 截断不拒整轮<br/>hunt_plan_suggest 建议审计（分痕 A）<br/>planner.ts:235-268<br/>🛡️ 防 菜单外组合（INV-11 第一道闸）"]
+        end
+
+        subgraph S93["9.3 扇出两子 run · 进入:planner 产出 C_k · 节拍:逐任务串行拉起 · 子 run 并行执行 · 退出:全部子 run 到终局"]
+            direction TB
+            DISPATCH["dispatch 逐任务 launchTask 扇出<br/>hunt_dispatch_decide 决定审计（分痕 B）<br/>hunt_children_declared 事件<br/>铸票失败先落 DENIED 再上抛（T15）<br/>flow.ts:136-207"]
+            SPIN_GATE["防转指纹对比 spinFingerprint<br/>相邻轮 任务集+gap 摘要 双双踏步 → 拒组合<br/>cancelled(spin) 不冒充 refuted<br/>flow.ts:150-170 · llm-stubs.ts:122-126<br/>🛡️ 防 原地空转烧预算"]
+            CHILD_MINT["子票现铸 ticketSpecFor<br/>allowed_tools=该任务唯一工具（窄票）<br/>父菜单外拒铸 → failed(mint_failed)+502<br/>run-kinds.ts:342-354 · app.ts:375-397<br/>🛡️ 防 越界票签出（INV-11 第二道闸·铸票缝）"]
+            TASK_FLOW["子 run 四节点小图 hunt_task<br/>intake(簿记恢复任务)→plan→execute→report<br/>report 发 hunt_task_finished 终态事件<br/>task-flow.ts:31-109"]
+            SIG_HUNT["子 run 签名契约+真执行体<br/>参数违约不执行不烧后端<br/>观察折成 tool total=N hits=M<br/>hunt-executor.ts:58-89,108-155<br/>🛡️ 防 违约查询执行"]
+            GATED_HUNT["子 run 验票闸 makeGatedCall<br/>narrow-scope 子票 亮票→验票→执行→记账<br/>闸拒 = DENIED 审计 + 抛错强杀<br/>hunt-executor.ts:121-134<br/>🛡️ 防 无票/超范围调用（INV-3）"]
+        end
+
+        subgraph S94["9.4 等待与裁决 · 进入:dispatch 扇出完成 · 节拍:事件唤醒（禁轮询）· 退出:judge 判据落交接态"]
+            direction TB
+            AWAIT_CHILDREN["await_children 事件唤醒<br/>构造即订阅（早于派工）· 幂等缓冲<br/>终局两形态 hunt_task_finished / error<br/>无定时器 无轮询（T19）<br/>await-children.ts:38-70"]
+            JUDGE_SAN["judge 输入消毒 sanitizeJudgeInput<br/>子报告摘要过扫描 · task 深拷贝零共享<br/>judge.ts:133-161<br/>🛡️ 防 注入话术进裁决面（INV-4）"]
+            JUDGE_SCHEMA["判据 schema 化 parseJudgeVerdict<br/>sufficient ⟺ verdict 非 null 一致性双检<br/>坏形重试 1 次 再败降级不收敛<br/>judge.ts:91-120,234-256"]
+            TAMPER["防改写留底比对（T17）<br/>LLM 只按 params_hash 引用子报告<br/>调用前后快照比对 改写即裁决无效<br/>report_mutated 降级<br/>judge.ts:196-199,262-270<br/>🛡️ 防 judge 改写子报告（防合谋）"]
+            CONF_FLOOR["置信度地板 0.7（env 可调）<br/>sufficient 但低于地板 → 强制降级不充分<br/>hunt_judge_verdict 审计带 evidence_hashes<br/>judge.ts:53-56,272-277<br/>🛡️ 防 低置信提前收敛"]
+        end
+
+        subgraph S95["9.5 gap 换轮 · 进入:judge 判不充分 · 节拍:每轮 outcome 一次 · 退出:轮 k+1 拉起（成环）或 spin 终止"]
+            direction TB
+            OUTCOME["outcome 轮次收口<br/>spin/planner_failed → 空轮归集 无接力<br/>hunt_round_outcome 五要素审计<br/>flow.ts:237-346"]
+            GAP["gap 翻译缺口 analyzeGap<br/>{gap_description, unknown, suggested_focus}<br/>坏形降级机制档缺口 不停摆<br/>gap.ts:121-193"]
+            RECORD_ROUND["recordRound 轮次归集<br/>POST /api/v1/hypotheses/:id/rounds（R1 公开面）<br/>(hypothesis_id, round_no) 唯一 幂等替换<br/>flow.ts:300-306 · hypotheses.ts:204-239"]
+            RELAY["轮间接力 round_relay<br/>dispatcher 层订阅 → launchRound 轮 k+1<br/>幂等: findByRound 簿记锚 + 在途集合<br/>relay.ts:26-55"]
+        end
+
+        subgraph S96["9.6 收敛分岔与停止链 · 进入:judge sufficient=true 或 取消/预算触发 · 节拍:一次性（终态）· 退出:假设到 concluded/refuted/cancelled"]
+            direction TB
+            CONVERGE["收敛分岔 converge<br/>hit → concluded / miss → refuted<br/>迁移 409 原样上抛 不带病收敛<br/>judge.ts:335-405"]
+            CASE_CREATE["建案 + 结论 note<br/>POST /api/v1/cases 挂 hypothesis_id<br/>note: confidence+evidence_hashes<br/>+遏制建议（只有文本 INV-3/9）<br/>case-port.ts:30-56"]
+            REGISTER["hypothesis_register（miss 半边）<br/>假设-证据-结论关系入图<br/>一律 proposed 态（INV-5）<br/>register.ts:14"]
+            CANCEL_CHAIN["取消停止链 requestCancel<br/>信号板首写 wins + m2 PATCH 写半边<br/>预算强杀事件订阅（role=round 过滤）<br/>cancel.ts:49-167<br/>🛡️ 防 取消后新增取证工作（T10）"]
+        end
+    end
+
+    subgraph GW["容器 gateway（Python · FastAPI · :8002）"]
+        GW_MINT["gateway /internal/mint<br/>HMAC 三段任务票（含 hunt_task 窄票）<br/>缺密钥 500 拒签<br/>🛡️ 防 fail-open 铸票（INV-1）"]
+    end
+
+    subgraph GU["容器 guards（Python · FastAPI · :8001）"]
+        GU_SCAN["POST :8001/scan/injection<br/>planner/judge/gap 三决策面消毒的扫描后端<br/>不可达 → fail_closed 占位符<br/>🛡️ 防 注入话术进决策面（INV-4）"]
+    end
+
+    %% ===== 9.1 发起假设与五态门口 =====
+    OPERATOR -. "请求 POST /api/v1/hypotheses {text,template_id}<br/>跨容器→case-backend:3002" .-> HYP_CREATE
+    HYP_CREATE -- "事务内 INSERT proposed + create 审计" --> T_HYPS
+    HYP_CREATE -- "状态机初始态（proposed 只许进 hunting）" --> HYP_FSM
+    OPERATOR -. "请求 POST /api/v1/hypotheses/:id/cancel（仅发起人+仅 hunting）<br/>跨容器→case-backend:3002" .-> HYP_CANCEL_EP
+    HYP_CANCEL_EP -- "账面落 cancelled + 同事务发事件" --> HYP_FSM
+    T_HYPS -. "响应 outbox 增量 GET /api/v1/events?after<br/>（autorun 读屏）" .-> AUTORUN_HUNT
+    AUTORUN_HUNT -- "launch: launchRound 打正门+落轮锚" --> LAUNCH_ROUND
+    LAUNCH_ROUND -- "请求 POST /internal/runs {kind:hunt_flow, hypothesis_id}" --> RUN_GATE_HUNT
+    LAUNCH_ROUND -- "簿记锚 put（role=round, round_no）" --> T_LINKS
+    RUN_GATE_HUNT -- "createRun（hypothesis_id 专用列）+ run_jobs 落任务" --> T_RUNS_HUNT
+
+    %% ===== 9.2 intake + planner =====
+    T_RUNS_HUNT -. "分发循环领走 → 组图开跑轮 k" .-> INTAKE
+    INTAKE -. "读假设详情+gap · 轮 1 前置 hunting（PATCH）<br/>跨容器→case-backend:3002" .-> HYP_FSM
+    INTAKE -- "每节点前: 取消检查 + 轮级三闸（包装层）" --> ROUND_BUDGET
+    INTAKE -- "交接态就绪（假设/菜单/gap/指纹原料）" --> SANITIZE
+    SANITIZE -- "请求 POST :8001/scan/injection<br/>跨容器→guards:8001" --> GU_SCAN
+    GU_SCAN -. "响应 allow/strip/block/flag（占位符替换）" .-> SANITIZE
+    SANITIZE -- "消毒输入" --> PLAN_LLM
+    PLAN_LLM -- "组合 C_k 回包" --> MENU_GATE
+    MENU_GATE -- "通过: C_k 落交接态 + hunt_plan_suggest" --> DISPATCH
+    MENU_GATE -. "菜单外: hunt_plan_denied 整轮终止（无子 run）" .-> OUTCOME
+
+    %% ===== 9.3 扇出两子 run =====
+    DISPATCH -- "指纹对比（防转门牌）" --> SPIN_GATE
+    SPIN_GATE -. "spin: cancelled(spin)（跨容器→case-backend:3002）<br/>空轮归集 无接力" .-> HYP_FSM
+    DISPATCH -- "逐任务 launchTask（进程内正门）" --> CHILD_MINT
+    CHILD_MINT -- "请求 POST :8002/internal/mint（窄票）<br/>跨容器→gateway:8002" --> GW_MINT
+    GW_MINT -. "响应 HMAC 窄票 / 拒签 500" .-> CHILD_MINT
+    CHILD_MINT -. "父菜单外: 拒铸 → failed(mint_failed)" .-> DISPATCH
+    CHILD_MINT -- "202 + run_jobs → 子 run 开跑（簿记 task 行）" --> T_LINKS
+    CHILD_MINT --> TASK_FLOW
+    TASK_FLOW -- "execute: 契约先行" --> SIG_HUNT
+    SIG_HUNT -- "亮票过闸（narrow-scope 子票）" --> GATED_HUNT
+    GATED_HUNT -. "响应 观察 tool total=N hits=M（引用痕）" .-> SIG_HUNT
+    TASK_FLOW -- "report: hunt_task_finished / error 落盘" --> T_RUNEVENTS
+
+    %% ===== 9.4 等待与裁决 =====
+    T_RUNEVENTS -- "eventTap 扇出（落盘总线）" --> EVENT_TAP
+    EVENT_TAP -. "事件 hunt_task_finished/error 终局" .-> AWAIT_CHILDREN
+    AWAIT_CHILDREN -- "children 到齐（run_id/status/summary/params_hash）" --> JUDGE_SAN
+    JUDGE_SAN -- "请求 POST :8001/scan/injection<br/>跨容器→guards:8001" --> GU_SCAN
+    JUDGE_SAN -- "消毒副本（深拷贝）" --> JUDGE_SCHEMA
+    JUDGE_SCHEMA -- "回包" --> TAMPER
+    TAMPER -- "未改写" --> CONF_FLOOR
+    CONF_FLOOR -- "judge 落交接态（sufficient 与否）" --> OUTCOME
+
+    %% ===== 9.5 gap 换轮（回路）=====
+    OUTCOME -- "不充分 → 翻译缺口" --> GAP
+    GAP -- "gap 落交接态" --> RECORD_ROUND
+    OUTCOME -- "充分 → 直接归集" --> RECORD_ROUND
+    RECORD_ROUND -- "POST /api/v1/hypotheses/:id/rounds（幂等 upsert）<br/>跨容器→case-backend:3002" --> T_HYPS
+    RECORD_ROUND -- "不充分 → round_relay 事件" --> RELAY
+    RELAY -- "launchRound 轮 k+1（回正门成环）" --> LAUNCH_ROUND
+    RELAY -. "订阅 round_relay" .-> EVENT_TAP
+
+    %% ===== 9.6 收敛分岔与停止链 =====
+    RECORD_ROUND -- "充分 → 收敛分岔" --> CONVERGE
+    CONVERGE -- "建案+note" --> CASE_CREATE
+    CASE_CREATE -- "POST /api/v1/cases（挂 hypothesis_id）/ timeline<br/>跨容器→case-backend:3002" --> T_CASES
+    CONVERGE -- "miss: register 一律 proposed" --> REGISTER
+    CONVERGE -. "PATCH concluded/refuted（终态）<br/>跨容器→case-backend:3002" .-> HYP_FSM
+    AUTORUN_CANCEL --> CANCEL_CHAIN
+    CANCEL_CHAIN -. "订阅 budget_exceeded error 事件（role=round）" .-> EVENT_TAP
+    CANCEL_CHAIN -. "PATCH cancelled(reason) · 跨容器→case-backend:3002" .-> HYP_FSM
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 9.1：HYP_CREATE 防 账面与拉起信号分家（INV-6/8）/ HYP_FSM 防 表外迁移与终态复活（INV-10）
+    %%      RUN_GATE_HUNT 防 非法拉起（INV-1）
+    %% 9.2：ROUND_BUDGET 防 单轮烧穿/超顶轮起跑（预算双闸）/ SANITIZE 防 注入话术进决策面（INV-4）
+    %%      MENU_GATE 防 菜单外组合（INV-11 第一道闸）
+    %% 9.3：SPIN_GATE 防 原地空转烧预算 / CHILD_MINT 防 越界票签出（INV-11 第二道闸·铸票缝）
+    %%      SIG_HUNT 防 违约查询执行 / GATED_HUNT 防 无票/超范围调用（INV-3）
+    %% 9.4：TAMPER 防 judge 改写子报告（T17 防合谋）/ CONF_FLOOR 防 低置信提前收敛
+    %% 9.6：CANCEL_CHAIN 防 取消后新增取证工作（T10）
+    %% gateway：GW_MINT 防 fail-open 铸票（INV-1）/ guards：GU_SCAN 防 注入话术进决策面（INV-4）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class HYP_CREATE,HYP_FSM,RUN_GATE_HUNT,ROUND_BUDGET,SANITIZE,MENU_GATE,SPIN_GATE,CHILD_MINT,SIG_HUNT,GATED_HUNT,TAMPER,CONF_FLOOR,CANCEL_CHAIN,GW_MINT,GU_SCAN guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
