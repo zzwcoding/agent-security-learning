@@ -25,6 +25,10 @@ import { DefaultTemplateSource, DEFAULT_TEMPLATE } from "../../../services/agent
 import { makeHuntLauncher } from "../../../services/agent/src/orchestration/launcher.js";
 // 票 79（内容包）：三族模板登记面 + fake hunt LLM + weknora 三工具 stub + 真执行体数据源
 import { HuntTemplateSource, makeHuntFakeLoopLlm, loadHuntTemplates, renderHypothesisText, type HuntTemplateFixture } from "../../../services/agent/workers/investigation/hunt-pack.js";
+// 票 81：模板装载/渲染面再导出——紫队 rig（purple.ts，R2 非豁免件）只经本件消费
+// hunt-pack 公开面，保持「evals 新 rig 零 services 直引」的边界形态。
+export { loadHuntTemplates, renderHypothesisText };
+export type { HuntTemplateFixture };
 import { MemoryPlaybookLibrary, MemoryWeknoraGraph, WEKNORA_FIXTURES, WEKNORA_GRAPH_FIXTURE, makeHuntRegisterSeam, type RegisterRecord } from "../../../services/agent/workers/investigation/weknora.js";
 import { FixtureSiem } from "../../../services/agent/workers/investigation/siem.js";
 import type { OrchestrationDeps } from "../../../services/agent/src/orchestration/flow.js";
@@ -33,6 +37,7 @@ import type {
   CasePort,
   HypothesisDetail,
   HypothesisPort,
+  LoopLlm,
   RoundRecord,
   ScanSeam,
 } from "../../../services/agent/src/orchestration/ports.js";
@@ -335,12 +340,39 @@ export interface HuntFamilyTrajectory {
   registerAuditCount: number;
   /** 子 run 报告摘要（hunt_task_report 审计 details——真执行体的可观察证据）。 */
   childSummaries: string[];
+  // ---- 票 81（紫队 eval 的机器可复核面；纯增量，79/80 断言零变化） ----
+  /** 每轮完整任务面（params 在场——ground truth 签名比对的轨迹执行半边）。 */
+  rounds_full: { round_no: number; tasks: { tool: string; params: Record<string, unknown> }[]; judge: RoundRecord["judge"]; gap: RoundRecord["gap"] }[];
+  /** 逐子 run 取证报告（round_no × tool → result_summary 的 total=N；签名零命中判据）。 */
+  taskReports: { round_no: number; tool: string; result_summary: string }[];
+  /** gap_analyzer 轮次产物（盲区报告的循环侧来源——哪条证据链缺失由它说）。 */
+  gapRecords: { round_no: number; gap: NonNullable<RoundRecord["gap"]> }[];
+  /** loop LLM 计费（planner/judge/gap 桩 24 tok/次——成本 CSV 同口径的数据源）。 */
+  llmTokens: number;
+  llmCalls: number;
+  /** 布景墙钟（成本口径耗时列；不进复现 digest——计时不是被测对象）。 */
+  durationMs: number;
 }
 
-/** 单族布景：假设提交（proposed）→ hunt_flow 轮 1 → 轮间接力 → 收敛终态。 */
-async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTrajectory> {
-  const hypothesisId = `hyp-e2e-${f.template_id}`;
-  const hypothesisText = renderHypothesisText(f);
+/** 布景请求（票 81 参数化：紫队 eval 用槽位覆盖克隆换假设源，79/80 默认档零变化）。 */
+export interface HuntSceneRequest {
+  template: HuntTemplateFixture;
+  /** makeHuntFakeLoopLlm/HuntTemplateSource 的族清单（缺省 loadHuntTemplates()）——
+   *  传「模板被槽位覆盖克隆替换后的清单」即让确定性 planner 按覆盖槽位渲染波形 params。 */
+  families?: HuntTemplateFixture[];
+  hypothesisId?: string;
+  hypothesisText?: string;
+}
+
+/** 单族布景：假设提交（proposed）→ hunt_flow 轮 1 → 轮间接力 → 收敛终态。
+ *  票 81：自 runFamilyScene 参数化而来（families/hypothesisId/hypothesisText 可覆盖；
+ *  缺省行为逐字节同 79/80），轨迹加机器可复核增量面（rounds_full/taskReports/gapRecords/
+ *  计费计时）。唯被测对象 = 假设的轮次轨迹与收敛结论，机制语义零复制。 */
+export async function runHuntScene(req: HuntSceneRequest): Promise<HuntFamilyTrajectory> {
+  const f = req.template;
+  const families = req.families ?? loadHuntTemplates();
+  const hypothesisId = req.hypothesisId ?? `hyp-e2e-${f.template_id}`;
+  const hypothesisText = req.hypothesisText ?? renderHypothesisText(f);
   const audit = new MemoryAuditSink();
   const bus = makeLoopEventBus();
   setEventTap((e) => bus.publish(e));
@@ -350,6 +382,21 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
   const cases = new RecordingCasePort();
   const playbook = new MemoryPlaybookLibrary(WEKNORA_FIXTURES);
   const graph = new MemoryWeknoraGraph(WEKNORA_GRAPH_FIXTURE);
+  // 票 81：确定性 hunt 三件套 + 计费探针（LoopLlm 包装层——planner/judge/gap 每次调用的
+  // 桩 token 计入布景用量，成本 CSV 同口径的数据源；只观测不改变行为）。
+  const baseLlm = makeHuntFakeLoopLlm(families);
+  const usage = { calls: 0, tokens: 0 };
+  const count = async <T extends { tokens: number }>(p: Promise<T>): Promise<T> => {
+    const out = await p;
+    usage.calls += 1;
+    usage.tokens += out.tokens;
+    return out;
+  };
+  const llm: LoopLlm = {
+    planner: (input) => count(baseLlm.planner(input)),
+    judge: (input) => count(baseLlm.judge(input)),
+    gap: (input) => count(baseLlm.gap(input)),
+  };
   const orch: OrchestrationDeps = {
     port,
     ledger,
@@ -361,8 +408,8 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
         return (res.json() as { run_id: string }).run_id;
       },
     },
-    templates: new HuntTemplateSource(new DefaultTemplateSource()),
-    llm: makeHuntFakeLoopLlm(),
+    templates: new HuntTemplateSource(new DefaultTemplateSource(), families),
+    llm,
     scan: scanAllow,
     cases,
     register: makeHuntRegisterSeam({ graph, audit }), // L0 裁定②：converge 缝 = weknora stub（INV-8 在 seam 内）
@@ -381,6 +428,7 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
   const app = buildApp({ db: openDb(":memory:"), audit, makeNodes, mint, dispatcher: { intervalMs: 5, concurrency: 2 } });
   const launcher = makeHuntLauncher(orch.door, ledger);
   const stopRelay = startRoundRelay({ bus, ledger, door: orch.door, log: () => {} });
+  const t0 = Date.now();
   try {
     await launcher.launchRound({ hypothesisId, roundNo: 1 });
     for (let i = 0; i < 4000; i++) {
@@ -390,6 +438,15 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
     if (!["concluded", "refuted", "cancelled"].includes(port.status)) {
       throw new Error(`布景未收敛：${f.template_id} 停在 ${port.status}（fake 轨迹被扰动？）`);
     }
+    const durationMs = Date.now() - t0;
+    // 逐子 run 取证报告（audit 是真相源，INV-8）：round_no × tool → result_summary。
+    const reports = audit.entries
+      .filter((e: AuditEntry) => e.action === "hunt_task_report")
+      .map((e) => ({
+        round_no: Number(e.details.round_no),
+        tool: String(e.details.tool),
+        result_summary: String(e.details.result_summary),
+      }));
     return {
       templateId: f.template_id,
       hypothesisId,
@@ -400,14 +457,25 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
         tools: r.tasks.map((t) => t.tool),
         judge: r.judge,
       })),
+      rounds_full: port.rounds.map((r) => ({
+        round_no: r.round_no,
+        tasks: r.tasks.map((t) => ({ tool: t.tool, params: { ...t.params } })),
+        judge: r.judge,
+        gap: r.gap,
+      })),
+      taskReports: reports,
+      gapRecords: port.rounds
+        .filter((r): r is RoundRecord & { gap: NonNullable<RoundRecord["gap"]> } => r.gap !== null)
+        .map((r) => ({ round_no: r.round_no, gap: r.gap })),
+      llmTokens: usage.tokens,
+      llmCalls: usage.calls,
+      durationMs,
       caseHypothesisIds: cases.created.map((c) => c.hypothesis_id ?? ""),
       noteCount: cases.notes,
       noteInputs: cases.noteInputs,
       registerRecords: graph.entries.filter((e) => e.hypothesis_id === hypothesisId),
       registerAuditCount: audit.entries.filter((e) => e.action === "hypothesis_register").length,
-      childSummaries: audit.entries
-        .filter((e: AuditEntry) => e.action === "hunt_task_report")
-        .map((e) => String(e.details.result_summary)),
+      childSummaries: reports.map((r) => r.result_summary),
     };
   } finally {
     stopRelay.stop();
@@ -421,7 +489,7 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
 export async function hunt_pack_e2e(): Promise<{ families: HuntFamilyTrajectory[]; extraChecks: CheckResult[] }> {
   const families = loadHuntTemplates();
   const trajectories: HuntFamilyTrajectory[] = [];
-  for (const f of families) trajectories.push(await runFamilyScene(f));
+  for (const f of families) trajectories.push(await runHuntScene({ template: f }));
   const byId = new Map(trajectories.map((t) => [t.templateId, t]));
   const extraChecks: CheckResult[] = [];
 

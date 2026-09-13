@@ -15,8 +15,10 @@ const i = argv.indexOf("--tags");
 if (i >= 0 && argv[i + 1]) process.env.EVAL_TAGS = argv[i + 1];
 
 const here = dirname(fileURLToPath(import.meta.url));
+// 票 81：紫队闭环工件（purple-team.json + purple-cost.csv）随公开入口一并产出——
+// 套件（33 用例 → latest.json + cost_all.csv）与紫队 rig（11 例发现率 + 盲区）同跑。
 const { startVitest } = await import("vitest/node");
-const ctx = await startVitest("test", [`${here}/suite.test.ts`], {
+const ctx = await startVitest("test", [`${here}/suite.test.ts`, `${here}/rigs/purple.test.ts`], {
   root: dirname(here), // evals/ 包根（读它自己的 node_modules 与 tsconfig 语境）
   watch: false,
 });
