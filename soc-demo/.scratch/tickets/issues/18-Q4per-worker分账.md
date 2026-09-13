@@ -2,7 +2,7 @@
 
 **What to build:** 兑现狗粮裁决 Q4 的 M2 后置项(设计 §六"分账留 M2"):soc-demo 侧 `scripts/jiaotu-register.ts` 从单 agent 扩展为按 worker 注册——triage/investigation/knowledge/chat 各一 agent(命名 `soc-demo-<worker>`),各得 api_key 写 `.env`(`JIAOTU_API_KEY_<WORKER>`,幂等按名查重沿用);`services/agent/src/index.ts` 装配按 worker 选 key(env 缺省回落单键 `JIAOTU_API_KEY`,单键模式逐字节回归)。收益:椒图 `llm_call` 审计的 actor(api_key 解析)自然按 worker 分列,"谁在调模型"从服务级细到 worker 级;soc-demo 内部 actor 归因(M2 审计)与椒图 actor 从此可交叉验证。**跨仓票**:改动几乎全在 soc-demo(scripts+装配+契约测试),椒图侧零代码或仅注册口径注记(specs/identity.md)。
 
-**Touches modules:** `g1`(注记)+soc-demo m9 侧
+**Touches modules:** `m9`（跨仓：椒图侧 g1 仅注册口径注记零代码，见实现记录——soc-demo 仓 spec gate 只认本仓 modules.md 声明，模块号措辞照 jiaotu 票 27 先例修正）
 
 **Belongs to spec:** specs/identity.md(注册口径注记);soc-demo specs/modules.md m9 备注
 
