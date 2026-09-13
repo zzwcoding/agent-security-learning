@@ -34,6 +34,18 @@
         { "tool": "outbound_conn_query", "params": { "field": "domain", "value": "{exfil_domain}", "time_window": "{time_window}" } }
       ],
       "refs": ["ATT&CK T1003", "ATT&CK T1041"]
+    },
+    {
+      "id": "pb-ir-host-compromise-001",
+      "title": "主机失陷确认应急取证",
+      "family": "ir_host_compromise",
+      "purpose": "验证『主机已失陷』类假设：持久化机制（计划任务/守护进程拉起可疑进程）→ 执行痕迹落盘（FIM）→ 异常外联（回连 C2）三线收敛；遏制类动作只出建议文本，隔离主机须经人工审批（票 80 第二业务验收件）。",
+      "queries": [
+        { "tool": "proc_lineage_query", "params": { "process": "{persistence}", "role": "parent", "time_window": "{time_window}" } },
+        { "tool": "file_change_query", "params": { "field": "path", "value": "{path}", "time_window": "{time_window}" } },
+        { "tool": "outbound_conn_query", "params": { "field": "dst_ip", "value": "{dst_ip}", "time_window": "{time_window}" } }
+      ],
+      "refs": ["ATT&CK T1053", "ATT&CK T1071", "ATT&CK T1505.003"]
     }
   ]
 }

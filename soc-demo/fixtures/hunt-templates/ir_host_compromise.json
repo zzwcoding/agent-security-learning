@@ -1,0 +1,33 @@
+{
+  "template_id": "ir_host_compromise",
+  "family": "ir_host_compromise",
+  "title": "主机失陷确认应急取证",
+  "hypothesis_patterns": [
+    "怀疑主机 {host} 已失陷：存在 {persistence} 持久化机制拉起可疑进程，可疑载荷落盘于 {path}，且向 {dst_ip} 发起异常外联——三线取证收敛后确认失陷。",
+    "确认前排查主机 {host}：{persistence} 持久化、{path} 执行痕迹落盘、外联 {dst_ip} 三线证据齐备方可下失陷结论，遏制建议只出文本。"
+  ],
+  "menu": ["playbook_lookup", "graph_query", "file_change_query", "outbound_conn_query", "proc_lineage_query"],
+  "max_rounds": 6,
+  "max_tasks": 2,
+  "default_time_window": { "from": "2023-04-25T00:00:00.000Z", "to": "2023-04-26T00:00:00.000Z" },
+  "example_slots": { "host": "centos7", "persistence": "cron", "path": "/var/www/html/uploads/sh.php", "dst_ip": "203.0.113.66" },
+  "containment_suggestions": [
+    "隔离主机 {host}（L2 动作：本模板仅产出建议文本，须经人工审批后由审批回路执行）",
+    "阻断 {host} 与 {dst_ip} 的外联通道（L2 动作：同上，须经人工审批）"
+  ],
+  "waves": [
+    [
+      { "tool": "playbook_lookup", "params": { "tag": "ir_host_compromise" }, "rationale": "开局先调剧本库，锚定主机失陷应急取证的遏制口径与取证面（剧本/图谱开局是 plan 起手式）" }
+    ],
+    [
+      { "tool": "proc_lineage_query", "params": { "process": "{persistence}", "role": "parent", "time_window": "{time_window}" }, "rationale": "首轮缺取证面证据：先查持久化机制——计划任务拉起可疑进程的谱系（host 维度，强制 time_window）" }
+    ],
+    [
+      { "tool": "file_change_query", "params": { "field": "path", "value": "{path}", "time_window": "{time_window}" }, "rationale": "换维度补查执行历史：按可疑载荷路径查 FIM 落盘/篡改痕迹（host 维度，强制 time_window）" }
+    ],
+    [
+      { "tool": "outbound_conn_query", "params": { "field": "dst_ip", "value": "{dst_ip}", "time_window": "{time_window}" }, "rationale": "按假设主目的查异常外联（回连 C2 维度，host 维度收窄的第三线）" },
+      { "tool": "graph_query", "params": { "entity": "{host}" }, "rationale": "并行查关系图（approved 态关系——失陷主机的已知情报佐证）" }
+    ]
+  ]
+}

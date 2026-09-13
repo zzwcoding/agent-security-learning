@@ -14,7 +14,8 @@
     "wazuh:feed": "tsx scripts/wazuh-logtest-feed.ts",
     "jiaotu:register": "tsx scripts/jiaotu-register.ts",
     "gen:tool": "node tools/gen-tool.mjs",
-    "check:boundary": "python3 tools/check_boundary.py --self-test && python3 tools/check_boundary.py ."
+    "check:boundary": "python3 tools/check_boundary.py --self-test && python3 tools/check_boundary.py .",
+    "check:zero-increment": "python3 tools/check_zero_increment.py --self-test && python3 tools/check_zero_increment.py"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

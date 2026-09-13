@@ -34,6 +34,10 @@ jobs:
           cache-dependency-path: soc-demo/pnpm-lock.yaml
       # 票 28 边界闸：specs「边界规则」节的机器消费（零依赖 python，无需装包）
       - run: pnpm check:boundary
+      # 票 80 零增量闸（T20）：内容层票 diff 与机制层目录交集为空。CI 浅克隆拿不到
+      # origin/main 时回退 HEAD=工作树档（恒绿，闸机制由 --self-test 证明活着）；
+      # PR diff 档（--base merge-base）在本地收口与 L0 关票时强制执行。
+      - run: pnpm check:zero-increment
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck

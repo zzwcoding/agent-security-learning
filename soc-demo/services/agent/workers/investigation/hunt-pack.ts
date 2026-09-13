@@ -41,6 +41,10 @@ export interface HuntTemplateFixture {
   /** 既定查询计划（wave = 一轮的任务组合；剧本库 queries 的可执行化）——fake LLM 的
    *  确定性拆条路径数据源，真 LLM（票 81）把它当 few-shot 母本。 */
   waves: { tool: string; params: Record<string, unknown>; rationale: string }[][];
+  /** 遏制建议文本（内容层模板数据，票 80 ir 模板首发；可缺席 = 无建议）。hit 收敛时由
+   *  judge adapter 附带 containment_suggestions——INV-3/9：只进 timeline note 文本，
+   *  永不进动作通道与假设账面（judge.ts 形把关 + 消毒，L2 动作止于人工审批口径）。 */
+  containment_suggestions?: string[];
 }
 
 /** 装载模板目录（*.json 逐文件；空目录 = 无内容模板，对账测试会红——内容包不能缺席）。 */
@@ -133,9 +137,14 @@ function familyOfMenu(menu: readonly string[], families: HuntTemplateFixture[]):
  *    verdict = hit 当且仅当取证面报告有 total>0（剧本/图谱导航面不计入裁决）。
  *  · gap：judge 缺口直翻（FakeLoopGap 同款）。 */
 export function makeHuntFakeLoopLlm(families: HuntTemplateFixture[] = loadHuntTemplates()): LoopLlm {
+  // planner 的族识别结果（judge 无菜单输入，靠同调用序的 planner 面确定——fake 纪律：
+  // 只吃输入结构）。hit 收敛时据此附带模板自带的遏制建议文本（票 80；未带该字段的
+  // 79 三族行为零变化）。
+  let currentFamily: HuntTemplateFixture | null = null;
   return {
     async planner(input) {
       const family = familyOfMenu(input.menu, families);
+      currentFamily = family;
       if (!family || family.waves.length === 0) {
         // 非族菜单（机制默认档）：单任务退化形态——只吃菜单结构，不编造业务查询
         const first = input.menu[0];
@@ -166,12 +175,17 @@ export function makeHuntFakeLoopLlm(families: HuntTemplateFixture[] = loadHuntTe
       );
       const sufficient = (input.prior_rounds ?? 0) >= 1 && reports.length >= 2;
       if (sufficient) {
+        const verdict = forensicHit ? "hit" : "miss";
+        // 遏制建议（票 80）：只在确认失陷（hit）半边附带，模板未带该字段 = 空建议——
+        // INV-3/9：文本止于 timeline note，动作通道不存在。
+        const containment = verdict === "hit" && currentFamily ? renderContainmentSuggestions(currentFamily) : [];
         return {
           sufficient: true,
-          verdict: forensicHit ? "hit" : "miss",
+          verdict,
           confidence: 0.8,
           gap_description: null,
           tokens: TOKENS_PER_CALL,
+          ...(containment.length > 0 ? { containment_suggestions: containment } : {}),
         };
       }
       return {
@@ -198,4 +212,16 @@ export function renderHypothesisText(f: HuntTemplateFixture, patternIdx = 0): st
     text = text.split(`{${k}}`).join(v);
   }
   return text;
+}
+
+/** 遏制建议实例（票 80：hit 收敛时 judge adapter 附带的文本面；{slot} → example_slots
+ *  与句式族同源渲染）。可缺席的模板 → 空数组（79 三族未带该字段，行为零变化）。 */
+export function renderContainmentSuggestions(f: HuntTemplateFixture): string[] {
+  return (f.containment_suggestions ?? []).map((s) => {
+    let text = s;
+    for (const [k, v] of Object.entries(f.example_slots)) {
+      text = text.split(`{${k}}`).join(v);
+    }
+    return text;
+  });
 }

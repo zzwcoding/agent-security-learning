@@ -26,15 +26,16 @@ import type { PlannerInput } from "../../src/orchestration/ports.js";
 const families = loadHuntTemplates();
 const byId = new Map(families.map((f) => [f.template_id, f]));
 
-describe("三族假设模板（票 79①：template_id + 假设句式族 + 菜单子集 + 轮次上限）", () => {
-  test("三族齐备：webshell / c2_beacon / credential_leak，字段自洽", () => {
+describe("假设模板族（票 79① 三族 + 票 80 第二业务 ir_host_compromise）", () => {
+  test("四族齐备：webshell / c2_beacon / credential_leak / ir_host_compromise，字段自洽", () => {
     expect(families.map((f) => f.template_id)).toEqual([
       "hunt_c2_beacon",
       "hunt_credential_leak",
       "hunt_webshell",
+      "ir_host_compromise", // 票 80：应急取证（架构验收件）——内容层零机制增量落地
     ]);
     expect(new Set(families.map((f) => f.family))).toEqual(
-      new Set(["webshell", "c2_beacon", "credential_leak"]),
+      new Set(["webshell", "c2_beacon", "credential_leak", "ir_host_compromise"]),
     );
     for (const f of families) {
       expect(f.hypothesis_patterns.length).toBeGreaterThan(0);

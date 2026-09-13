@@ -271,7 +271,8 @@ export function inv11_seam_gate_denies_offmenu(): boolean {
   }
 }
 
-// ---------- 票 79④：三族假设端到端布景（spec 验收①/T07/T08 的真执行体路径骨架，票 81 复用） ----------
+// ---------- 票 79④：三族假设端到端布景（spec 验收①/T07/T08 的真执行体路径骨架，票 81 复用）
+// ---------- 票 80：扩第二业务 ir_host_compromise（架构验收件，T20 的 e2e 半边） ----------
 //
 // 每族一条独立布景：真 buildApp + 真注册表组图 + 真验票闸 + 真执行体（deps.huntExecutor
 // = FixtureSiem 语料 + weknora Memory stub）+ 真模板登记缝（HuntTemplateSource）；假设面/
@@ -304,16 +305,18 @@ class FamilyHypothesisPort implements HypothesisPort {
   }
 }
 
-/** 建案/note 记账假件（T07/T08 的收敛断言面）。 */
+/** 建案/note 记账假件（T07/T08 的收敛断言面；票 80 补记 note 原文——遏制建议文本面）。 */
 class RecordingCasePort implements CasePort {
   created: CaseCreateInput[] = [];
   notes = 0;
+  noteInputs: { caseId: string; body: string; structured?: unknown }[] = [];
   async create(input: CaseCreateInput): Promise<string> {
     this.created.push({ ...input });
     return `case_${this.created.length}`;
   }
-  async addNote(): Promise<void> {
+  async addNote(caseId: string, entry: { body: string; structured?: unknown }): Promise<void> {
     this.notes += 1;
+    this.noteInputs.push({ caseId, body: entry.body, structured: entry.structured });
   }
 }
 
@@ -326,6 +329,8 @@ export interface HuntFamilyTrajectory {
   rounds: { round_no: number; tools: string[]; judge: RoundRecord["judge"] }[];
   caseHypothesisIds: string[];
   noteCount: number;
+  /** note 原文（票 80：遏制建议只进 note 文本的断言面，INV-3/9）。 */
+  noteInputs: { caseId: string; body: string; structured?: unknown }[];
   registerRecords: RegisterRecord[];
   registerAuditCount: number;
   /** 子 run 报告摘要（hunt_task_report 审计 details——真执行体的可观察证据）。 */
@@ -397,6 +402,7 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
       })),
       caseHypothesisIds: cases.created.map((c) => c.hypothesis_id ?? ""),
       noteCount: cases.notes,
+      noteInputs: cases.noteInputs,
       registerRecords: graph.entries.filter((e) => e.hypothesis_id === hypothesisId),
       registerAuditCount: audit.entries.filter((e) => e.action === "hypothesis_register").length,
       childSummaries: audit.entries
@@ -410,7 +416,8 @@ async function runFamilyScene(f: HuntTemplateFixture): Promise<HuntFamilyTraject
   }
 }
 
-/** 三族端到端（票 79④）：fixture 假设 + 期望轮次轨迹 + 收敛结论断言的 eval 骨架。 */
+/** 假设端到端（票 79④ 三族 + 票 80 第二业务 ir_host_compromise）：fixture 假设 +
+ *  期望轮次轨迹 + 收敛结论断言的 eval 骨架（真执行体路径，票 81 复用）。 */
 export async function hunt_pack_e2e(): Promise<{ families: HuntFamilyTrajectory[]; extraChecks: CheckResult[] }> {
   const families = loadHuntTemplates();
   const trajectories: HuntFamilyTrajectory[] = [];
@@ -422,6 +429,7 @@ export async function hunt_pack_e2e(): Promise<{ families: HuntFamilyTrajectory[
   const webshell = byId.get("hunt_webshell")!;
   const c2 = byId.get("hunt_c2_beacon")!;
   const cred = byId.get("hunt_credential_leak")!;
+  const ir = byId.get("ir_host_compromise")!;
 
   extraChecks.push(check(
     "e2e_webshell_hit_trajectory",
@@ -460,12 +468,33 @@ export async function hunt_pack_e2e(): Promise<{ families: HuntFamilyTrajectory[
     `credential 族：2 轮取证零命中 → judge miss → refuted + note + register(proposed)（T08，INV-5/8）`,
   ));
   extraChecks.push(check(
+    "e2e_ir_host_compromise_trajectory",
+    ir.status === "concluded" &&
+      ir.rounds.length === 4 &&
+      ir.rounds[0]!.tools.join("|") === "playbook_lookup" &&
+      ir.rounds[1]!.tools.join("|") === "proc_lineage_query" &&
+      ir.rounds[2]!.tools.join("|") === "file_change_query" &&
+      ir.rounds[3]!.tools.join("|") === "outbound_conn_query|graph_query" &&
+      ir.rounds[3]!.judge?.sufficient === true &&
+      ir.rounds[3]!.judge?.verdict === "hit" &&
+      ir.caseHypothesisIds.length === 1 &&
+      ir.registerRecords.length === 0 &&
+      ir.noteInputs.some(
+        (n) =>
+          n.body.includes("遏制建议") &&
+          n.body.includes("隔离主机") &&
+          n.body.includes("人工审批") &&
+          Array.isArray((n.structured as { recommended_actions?: unknown } | null)?.recommended_actions) === true,
+      ),
+    `ir 族（应急取证·第二业务，票 80）：4 轮 gap 换组合（剧本 → 持久化机制 → 执行历史落盘 → 外联+图谱）→ judge hit → 建案 + 遏制建议只以文本进 note（INV-3/9；hit 半边不写 register）`,
+  ));
+  extraChecks.push(check(
     "e2e_real_executor_evidence",
-    [webshell, c2, cred].every((t) =>
+    [webshell, c2, cred, ir].every((t) =>
       t.childSummaries.length > 0 &&
       t.childSummaries.every((s) => s.includes("total=") && !s.startsWith("stub observation")),
     ),
-    `三族子 run 摘要全部来自真执行体（FixtureSiem/weknora 观察格式，非 73 桩 canned 文案）`,
+    `四族子 run 摘要全部来自真执行体（FixtureSiem/weknora 观察格式，非 73 桩 canned 文案）`,
   ));
 
   return { families: trajectories, extraChecks };
