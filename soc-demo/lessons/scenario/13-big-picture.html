@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>场景 13 大图 · 有记忆的狩猎：知识平面与毒剧本防线</title>
+<style>
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: #1e1e2e; color: #cdd6f4;
+    overflow: hidden;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+  }
+  h1 {
+    font-size: 14px; margin: 0; padding: 8px 12px;
+    background: #181825; border-bottom: 1px solid #313244;
+    color: #cdd6f4; font-weight: 500;
+  }
+  #host {
+    position: absolute; top: 36px; left: 0; right: 0; bottom: 0;
+    background:
+      radial-gradient(circle, #313244 1px, transparent 1px) 0 0 / 24px 24px,
+      #1e1e2e;
+    overflow: hidden;
+  }
+  /* SVG 元素 —— 尺寸由 JS 内联样式撑到 #host 大小(svg-pan-zoom 以
+     svg 自身 clientWidth/Height 为视口基准, 见脚本内说明) */
+  #host > svg {
+    display: block;
+  }
+  /* 矢量精度提示 —— 这是真正对矢量起作用的东西 */
+  #host svg {
+    shape-rendering: geometricPrecision;
+    text-rendering: geometricPrecision;
+  }
+  /* 暗黑配色 */
+  #host .node rect, #host .node polygon, #host .node circle, #host .node ellipse,
+  #host .cluster rect {
+    stroke: #89b4fa !important;
+    fill: #313244 !important;
+  }
+  #host .cluster rect {
+    fill: #181825 !important;
+    stroke-dasharray: 4 2;
+  }
+  #host .edgePath path, #host .flowchart-link {
+    stroke: #89b4fa !important;
+  }
+  #host .arrowheadPath {
+    fill: #89b4fa !important;
+    stroke: #89b4fa !important;
+  }
+  #host .edgeLabel, #host .edgeLabel rect,
+  #host .nodeLabel, #host .label, #host text {
+    fill: #cdd6f4 !important;
+    color: #cdd6f4 !important;
+  }
+  #host .edgeLabel rect {
+    fill: #1e1e2e !important;
+  }
+  /* svg-pan-zoom 自带按钮暗色化 */
+  #host .svg-pan-zoom-control-background {
+    fill: #313244 !important;
+    stroke: #89b4fa !important;
+  }
+  #host .svg-pan-zoom-control-element {
+    fill: #cdd6f4 !important;
+  }
+</style>
+</head>
+<body>
+<h1>场景 13 大图 · 有记忆的狩猎：知识平面与毒剧本防线 · 拖拽平移 · 滚轮缩放 · 右下角控制按钮</h1>
+<details id="brief" style="position:absolute;top:42px;left:8px;z-index:20;max-width:min(1180px,calc(100vw - 24px));background:#181825;border:1px solid #313244;border-radius:6px;color:#cdd6f4;font-size:13px;line-height:1.55;">
+<summary style="cursor:pointer;padding:6px 10px;user-select:none;color:#89b4fa;font-weight:500;">📖 速览 · 这张图是什么 / 怎么读 / 最常被问的入口（点开收起）</summary>
+<div style="padding:0 14px 12px;max-height:78vh;overflow:auto;">
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">① 这张图是什么</h3>
+<p>场景 13「有记忆的狩猎」的代码落点索引：主视觉线是<b>剧本库/图谱（知识平面）→ planner
+消费 → 循环取证 → INV-5 毒剧本闸 → 跨仓分工</b>。左侧宿主实测面（真栈 c2 假设 3 轮轨迹 +
+契约级短路经济对照 3 轮→2 轮），中间 agent 侧（soc-demo＝闸门半仓：菜单扩容/两票执行/
+register 缝），右下知识平面（weknora Memory stub 布景：剧本库 4 册查询参考册 + 关系图旧案
+记忆 seed:ir-2023-041 + proposed 毒探针），写入面的 INV-5 真闸（register 只写 proposed /
+graph_query 只回 approved，人审是唯一翻面通道）。教学句：**记忆进菜单，毒进不了面**——
+好记忆帮 planner 省一轮盲查（192→120 tok），毒记忆在检索面物理隐身。诚实形态声明：weknora
+三工具是「真接口假实现」（票 79 铁律），知识平面整块是镜像内 fixture 布景，<b>票 83 对接后
+才换 HTTP 真源</b>（灰虚线边标注，绝不冒充已对接）。本场景数字：<b>5 步 / 17 个节点 /
+4 道安全闸</b>（红描边 🛡️）。跨容器出站边仅 3 条（都是 agent/宿主 → case-backend:3002 的
+公开 REST），weknora 方向零真实出站边——真出网属于票 83 对接后的世界。
+（八场景全局数字见 0-0.md，不在这张图里。）</p>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">② 怎么读</h3>
+<ul>
+  <li><b>配色</b>：蓝框 = 普通节点；<b>红描边 + 🛡️ = 安全防护节点</b>（防什么写在节点里）；
+  cylinders（柱形）= 数据文件；<b>暗灰虚线 = 说明性节点</b>（seam 落点/未对接外仓，非数据流）。</li>
+  <li><b>线型</b>：实线 = 主流程调用；虚线 = 响应 / 只读 / 非主流程；跨容器出站调用在标签里
+  带 <code>跨容器→服务:端口</code>（本图 3 条，全去 case-backend:3002）。</li>
+  <li><b>箭字前缀</b>：<code>请求 …</code> = 发起执行；<code>读 …</code> = 只读依赖；
+  <code>T+…</code> = 时序前缀；<code>响应 …</code> = 返回面。</li>
+  <li><b>子图标题</b>带 <code>进入 / 节拍 / 退出</code> 三段——先看它再进节点。节点只写「做什么」，「为什么 / 下游」看下面的明细表与对应文章 13-0..13-5（文档每站开头的 📍 行 = 本图节点 ID）。</li>
+</ul>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">③ 最常被问的入口（5 条）</h3>
+<ol>
+  <li>想看「能力菜单怎么多出两件知识工具」→ <code>T_HYP → ROUND_CHAIN → TPL_CARD → PLANNER → MENU_GATE</code>（13.1，菜单真源=预案卡子集）。</li>
+  <li>想看「三个月前有人猎过同款」→ <code>CHILD_RUN → PB_LIB</code>（13.2，pb-c2-001 三条既定查询＝waves 内容母本）。</li>
+  <li>想看「记忆省一轮」→ <code>ECON</code>（13.3，3 轮→2 轮 / 192→120 tok）+ <code>T_GRAPH</code>（旧案记忆 ir-2023-041）。</li>
+  <li>想看「毒剧本为什么上不了检索面」→ <code>POISON → CHILD_GATE / REG_SEAM → INV5_GATE</code>（13.4，403 / proposed / 检索面查无三连）。</li>
+  <li>想看「两仓边界画在哪」→ <code>SEAM_NOTE → WEKNORA_REAL</code>（13.5，灰虚线=未接线，票 83 对接后的世界）。</li>
+</ol>
+
+<h3 style="font-size:13px;margin:10px 0 4px;color:#f9e2af;">节点明细表（17 节点全量）</h3>
+<table style="border-collapse:collapse;width:100%;margin:6px 0;font-size:12px;">
+<tr><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">节点 ID</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">干什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">为什么</th><th style="border:1px solid #313244;padding:3px 6px;text-align:left;background:#1e1e2e;color:#89b4fa;white-space:nowrap">下游</th></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">OPERATOR</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">值班长/学习者：真栈发 c2 假设（POST :3002，13.3 实测 hyp_265f157e）+ 宿主跑契约级布景实验</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">狩猎的入口与 S9 同一扇门——提出者可以是值班长/紫队脚本（S12 的 actor=system）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYP（跨容器）/ ECON</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ECON</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">短路经济对照实验（runHuntScene 契约级布景·真注册表+真执行体+内存数据缝）：无记忆基线 3 轮 192 tok vs 记忆知情 2 轮 120 tok</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">省的正是 total=0 的低置信盲查轮——「记忆→更准组合→更少轮次」的可测形态</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（同机制对照）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_HYP</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 hypotheses 表：假设账面（proposed→hunting→concluded/refuted/cancelled，INV-10）+ 轮次归集 (hypothesis_id, round_no) 唯一</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">侦查怀疑书的唯一真相源；轮次归集让「第几轮查了什么」可回放（S9 口径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（拉起/回写·跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_AUDIT</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">M2 audit_entries：五要素审计（hunt_task_report total=N / hypothesis_register 可回放）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">取证面 total 是 judge 判定的真相源（INV-8）；投毒投递必留痕</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（对账/人审面）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">TPL_CARD</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">预案卡 fixture（fixtures/hunt-templates/ 4 张·内容层数据）：menu 子集 + waves 既定查询计划 + max_rounds/max_tasks</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单真源（TERMS「派工菜单」条：机制不持第二份清单）；预案卡管循环怎么排、剧本库管查询怎么抄（分家口径）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（注入）/ PLANNER</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">查证轮六节点 intake→planner→dispatch→await→judge→outcome；真栈 c2 实测 3 轮：剧本开局→低置信盲查（total=0）→主目的+谱系 hit</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">机制 m14 黑盒对知识平面零 if/else——消费面扩容全部是菜单数据（13.1）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLANNER / CHILD_GATE / REG_SEAM / T_HYP（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PLANNER</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 拟单（循环三件套）：输入=假设文本+菜单+证据/gap；hunt 版起手式=剧本/图谱开局（hunt-prompt.ts:59）；选路依据=现场证据+历史研判</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">消费面扩到知识源=编排的进化维度——菜单里出现 playbook_lookup/graph_query 两件 L0 工具</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">MENU_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">planner 菜单闸（INV-11 第一道闸·选不得）：offmenu_tool 零重试整轮终止 hunt_plan_denied（planner.ts:235-239）；🛡️ 防 菜单外组合（INV-11）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">菜单越动态闸越不能松——知识工具进菜单也要过同一道闸，hypothesis_register 永不入组合菜单</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">ROUND_CHAIN（通过/拒绝）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt_task 验票闸（makeGatedCall·两票制）：子票=单任务单工具窄票（S10 原样）；🛡️ 防 无票奔跑/越票面执行（INV-3/11）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">毒剧本工具面直投的第一堵墙：register 是 L1，无票 403 no_ticket（13.4 实测）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（通过/拒绝）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hunt_task 真执行体：签名契约→闸→执行→观察（hunt-executor.ts:58-74）；四狩猎维度 FixtureSiem + weknora 三工具同门分发</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">导航面（剧本/图谱）与取证面（四维查询）同一执行体同一闸——知识工具不是旁门</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PB_LIB / T_GRAPH / T_CORPUS / T_AUDIT（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_CORPUS</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">取证语料库 fixtures/alerts/（镜像内布景·现场证据面）：outbound total=3 / proc_lineage total=1 的出处</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">选路依据的「现场证据」半边——知识平面（历史研判）与语料（现场）合起来才是完整选路依据</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">PB_LIB</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">剧本库 playbooks.json（查询参考册 4 张）：pb-c2-001 三条既定查询=频率口径/主目的/进程谱系，refs=ATT&CK T1071/T1053；lookup 防全库捞 tag/query 至少一维（weknora.ts:89）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「三个月前有人猎过同款」的查询参考册——waves 是它的可执行化（fixture _readme 口径），stub 期只读零写口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（响应）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_GRAPH</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">关系图 graph.json（旧案记忆）：web01—resolved_to→203.0.113.66—beacons_to→C2【approved·seed:ir-2023-041】；seed 自带 proposed 毒探针 hosts_webshell（T22 负例·检索面不可见）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">「该 IoC 连过什么案」——记忆短路的原料；query 只回 approved 是检索面纪律（weknora.ts:228）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_RUN（响应）/ INV5_GATE（写入）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">POISON</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">毒剧本投递布景（捣乱②·S5 续集）：02_poison_rejected 同款话术想进知识平面</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">S5 攻的是检索面写入口（kb_write/直投 proposals）；这次连检索面都进不去——写口唯一且写即 proposed</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">CHILD_GATE（403）/ REG_SEAM（proposed）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">REG_SEAM</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">hypothesis_register 循环缝（outcome 收敛归档步·miss 半边）：写经 weknora stub + 五要素审计在缝内落账（weknora.ts:289-309）；🛡️ 防 写动作不留痕（INV-8）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">写口的唯一合法通道（不入 planner 菜单，INV-11 对账钉死）；两面落法：工具面有票才是真闸、缝面审计兜底</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV5_GATE / T_AUDIT（跨容器）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV5_GATE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">INV-5 毒剧本真闸（T22）：register 只写 proposed（类型面唯一值·weknora.ts:243）/ graph_query 只回 approved（weknora.ts:228）；人审是唯一翻面通道（票 83 对接期定端点）；🛡️ 防 毒剧本未经人审进检索面（INV-5）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">闸的牙齿在写侧不在读侧：没有任何写通道能产出 approved——检索面隐身是结构保证不是过滤运气</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">T_GRAPH（proposed 落图）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">SEAM_NOTE</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">数据源 seam＝WeknoraPlaybookBackend / WeknoraGraphBackend（weknora.ts:159/:164）——stub 与将来 HTTP adapter 的公共接口（说明性节点）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">真接口假实现：换 HTTP 实现不换调用方（MemoryVectorStore 先例）——票 83 对接期只换 seam 背后</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEKNORA_REAL（灰虚线·未接线）</td></tr>
+<tr><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">WEKNORA_REAL</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">weknora 真仓（外仓·未对接）：FastAPI /ingest /search /graph/query + SOC 实体图谱第二幕；只管知识平面零安全闸（两仓分工红线）</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">跨仓分工＝包层即闸门：soc-demo 侧人审/扫描/审计一件不能省——weknora 侧不做闸是分工不是缺口</td><td style="border:1px solid #313244;padding:3px 6px;text-align:left;vertical-align:top">—（票 83 对接期接线）</td></tr>
+</table>
+
+</div>
+</details>
+<div id="host" class="mermaid">
+flowchart TB
+subgraph HOST["宿主（不在容器里）"]
+        OPERATOR["值班长 / 学习者<br/>真栈主线：POST :3002/api/v1/hypotheses 发 c2 假设（201·hyp_265f157e）<br/>sleep 14 等轮间接力后 GET 假设详情看轨迹"]
+        ECON["短路经济对照实验（13.3 亲跑·runHuntScene 契约级布景）<br/>真注册表+真执行体+真闸·数据缝换内存件<br/>同一 c2 假设：无记忆基线 3 轮 192 tok → 记忆知情 2 轮 120 tok"]
+    end
+
+    subgraph M2["容器 case-backend（Fastify · better-sqlite3 · :3002）"]
+        direction TB
+        T_HYP[("M2 表 hypotheses<br/>假设账面：proposed→hunting→concluded/refuted/cancelled（INV-10）<br/>轮次归集 (hypothesis_id, round_no) 唯一（S9 口径）")]
+        T_AUDIT[("M2 表 audit_entries<br/>五要素审计：hunt_task_report total=N（取证面真相源）<br/>hypothesis_register 留痕可回放（INV-8）")]
+    end
+
+    subgraph AGENT["容器 agent（Fastify · LangGraph.js · better-sqlite3 · :3003）· soc-demo 侧＝闸门半仓"]
+        direction TB
+        ROUND_CHAIN["查证轮六节点 intake→planner→dispatch→await→judge→outcome<br/>真栈 c2 实测 3 轮：剧本开局→低置信盲查 total=0→主目的+谱系 hit<br/>机制对知识平面零 if/else——消费面扩容全是菜单数据（13.1）"]
+        subgraph T131["13.1 规划面·消费面扩到知识源 · 进入:hunt_flow intake 注入菜单 · 节拍:每轮一次 · 退出:合法组合落 dispatch"]
+            direction TB
+            TPL_CARD["预案卡 fixture（fixtures/hunt-templates/·4 张内容层数据）<br/>menu 子集+waves 既定查询计划+上限四字段<br/>预案卡管循环怎么排 · 剧本库管查询怎么抄（分家口径）"]
+            PLANNER["planner 拟单（循环三件套· hunt-prompt.ts:38）<br/>输入＝假设文本+菜单+证据/gap（消毒后）<br/>起手式＝剧本/图谱开局（hunt-prompt.ts:59）· 选路依据＝现场证据+历史研判"]
+            MENU_GATE["planner 菜单闸（INV-11 第一道闸·选不得·planner.ts:235-239）<br/>offmenu_tool 零重试整轮终止 hunt_plan_denied<br/>register 永不入组合菜单（INV-11 对账钉死）<br/>🛡️ 防 菜单外组合（INV-11）"]
+        end
+        subgraph T132["13.2-13.3 查证面·记忆消费 · 进入:dispatch 窄票扇出 · 节拍:事件唤醒回收（父不盯表） · 退出:hunt_task_report 落账"]
+            direction TB
+            CHILD_GATE["hunt_task 验票闸（makeGatedCall·两票制·hunt-executor.ts:121）<br/>子票＝单任务单工具窄票（S10 原样）<br/>🛡️ 防 无票奔跑/越票面执行（INV-3/11）"]
+            CHILD_RUN["hunt_task 真执行体（hunt-executor.ts:58-74）<br/>签名契约→闸→执行→观察 · 四狩猎维度+weknora 三工具同门分发<br/>导航面（剧本/图谱）与取证面同一执行体——知识工具不是旁门"]
+            T_CORPUS[("取证语料库 fixtures/alerts/（镜像内布景·现场证据面）<br/>c2 实测：轮 2 盲查 total=0 → 轮 3 主目的 total=3")]
+        end
+        subgraph T134["13.4 写入面·毒剧本防线 · 进入:outcome 收敛归档步 / 攻击者投毒 · 节拍:事件驱动 · 退出:proposed 落账或 403 拒绝"]
+            direction TB
+            REG_SEAM["hypothesis_register 循环缝（weknora.ts:289-309）<br/>outcome 收敛 miss 半边唯一合法写通道 · 五要素审计在缝内落账<br/>🛡️ 防 写动作不留痕（INV-8）"]
+            INV5_GATE["INV-5 毒剧本真闸（T22·weknora.ts:228/:243）<br/>register 只写 proposed（类型面唯一值）/ graph_query 只回 approved<br/>人审是唯一翻面通道（票 83 对接期定端点）<br/>🛡️ 防 毒剧本未经人审进检索面（INV-5）"]
+        end
+    end
+
+    subgraph ATTK["13.4 毒剧本投递布景（捣乱②·S5 续集） · 进入:攻击者伪造狩猎知识 · 节拍:一次性投递 · 退出:403 拒绝或 proposed 落账（检索面查无）"]
+        POISON["毒剧本内容（02_poison_rejected 同款话术）<br/>想把自己写成关系/剧本进知识平面"]
+    end
+
+    subgraph KNOW["知识平面 weknora Memory stub（镜像内 fixture 布景·非真仓·票 83 对接后整块换 HTTP 真源） · 进入:playbook_lookup/graph_query 调用 · 节拍:查询时读 fixture · 退出:total/hits 返回"]
+        direction TB
+        PB_LIB["剧本库 playbooks.json（查询参考册 4 张·13.2）<br/>pb-c2-001 三条既定查询＝频率口径/主目的/进程谱系 · refs=ATT&CK T1071/T1053<br/>waves 是它的可执行化 · lookup 防全库捞 tag/query 至少一维（weknora.ts:89）· stub 期只读零写口"]
+        T_GRAPH["关系图 graph.json（旧案记忆·13.3）<br/>web01—resolved_to→203.0.113.66—beacons_to→C2【approved·seed:ir-2023-041】<br/>seed 自带 proposed 毒探针 hosts_webshell（T22 负例·检索面不可见）"]
+        SEAM_NOTE["数据源 seam＝WeknoraPlaybookBackend / WeknoraGraphBackend（weknora.ts:159/:164）<br/>stub 是真接口假实现：换 HTTP 实现不换调用方（MemoryVectorStore 先例）"]
+    end
+
+    subgraph SPLIT["13.5 跨仓分工边界（架构叙事·票 83 对接期兑现） · 进入:WEKNORA_URL 开关设定才换真实现 · 节拍:MT-#83 对接期 · 退出:三工具换 HTTP 真源·包层闸门留在 soc-demo"]
+        WEKNORA_REAL["weknora 真仓（外仓·未对接）<br/>FastAPI /ingest /search /graph/query + SOC 实体图谱第二幕<br/>只管知识平面零安全闸（两仓分工红线）——soc-demo 侧人审/扫描/审计一件不能省（包层即闸门）"]
+    end
+
+    %% ===== 13.1 真栈主线与规划面 =====
+    OPERATOR -- "请求 POST :3002/api/v1/hypotheses（c2 假设·201）<br/>跨容器→case-backend:3002" --> T_HYP
+    T_HYP -. "事件 hypothesis.created → autorun 拉起 hunt_flow 轮 1（首轮前置 hunting·S9 全链）" .-> ROUND_CHAIN
+    TPL_CARD -- "菜单子集注入 intake（menu 真源·机制不持第二份清单）" --> ROUND_CHAIN
+    ROUND_CHAIN -- "请求 拟单（假设文本+菜单+证据/gap）" --> PLANNER
+    PLANNER -- "组合 C_k（1..max_tasks 任务）" --> MENU_GATE
+    MENU_GATE -- "通过: 菜单内组合落 dispatch" --> ROUND_CHAIN
+    MENU_GATE -. "拒绝样本: offmenu_tool 零重试整轮终止（菜单外组合物理不产生子 run）" .-> ROUND_CHAIN
+    ROUND_CHAIN -- "T+每任务: 扇出 hunt_task 单趟差（窄票现铸）" --> CHILD_GATE
+    CHILD_GATE -- "验票通过: 签名契约→执行 L0 查询" --> CHILD_RUN
+    CHILD_GATE -. "拒绝: 403 no_ticket / scope_insufficient（审计 DENIED）" .-> CHILD_RUN
+
+    %% ===== 13.2/13.3 知识平面消费 =====
+    CHILD_RUN -- "请求 playbook_lookup tag=c2（剧本开局·轮 1 实测 total=1）" --> PB_LIB
+    PB_LIB -. "响应 pb-c2-001 三条既定查询（频率口径/主目的/进程谱系）" .-> CHILD_RUN
+    CHILD_RUN -- "请求 graph_query entity=web01（只回 approved）" --> T_GRAPH
+    T_GRAPH -. "响应 旧案记忆 resolved_to→203.0.113.66（total=1·ir-2023-041）" .-> CHILD_RUN
+    CHILD_RUN -- "请求 四维取证查询（outbound/proc/web/fim·现场证据面）" --> T_CORPUS
+    T_CORPUS -. "响应 total=N（轮 2 盲查 total=0 / 轮 3 主目的 total=3）" .-> CHILD_RUN
+
+    %% ===== 13.4 写入面与毒剧本防线 =====
+    ROUND_CHAIN -- "outcome 收敛 miss 半边: 归档+登记（hit 半边不写图）" --> REG_SEAM
+    REG_SEAM -- "写 hypothesis_register（一律 proposed）" --> INV5_GATE
+    INV5_GATE -- "proposed 落图（账面在场·检索面查无）" --> T_GRAPH
+    REG_SEAM -- "请求 五要素审计（action=hypothesis_register·可回放）<br/>跨容器→case-backend:3002" --> T_AUDIT
+    CHILD_RUN -. "审计 hunt_task_report total=N（取证面真相源·INV-8）<br/>跨容器→case-backend:3002" .-> T_AUDIT
+    ROUND_CHAIN -- "轮次归集/状态流转 PATCH :3002<br/>跨容器→case-backend:3002" --> T_HYP
+    POISON -. "工具面直投: L1 无票 403 no_ticket（写动作到不了 store）" .-> CHILD_GATE
+    POISON -- "缝面投递（布景实测）: record.status=proposed + 审计留痕" --> REG_SEAM
+    INV5_GATE -. "graph_query 查毒内容 → total=0（检索面隐身·投毒未发生）" .-> POISON
+
+    %% ===== 13.3 宿主实测面 =====
+    OPERATOR -- "请求 runHuntScene 契约级布景（真机制+内存数据缝）" --> ECON
+    ECON -. "对照结论: 3 轮→2 轮 / 192→120 tok（省的是 total=0 盲查轮）" .-> ROUND_CHAIN
+
+    %% ===== 13.5 跨仓分工（灰虚线＝未接线·票 83 回填位） =====
+    SEAM_NOTE -. "票 83 对接后才接线（WEKNORA_URL 开关·两形态同仓共存·包层即闸门）" .-> WEKNORA_REAL
+
+    %% ===== 安全防护节点（红色描边 + 🛡️ 防 xxx 标注）=====
+    %% 约定：每个安全防护节点都套 guardSec 样式 + 🛡️ 标签 + 标对应 INV
+    %% 13.1：MENU_GATE 防 菜单外组合（INV-11 第一道闸·选不得）
+    %% 13.4：CHILD_GATE 防 无票奔跑/越票面执行（INV-3/11·工具面真闸）
+    %% 13.4：REG_SEAM 防 写动作不留痕（INV-8·缝面审计兜底）
+    %% 13.4：INV5_GATE 防 毒剧本未经人审进检索面（INV-5·写即 proposed/只回 approved）
+    classDef guardSec fill:#3a1a1a,stroke:#f38ba8,stroke-width:2px,color:#f38ba8
+    class MENU_GATE,CHILD_GATE,REG_SEAM,INV5_GATE guardSec
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.2/dist/svg-pan-zoom.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: false,
+    theme: "dark",
+    themeVariables: {
+      background: "#1e1e2e",
+      primaryColor: "#313244",
+      primaryTextColor: "#cdd6f4",
+      primaryBorderColor: "#89b4fa",
+      lineColor: "#89b4fa",
+      secondaryColor: "#181825",
+      tertiaryColor: "#181825",
+      fontFamily: "-apple-system, sans-serif"
+    },
+    securityLevel: "loose"
+  });
+
+  const PAD_Y = 20; // 上下各留 20px 边距
+
+  // svg-pan-zoom(3.6.x)没有 viewport:{width,height} 选项 —— 它视口基准
+  // 永远是 SVG 元素自身的 clientWidth/clientHeight,且 init 时会把 viewBox
+  // 从 <svg> 上删掉、把 viewBox→视口的映射烤进内层 <g> 的 CTM。
+  // 所以正确做法是把 SVG 元素本身撑到 #host 大小。注意 mermaid 会写
+  // max-width 内联样式,必须一并覆盖,否则宽度被钳在 viewBox 宽度上。
+  function sizeSvgToHost(svgEl, host) {
+    svgEl.style.maxWidth = "none";
+    svgEl.style.width = host.clientWidth + "px";
+    svgEl.style.height = host.clientHeight + "px";
+  }
+
+  // 高度撑满(上下各留 PAD_Y)+ 水平居中。
+  // getSizes().realZoom 是绝对值(1 viewBox 单位 = 多少像素),
+  // 用 zoomBy 换算成绝对目标,这样窗口 resize 后基线变了也依然成立。
+  function fitHeightFill(instance, host, vbHeight) {
+    const targetRealZoom = (host.clientHeight - PAD_Y * 2) / vbHeight;
+    const currentRealZoom = instance.getSizes().realZoom;
+    instance.zoomBy(targetRealZoom / currentRealZoom);
+    instance.center();
+  }
+
+  // mermaid 渲染是异步插入 svg 的,偶尔 then() 后第一帧还拿不到带
+  // viewBox 的 svg。轮询等到就绪(最多 ~5s),再进 rAF 初始化。
+  function whenDiagramReady(onReady, triesLeft) {
+    const svgEl = document.querySelector("#host > svg");
+    const vbHeight = svgEl && svgEl.viewBox ? svgEl.viewBox.baseVal.height : 0;
+    if (svgEl && vbHeight > 0) return onReady(svgEl);
+    if (triesLeft <= 0) {
+      console.warn("mermaid 渲染超时: 未等到带 viewBox 的 #host > svg");
+      return;
+    }
+    setTimeout(() => whenDiagramReady(onReady, triesLeft - 1), 50);
+  }
+
+  mermaid.run({
+    querySelector: "#host"
+  }).then(() => {
+    whenDiagramReady((svgEl) => {
+    // 等一帧保证 clientWidth/clientHeight 已 layout
+    requestAnimationFrame(() => {
+      const host = document.getElementById("host");
+      if (!host) return;
+      if (!host.clientHeight) {
+        console.warn("#host 高度为 0, 检查 CSS 布局");
+        return;
+      }
+
+      const vbHeight = svgEl.viewBox.baseVal.height;
+
+      sizeSvgToHost(svgEl, host);
+
+      // fit/center 都关掉: init 阶段它只按 viewBox 烤一个"fit 基线"进 CTM,
+      // 显示效果我们自己接管
+      const instance = svgPanZoom(svgEl, {
+        fit: false,
+        center: false,
+        zoomEnabled: true,
+        panEnabled: true,
+        controlIconsEnabled: true,
+        dblClickZoomEnabled: false, // 避免误触发
+        minZoom: 0.05,
+        maxZoom: 50
+      });
+
+      fitHeightFill(instance, host, vbHeight);
+
+      // 自适应: 以 #host 实际尺寸变化为准(ResizeObserver 对窗口拉伸/
+      // 开发者工具开合/嵌入容器变化都生效), window resize 兜底
+      const refit = () => {
+        sizeSvgToHost(svgEl, host);   // 先同步 SVG 元素尺寸
+        instance.resize();            // 再让 svg-pan-zoom 重新量取视口
+        fitHeightFill(instance, host, vbHeight);
+      };
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(refit).observe(host);
+      }
+      window.addEventListener("resize", refit);
+
+      // F12 调试句柄: __diagram.instance.getSizes() / getPan() 等
+      window.__diagram = { instance: instance, host: host, svgEl: svgEl };
+    });
+    }, 100); // 轮询上限 100 次 × 50ms
+  });
+</script>
+</body>
+</html>
