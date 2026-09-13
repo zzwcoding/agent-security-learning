@@ -11,9 +11,9 @@
 // m2↔m3 的 wire 契约（outbox payload {hypothesisId, templateId}）由本测试打真出站消费
 // 锁定；m2 侧「POST 与 outbox 同事务」由 case-backend hypotheses.test.ts 锁定。
 import { describe, expect, test } from "vitest";
+import type { FlowNode } from "./graph.js";
 import { openDb, type DB } from "./db.js";
 import { MemoryAuditSink } from "./audit.js";
-import { getRun } from "./runs.js";
 import { buildApp } from "./app.js";
 import { eventsAfter, setEventTap } from "./events.js";
 import {
@@ -27,6 +27,7 @@ import {
 import { requireRunKind, type RunGraphFactory, type RunKindGraphDeps } from "./run-kinds.js";
 import { MemoryHuntLedger } from "./orchestration/ledger.js";
 import { makeLoopEventBus } from "./orchestration/bus.js";
+import { makeLoopCancel, type LoopCancelReason } from "./orchestration/cancel.js";
 import { makeHuntLauncher } from "./orchestration/launcher.js";
 import { makeFakeLoopLlm } from "./orchestration/llm-stubs.js";
 import { DefaultTemplateSource } from "./orchestration/template.js";
@@ -52,7 +53,10 @@ interface Rig {
 
 /** agent 侧生产装配：真注册表组图 + 真 m2 REST 假设面 + 真 outbox 读口；
  *  只有铸票换测试固定密钥签票（hunt 桩节点不验票，票 76 的遍历矩阵另咬）。 */
-function rig(cb: CaseBackend, over: { llm?: OrchestrationDeps["llm"] } = {}): Rig {
+function rig(
+  cb: CaseBackend,
+  over: { llm?: OrchestrationDeps["llm"]; wrapChild?: (nodes: FlowNode[]) => FlowNode[] } = {},
+): Rig {
   const db = openDb(":memory:");
   const audit = new MemoryAuditSink();
   const bus = makeLoopEventBus();
@@ -73,6 +77,10 @@ function rig(cb: CaseBackend, over: { llm?: OrchestrationDeps["llm"] } = {}): Ri
     llm: over.llm ?? makeFakeLoopLlm(),
     scan: scanAllow, // 票 74 planner 消毒缝：假件全放行（扫描语义在 prompt-guard.test 咬）
   };
+  // 票 77（L0 裁决②）：取消机制在场（index.ts 生产同款装配）——人取消事件经 autorun 的
+  // cancelHypothesis 缝进 requestCancel 唯一入口；板空时节点包装层检查零行为。
+  const loopCancel = makeLoopCancel({ bus, ledger, port: orch.port, audit });
+  orch.cancel = loopCancel;
   // hunt 两工厂只读 audit + orchestration 两格（注册表 hunt_flow/hunt_task makeGraph）；
   // 其余格填零值——组图期不被触碰，类型上仍满足 RunKindGraphDeps。
   const kindDeps = {
@@ -82,8 +90,11 @@ function rig(cb: CaseBackend, over: { llm?: OrchestrationDeps["llm"] } = {}): Ri
     llmMode: "fake",
     orchestration: orch,
   } as unknown as RunKindGraphDeps;
-  const makeNodes: RunGraphFactory = (run, ticket, ctx) =>
-    requireRunKind(run.kind).makeGraph!(kindDeps)(run, ticket, ctx);
+  const makeNodes: RunGraphFactory = (run, ticket, ctx) => {
+    const made = requireRunKind(run.kind).makeGraph!(kindDeps)(run, ticket, ctx);
+    if (run.kind === "hunt_task" && over.wrapChild) return over.wrapChild(made as FlowNode[]);
+    return made;
+  };
   const mint: MintClient = {
     async mintTaskTicket(req) {
       return {
@@ -113,6 +124,8 @@ function rig(cb: CaseBackend, over: { llm?: OrchestrationDeps["llm"] } = {}): Ri
       launch,
       hasActiveRun: runsLookup(db),
       hasRoundRun: (hypothesisId, roundNo) => ledger.findByRound(hypothesisId, roundNo) !== null,
+      // 票 77（L0 裁决②）：index.ts 生产装配同款——reason 由 m2 取消端点在源头闸四因枚举
+      cancelHypothesis: (hypothesisId, reason) => loopCancel.requestCancel(hypothesisId, reason as LoopCancelReason, "user"),
       hasKbEntryForCase: async () => false,
     }),
   };
@@ -223,6 +236,101 @@ describe("票 73·L0 裁决①：hypothesis.created → autorun → hunt_flow（
       expect(res2.launched).toEqual([]);
       expect(res2.skipped).toEqual([{ topic: "hypothesis.created", refId: hypId, reason: "round_exists" }]);
       expect(huntRuns(db, hypId)).toHaveLength(1); // 不起第二轮 1（重试语义归轮次机，票 74/75）
+    } finally {
+      await rig1?.app.close();
+      await cb.close();
+    }
+  }, 40000);
+});
+
+// 票 77 · L0 裁决②：人取消的生产接续（T10 生产路径版）。
+// 全环用真件：POST /api/v1/hypotheses（真 m2 子进程）→ autorun 拉起轮 1（intake 真迁移
+// hunting）→ 父 run 挂在 await_children、子 run 停在测试栅栏（未产出任何取证工作）→
+// POST :id/cancel（真 m2 端点：仅发起人 + 仅 hunting，outbox hypothesis.cancelled 同事务）
+// → pollAutorunOnce 消费该事件 → m14 requestCancel 唯一入口 → 停止链。重放（游标丢失）
+// 幂等：created 分支 run_exists 挡、cancelled 分支 cancel_dup 挡，无第二事件副作用。
+describe("票 77·L0 裁决②：hypothesis.cancelled → autorun → m14 取消停止链（T10 生产路径）", () => {
+  test("POST :id/cancel → autorun tick → 挂起父 run 停 + 子 run failed(parent_cancelled) + 重放幂等", async () => {
+    const cb = await startCaseBackend();
+    let rig1: Rig | null = null;
+    try {
+      // 子 run 在 intake 节点体外的测试栅栏处挂起（机制包装层在其内层——放行后第一拍
+      // 就是取消检查）；父 run 因此停在 await_children（parksOnEvents 放行形态）
+      let releaseChildren!: () => void;
+      const childGate = new Promise<void>((r) => { releaseChildren = r; });
+      let childInFlight!: () => void;
+      const childWaiting = new Promise<void>((r) => { childInFlight = r; });
+      rig1 = rig(cb, {
+        wrapChild: (nodes: FlowNode[]) =>
+          nodes.map((n) =>
+            n.name === "intake"
+              ? { ...n, run: async (ctx) => { childInFlight(); await childGate; await n.run(ctx); } }
+              : n,
+          ),
+      });
+      const { db, audit, ledger, deps } = rig1;
+
+      // m2 正门发起 → autorun 拉起轮 1（真门：launcher + 簿记锚）
+      const created = (await (await fetch(`${cb.url}/api/v1/hypotheses`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ template_id: "t-default", text: "票 77 契约：人取消停止链", actor: "soc1" }),
+      })).json()) as { hypothesis_id: string };
+      const hypId = created.hypothesis_id;
+      const reader = new HttpOutboxReader(cb.url);
+      const first = await pollAutorunOnce(deps(reader, dbCursorStore(db)));
+      expect(first.launched).toEqual([`hunt_flow:${hypId}`]);
+      expect(first.cancelled).toEqual([]);
+
+      await waitUntil(() => huntRuns(db, hypId).length === 1, "hunt_flow run 出现");
+      const parentRun = huntRuns(db, hypId)[0];
+      await childWaiting; // 子 run 停在栅栏（已 claimed 未干任何活）；父 run 挂在 await_children
+
+      // 人取消（真 m2 端点：仅发起人 + 仅 hunting 态；outbox hypothesis.cancelled 同事务）
+      const cancelRes = await fetch(`${cb.url}/api/v1/hypotheses/${hypId}/cancel`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ by: "soc1", reason: "user_cancelled" }),
+      });
+      expect(cancelRes.status).toBe(200);
+
+      // autorun 消费 hypothesis.cancelled → requestCancel（信号板 + 停止链触发）
+      const res = await pollAutorunOnce(deps(reader, dbCursorStore(db)));
+      expect(res.cancelled).toEqual([hypId]);
+
+      // 放行子 run：机制包装层取消检查在节点体前掐停 → 子/父全链 failed(parent_cancelled)
+      releaseChildren();
+      const childIds = ledger.childrenOf(String(parentRun.id)).map((l) => l.runId);
+      expect(childIds.length).toBe(2);
+      const parentRow = await waitForRunTerminal(db, String(parentRun.id), { timeoutMs: 15000 });
+      expect(parentRow.status).toBe("failed");
+      expect(parentRow.failReason).toContain("parent_cancelled");
+      for (const id of childIds) {
+        const childRow = await waitForRunTerminal(db, id, { timeoutMs: 15000 });
+        expect(childRow.status).toBe("failed");
+        expect(childRow.failReason).toContain("parent_cancelled");
+        // 未干的活不干：取消检查先于节点体，零取证工作量
+        expect(eventsAfter(db, id, 0).some((e) => e.type === "tool_call")).toBe(false);
+      }
+      // 父链审计齐（INV-8）：取消决定 + 父/子强杀 FAILURE 条目可回放
+      expect(audit.entries.some((e) => e.action === "hunt_cancel" && e.objectId === hypId && e.result === "SUCCESS")).toBe(true);
+      expect(audit.entries.some((e) => e.action === "kill" && e.objectId === String(parentRun.id) && e.result === "FAILURE")).toBe(true);
+
+      // m2 账面由端点落账且不被停止链二次扰动（requestCancel 对已终态免重 PATCH，INV-10）
+      const after = (await (await fetch(`${cb.url}/api/v1/hypotheses/${hypId}`)).json()) as {
+        status: string; cancel_reason: string;
+      };
+      expect(after.status).toBe("cancelled");
+      expect(after.cancel_reason).toBe("user_cancelled");
+
+      // 重放幂等（游标丢失重读同一批）：created 分支——轮 1 run 已 failed，闸① 放行、
+      // 闸② 簿记锚 round_exists 挡（73 测试 2 同款两道闸语义）；cancelled 分支 cancel_dup
+      // 挡（信号板首写 wins）——无新 run、无第二停止链
+      const replay = await pollAutorunOnce(deps(reader, { get: () => 0, set: () => {} }));
+      expect(replay.cancelled).toEqual([]);
+      expect(replay.skipped).toContainEqual({ topic: "hypothesis.created", refId: hypId, reason: "round_exists" });
+      expect(replay.skipped).toContainEqual({ topic: "hypothesis.cancelled", refId: hypId, reason: "cancel_dup" });
+      expect(huntRuns(db, hypId)).toHaveLength(1);
     } finally {
       await rig1?.app.close();
       await cb.close();

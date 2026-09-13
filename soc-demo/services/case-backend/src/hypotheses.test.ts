@@ -4,7 +4,7 @@
 // 状态机外变更一律 409（T21）、轮次归集幂等可回放。
 import { describe, expect, test } from "vitest";
 import { buildApp } from "./app.js";
-import { openDb, type DB } from "./db.js";
+import { openDb } from "./db.js";
 
 function appAndDb() {
   const db = openDb(":memory:");
@@ -201,6 +201,28 @@ describe("POST /api/v1/hypotheses/:id/cancel（仅发起人 + 仅 hunting 态）
     await startHunting(app, id);
     const res = await cancel(app, id, { reason: "just_because" });
     expect(res.status).toBe(400);
+  });
+
+  test("票 77（L0 裁决②）：取消与 outbox hypothesis.cancelled 同事务落盘（agent autorun 消费信号；照 hypothesis.created 同事务先例）", async () => {
+    const { db, app } = appAndDb();
+    const { json } = await propose(app);
+    const id = json.hypothesis_id as string;
+    await startHunting(app, id);
+
+    const res = await cancel(app, id);
+    expect(res.status).toBe(200);
+    const outbox = db
+      .prepare("SELECT * FROM outbox_events WHERE topic = 'hypothesis.cancelled'")
+      .all() as Record<string, unknown>[];
+    expect(outbox).toHaveLength(1);
+    expect(JSON.parse(outbox[0].payload as string)).toMatchObject({ hypothesisId: id, reason: "user_cancelled" });
+
+    // 终态重取消 → 409 不发第二事件（INV-10 语义不变：信号只在账面迁移时发出）
+    const replay = await cancel(app, id);
+    expect(replay.status).toBe(409);
+    expect(
+      db.prepare("SELECT * FROM outbox_events WHERE topic = 'hypothesis.cancelled'").all(),
+    ).toHaveLength(1);
   });
 });
 

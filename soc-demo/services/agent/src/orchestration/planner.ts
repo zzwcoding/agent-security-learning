@@ -27,7 +27,7 @@ import type { AuditSink } from "../audit.js";
 import { LlmUpstreamError } from "../llm-client.js";
 import { scanInjection, type ScanAction } from "../guards-client.js";
 import { recordAudit } from "./audit-log.js";
-import { taskFingerprint } from "./llm-stubs.js";
+import { spinFingerprint } from "./llm-stubs.js";
 import type { OrchestrationDeps, PlannedTask, PlannerInput, ScanSeam } from "./ports.js";
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -245,7 +245,9 @@ export async function planRound(deps: PlannerStageDeps, ctx: NodeCtx): Promise<v
 
   ctx.state.tasks = capped;
   ctx.state.tasks_truncated = truncated;
-  ctx.state.tasks_fingerprint = taskFingerprint(capped);
+  // 票 77：tasks_fingerprint 升格为防转指纹（行为 10/T06）——任务集 + 本轮规划输入的
+  // gap 摘要（raw 原件，消毒只影响 prompt 副本）；gap hash 在指纹内即表达差异化豁免。
+  ctx.state.tasks_fingerprint = spinFingerprint(capped, raw.gap);
 
   // 审计分痕 A（路由建议）：planner 输出组合；决定（B）= flow.ts dispatch 的
   // hunt_dispatch_decide。两个 action 可区分可查（INV-8 五要素）。

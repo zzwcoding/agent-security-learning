@@ -11,12 +11,24 @@ import { paramsHash } from "../verify-ticket.js";
 import type { AuditSink } from "../audit.js";
 import type { PlannedTask } from "./ports.js";
 import type { OrchestrationDeps } from "./flow.js";
+import { throwIfCancelled } from "./cancel.js";
 
 const ACTOR = { type: "agent", id: "agent:hunt_task" } as const;
 
 export function makeHuntTaskFlow(deps: { runId: string; orch: OrchestrationDeps; audit: AuditSink }): FlowNode[] {
   const { runId, audit } = deps;
-  return [
+  // 票 77 T10/行为 11：子 run 的节点包装层取消检查——父链取消（预算触发/人取消）后，
+  // 进行中的子 run 在下一个节点边界安全停（不再产生任何取证工作量），未起的起了也
+  // 立即停。强杀经 BudgetExceededError(parent_cancelled) 既有 runner 路径，不自建第二套。
+  const board = deps.orch.cancel?.board;
+  const withCancelCheck = (node: FlowNode): FlowNode => ({
+    name: node.name,
+    run: async (ctx) => {
+      throwIfCancelled(board, typeof ctx.state.case_id === "string" ? ctx.state.case_id : "");
+      await node.run(ctx);
+    },
+  });
+  const nodes: FlowNode[] = [
     // ---- intake：交接态从簿记恢复（task 由 dispatch 在拉起前不可知，落 hunt_run_links）----
     {
       name: "intake",
@@ -93,4 +105,5 @@ export function makeHuntTaskFlow(deps: { runId: string; orch: OrchestrationDeps;
       },
     },
   ];
+  return nodes.map(withCancelCheck);
 }

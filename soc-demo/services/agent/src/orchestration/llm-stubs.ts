@@ -8,6 +8,7 @@
 //   judge：本轮子报告全 ok 且已有既往轮 → sufficient + hit；否则不充分（第一轮必不充分
 //     → 走 gap → 换组合再来一轮）。
 //   gap：从 judge 的 gap_description 直翻缺口（unknown/suggested_focus 是机制壳）。
+import { createHash } from "node:crypto";
 import { paramsHash } from "../verify-ticket.js";
 import { GatewayLlmClient } from "../llm-client.js";
 import { RealLoopGap, RealLoopJudge, RealLoopPlanner } from "./llm-real.js";
@@ -113,4 +114,13 @@ export function taskFingerprint(tasks: PlannedTask[]): string {
     .map((t) => `${t.tool}:${paramsHash(t.params)}`)
     .sort()
     .join("|");
+}
+
+/** 防转指纹（票 77 行为约定 10/T06）：hash(排序后任务集 + gap 摘要)。gap hash 在指纹内
+ *  即表达「gap 实质变化豁免」——组合相同但缺口输入不同（新证据改写了缺口）→ 指纹不同
+ *  → 不判空转；组合与缺口双双原地踏步 → 相邻轮指纹相同 → 拒组合（max_repeat=1）。 */
+export function spinFingerprint(tasks: PlannedTask[], gap: GapOutput | null): string {
+  return "sha256:" + createHash("sha256")
+    .update(`${taskFingerprint(tasks)}#${gap ? paramsHash({ gap }) : ""}`)
+    .digest("hex");
 }

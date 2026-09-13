@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { openDb, type DB } from "./db.js";
 import { createRun, getRun, requireRun, transitionRun, type RunCtx } from "./runs.js";
 import { executeRun, resumeRun, type ExecuteOpts, type FlowNode } from "./graph.js";
+import { budgetForKind } from "./budget.js";
 import { emitEvent, eventsAfter, formatSse } from "./events.js";
 import {
   APPROVAL_STATES,
@@ -476,6 +477,14 @@ export function buildApp(opts: {
     };
   }
 
+  /** 票 77：run 级预算按 kind 取档（budget.ts 档位表唯一事实源）。不在档位表内的
+   *  kind（alert_flow 等旧 kind / hunt_task）返回默认档——与 budgetFromEnv 等价，
+   *  既有 run 级闸语义逐字节不动（零回归硬验收）；hunt_flow 取 900s/200 步/500k 档。
+   *  每次调用全新账本实例（账随 run 走，resume 由 resumeRun 从 run 行接续累计）。 */
+  function kindBudget(kind: string) {
+    return budgetForKind(kind).run;
+  }
+
   /** start 任务：铸任务票 → 组图 → 从 queued 开跑。铸票失败 = 不留无票 run：
    *  镜像 runFlow 的强杀口径把 run 推到 failed(reason=mint_failed)（queued→running→
    *  failed 两步合法迁移）+ 审计 FAILURE + error 事件（原 502 面的异步等价物）。
@@ -511,7 +520,7 @@ export function buildApp(opts: {
         return;
       }
     }
-    await executeRun(db, runId, { ...dispatcherRunOpts(), nodes });
+    await executeRun(db, runId, { ...dispatcherRunOpts(), nodes, budget: kindBudget(run.kind) });
   }
 
   /** resume 任务：从审批挂起处续跑（按 kind 重组 worker 图）。决定已落在卡上，这里
@@ -525,7 +534,7 @@ export function buildApp(opts: {
     if (!opts.nodes && opts.makeNodes) {
       resumeNodes = await rebuildResumeNodes(runId);
     }
-    await resumeRun(db, runId, { ...dispatcherRunOpts(), nodes: resumeNodes });
+    await resumeRun(db, runId, { ...dispatcherRunOpts(), nodes: resumeNodes, budget: kindBudget(run.kind) });
   }
 
   app.post("/api/v1/approvals/:id/approve", async (req, reply) => {

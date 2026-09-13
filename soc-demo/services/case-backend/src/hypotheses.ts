@@ -180,6 +180,11 @@ export function cancelHypothesis(
       reason,
       by: d.by ?? ctx.actor.id,
     });
+    // 票 77（L0 裁决②）：hypothesis.cancelled 与取消落账同一事务（照 hypothesis.created
+    // 同事务先例，行为约定 1 的镜像）——agent 侧 autorun 消费它进 m14 取消机制唯一入口
+    // requestCancel（停止链：挂起父 run 停 / 子 run failed(parent_cancelled) / 未起不干
+    // 活）。事件失败随事务回滚：账面 cancelled 与拉起信号原子（INV-8/INV-10 口径不变）。
+    emitEvent(db, "hypothesis.cancelled", { hypothesisId: id, reason });
     return mapHypothesis(requireHypothesisRow(db, id)) as Record<string, unknown>;
   })();
 }

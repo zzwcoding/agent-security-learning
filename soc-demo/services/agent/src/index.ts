@@ -47,6 +47,7 @@ import { startRoundRelay } from "./orchestration/relay.js";
 import { makeHuntLauncher } from "./orchestration/launcher.js";
 import { DefaultTemplateSource } from "./orchestration/template.js";
 import { makeLoopLlm } from "./orchestration/llm-stubs.js";
+import { makeLoopCancel, type LoopCancelReason } from "./orchestration/cancel.js";
 import type { OrchestrationDeps } from "./orchestration/flow.js";
 
 const PORT = Number(process.env.PORT ?? 3003);
@@ -172,6 +173,17 @@ const ORCH_DEPS: OrchestrationDeps = {
   llm: makeLoopLlm(LLM_MODE), // 票 75 生产切换（74 移交）：AGENT_LLM 口径与四 worker 同一总口
 };
 RUN_KIND_DEPS.orchestration = ORCH_DEPS;
+// 票 77（预算双闸/取消停止）：取消机制装配——预算强杀 error 事件的 m14 消费半边
+//（假设侧 cancelled 落账 + 信号板，轮次链/子 run 的节点包装层检查据此掐停）；人取消
+//（POST /hypotheses/:id/cancel）经同一 requestCancel 口进同一停止链。
+const loopCancel = makeLoopCancel({
+  bus: loopBus,
+  ledger: huntLedger,
+  port: ORCH_DEPS.port,
+  audit,
+  log: (e) => console.log(JSON.stringify(e)),
+});
+ORCH_DEPS.cancel = loopCancel;
 // 票 73：hunt 拉起件（door 正门 + hunt_run_links 簿记锚落账）——autorun 的
 // hypothesis.created → hunt_flow 轮 1 拉起与 relay 的轮间接力共用同一 launcher。
 const huntLauncher = makeHuntLauncher(ORCH_DEPS.door, huntLedger);
@@ -208,6 +220,7 @@ const app = buildApp({
 });
 app.addHook("onClose", async () => {
   roundRelay.stop(); // 轮次接力订阅随手撤（进程退出前不再接力）
+  loopCancel.stop(); // 取消机制订阅随手撤（票 77）
 });
 app
   .listen({ port: PORT, host: "0.0.0.0" })
@@ -253,6 +266,10 @@ app
       hasActiveRun: runsLookup(db),
       // 票 73（L0 裁决①）：hunt 防重闸二 = m14 簿记锚（findByRound 在册即不重拉轮 1）
       hasRoundRun: (hypothesisId, roundNo) => huntLedger.findByRound(hypothesisId, roundNo) !== null,
+      // 票 77（L0 裁决②）：hypothesis.cancelled → m14 取消机制唯一入口（人取消生产接续；
+      // reason 由 m2 取消端点在源头闸四因枚举，这里原样转发不猜不改写）
+      cancelHypothesis: (hypothesisId, reason) =>
+        loopCancel.requestCancel(hypothesisId, reason as LoopCancelReason, "user"),
       hasKbEntryForCase: makeHttpKbEntryCheck(),
       log: (e) => console.log(JSON.stringify(e)),
     });

@@ -15,6 +15,8 @@
 //                     本票 fake 确定性桩，74/75 换真）。
 import type { SseEventType } from "../events.js";
 import type { ScanChannel, ScanDecision, ScanOptions } from "../guards-client.js";
+import type { RunBudget } from "../budget.js";
+import type { LoopCancel } from "./cancel.js";
 
 // ---------- 模板格式契约（R10 例外：纯类型无行为，单文件语义） ----------
 
@@ -238,4 +240,12 @@ export interface OrchestrationDeps {
   /** 票 75：hypothesis_register 循环侧缝；缺省 = MemoryHypothesisRegister（内存桩记
    *  proposed 态——工具本体与真 Memory stub 归票 79）。 */
   register?: HypothesisRegisterSeam;
+  /** 票 77：取消信号机制（cancel.ts——信号板 + 预算强杀事件订阅）。缺省 = 机制关闭
+   *  （73 的既有装配与测试零改动）；生产 index.ts 装配，预算/取消测试注入。 */
+  cancel?: LoopCancel;
+  /** 票 77：轮级预算闸工厂（每个轮次 run 一本新账，RoundBudget；缺省 = 机制默认档
+   *  budgetForKind("hunt_flow").round，见 flow.ts）。测试注入定 limits/假钟用小档。 */
+  roundBudget?: () => RunBudget | null;
+  /** 票 77：轮级墙钟闸的 now（缺省 Date.now；测试注假钟——禁 wall clock 的同款纪律）。 */
+  now?: () => number;
 }

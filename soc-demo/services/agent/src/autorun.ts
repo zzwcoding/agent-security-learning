@@ -6,6 +6,8 @@
 // 后台轮询 M2 事件游标，把两类事件折成对自家正门的拉起——
 //   alert.created → alert_flow（分诊，TP 后同 run 链调查富化，票 36）
 //   case.closed   → knowledge_flow（提炼，kb_propose → 人审闸，票 17）
+//   hypothesis.created → hunt_flow 轮 1（票 73·L0 裁决①，m14 编排循环入口）
+//   hypothesis.cancelled → m14 取消机制唯一入口 requestCancel（票 77·L0 裁决②，停止链）
 // close_flow 不挂自动：SOC1 手动确认是票 39 的语义（AI 出主意，人按按钮）。
 //
 // 三个口径（记票）：
@@ -107,6 +109,11 @@ export interface AutorunDeps {
   hasRoundRun(hypothesisId: string, roundNo: number): boolean;
   /** 防重二（M2 kb 账面，仅 knowledge_flow 用）：该 case 已有 proposed/approved 提案 → true。 */
   hasKbEntryForCase(caseId: string): Promise<boolean>;
+  /** 票 77（L0 裁决②，仅 hypothesis.cancelled 消费）：人取消的生产接续——m14 取消机制
+   *  唯一入口 requestCancel（停止链：挂起父 run 停 / 子 run failed(parent_cancelled) /
+   *  未起不干活）。返回 false = 该假设的取消停止链已跑过（信号板首写 wins，重放幂等）。
+   *  未接线（缺省）= 分支按 ignored 跳过。生产装配 = loopCancel.requestCancel（index.ts）。 */
+  cancelHypothesis?(hypothesisId: string, reason: string): Promise<boolean>;
   /** 结构化日志（缺省静默；生产打 console）。 */
   log?(entry: Record<string, unknown>): void;
 }
@@ -141,7 +148,7 @@ export function makeHttpKbEntryCheck(
 export interface AutorunSkip {
   topic: string;
   refId: string;
-  reason: "ignored" | "malformed_payload" | "dup_batch" | "run_exists" | "kb_exists" | "round_exists";
+  reason: "ignored" | "malformed_payload" | "dup_batch" | "run_exists" | "kb_exists" | "round_exists" | "cancel_dup";
 }
 
 export interface AutorunPollResult {
@@ -149,6 +156,8 @@ export interface AutorunPollResult {
   scanned: number;
   /** 拉起成功的 run（`${kind}:${refId}`）。 */
   launched: string[];
+  /** 票 77：消费掉的假设取消（停止链首次触发；重放不重复计）。 */
+  cancelled: string[];
   skipped: AutorunSkip[];
   /** 拉起/防重查询失败（游标停在失败事件之前，下轮重试）。 */
   failed?: { topic: string; refId: string; error: string };
@@ -158,6 +167,7 @@ export interface AutorunPollResult {
 
 type Decision =
   | { action: "launched"; kind: string; refId: string }
+  | { action: "cancelled"; hypothesisId: string }
   | { action: "skipped"; skip: AutorunSkip }
   | { action: "failed"; error: string };
 
@@ -231,6 +241,34 @@ async function decide(
     batchSeen.set("hunt_flow", seen);
     return { action: "launched", kind: "hunt_flow", refId: hypId };
   }
+  if (e.topic === "hypothesis.cancelled") {
+    // 票 77（L0 裁决②）：人取消的生产接续——m2 取消端点同事务发 hypothesis.cancelled
+    //（照 hypothesis.created 先例），本分支把它折成 m14 取消机制唯一入口 requestCancel
+    //（停止链：挂起父 run 停 / 子 run failed(parent_cancelled) / 未起不干活；m2 账面已
+    // 由端点落 cancelled，requestCancel 对已终态账面免重 PATCH）。防重：信号板首写 wins
+    //（重放/迟到事件 requestCancel 返 false → cancel_dup 幂等跳过）；未接线 → ignored。
+    // 取消失败不动游标（at-least-once，与拉起失败同款语义——停止链不能丢）。
+    const hypId = typeof e.payload.hypothesisId === "string" ? e.payload.hypothesisId : "";
+    if (!hypId) return { action: "skipped", skip: { topic: e.topic, refId: "", reason: "malformed_payload" } };
+    if (!deps.cancelHypothesis) {
+      return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "ignored" } };
+    }
+    const seen = batchSeen.get("hunt_cancel") ?? new Set<string>();
+    if (seen.has(hypId)) return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "dup_batch" } };
+    const reason = typeof e.payload.reason === "string" && e.payload.reason !== "" ? e.payload.reason : "user_cancelled";
+    let fresh: boolean;
+    try {
+      fresh = await deps.cancelHypothesis(hypId, reason);
+    } catch (err) {
+      return { action: "failed", error: String(err) };
+    }
+    if (!fresh) {
+      return { action: "skipped", skip: { topic: e.topic, refId: hypId, reason: "cancel_dup" } };
+    }
+    seen.add(hypId);
+    batchSeen.set("hunt_cancel", seen);
+    return { action: "cancelled", hypothesisId: hypId };
+  }
   return { action: "skipped", skip: { topic: e.topic, refId: "", reason: "ignored" } };
 }
 
@@ -238,12 +276,12 @@ async function decide(
 export async function pollAutorunOnce(deps: AutorunDeps): Promise<AutorunPollResult> {
   let cursor = deps.cursor.get(AUTORUN_CURSOR);
   const batch = await deps.events.eventsAfter(cursor, BATCH_LIMIT);
-  const res: AutorunPollResult = { scanned: batch.length, launched: [], skipped: [], cursor };
+  const res: AutorunPollResult = { scanned: batch.length, launched: [], cancelled: [], skipped: [], cursor };
   const batchSeen = new Map<string, Set<string>>();
   for (const e of batch) {
     const d = await decide(e, deps, batchSeen);
     if (d.action === "failed") {
-      res.failed = { topic: e.topic, refId: String(e.payload.alertId ?? e.payload.caseId ?? ""), error: d.error };
+      res.failed = { topic: e.topic, refId: String(e.payload.alertId ?? e.payload.caseId ?? e.payload.hypothesisId ?? ""), error: d.error };
       deps.log?.({ warn: "autorun_launch_failed", topic: e.topic, after: cursor, error: d.error });
       break; // 游标不动，下轮从失败事件重试（at-least-once）
     }
@@ -252,6 +290,9 @@ export async function pollAutorunOnce(deps: AutorunDeps): Promise<AutorunPollRes
     if (d.action === "launched") {
       res.launched.push(`${d.kind}:${d.refId}`);
       deps.log?.({ info: "autorun_launched", kind: d.kind, refId: d.refId, event: e.id });
+    } else if (d.action === "cancelled") {
+      res.cancelled.push(d.hypothesisId);
+      deps.log?.({ info: "autorun_cancelled", hypothesis_id: d.hypothesisId, event: e.id });
     } else {
       res.skipped.push(d.skip);
     }
