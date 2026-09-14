@@ -41,7 +41,16 @@ services:
       retries: 12
 
   agent:
-    build: { context: ., dockerfile: services/agent/Dockerfile }
+    build:
+      context: .
+      dockerfile: services/agent/Dockerfile
+      # 票 27（agent-guard 狗粮首用）：services/agent 以 link:../../../agentjiaotu/packages/agent-guard
+      # 依赖兄弟仓（lockfile 在案）——link: 目标在 soc-demo 构建上下文外，pnpm install 在镜像内
+      # 只会建悬空 symlink（install 不报错，运行时才炸）。把兄弟仓挂成附加构建上下文
+      # （compose 2.17+，路径相对本 compose 文件），Dockerfile 里 COPY 到 link: 的镜像内
+      # 解析路径（照 jiaotu gateway Dockerfile COPY 包先例；只修上下文，不 build 不验证）。
+      additional_contexts:
+        - "agentjiaotu=../agentjiaotu"
     ports: ["3003:3003"]
     depends_on:
       case-backend: { condition: service_healthy }

@@ -7,7 +7,21 @@
 // fail-closed：任何一步不过立刻短路 403；闸体任何异常也归 403（INV-1）。
 // reason 枚举 = contract.json.reasons：PRD FR-S2.2 六种 403 + allow +
 // signature_invalid（本契约扩展，fail-closed 桶的名字，见 fixtures/tickets/README.md）。
+//
+// 票 27 换闸（agent-guard 狗粮首用）：票面裁决真相（签名/exp/jti/焚毁/allowed_tools/
+// params_hash 六判据）改由 @agentjiaotu/agent-guard 纯函数面出具（verifyToken /
+// verifyTokenSignature / paramsHash）——不接 createGuard 整闸（其 L2 放行前同步焚毁
+// 撞「用后焚」红线③，且要求 soc-demo 不存在的三个 HTTP 缝）。soc-demo 侧保留：
+// tierOf 分级控制流（红线②，表源 tools-manifest.json 不换——包「未登记→
+// scope_insufficient」语义不被引入，口径仍是 no_ticket）、case/run 绑定（红线①）、
+// unseal+asClaims 形状预闸（soc 序：形状先于 exp）、7 值 reason、带 payload 返回形、
+// 闸内零焚毁（BurnRegistry.has 一行桥接包 isBurned，写侧仍由执行方用后焚）、
+// fail-closed 桶名 signature_invalid（INV-1）。公共面逐名冻结——消费方零改动。
+// 安全注记：包 verifyToken 的审批分支只查 params_hash 不查 tool（包 token.ts:103-109），
+// 审批路径必须自查 p.tool（与包闸面 createGuard 的 L2 自排同构，包 guard.ts:251-254），
+// 否则「错工具+对参数」从 scope_insufficient 变 allow——回归锁在 verify-ticket.guard-adapter.test.ts。
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { paramsHash as guardParamsHash, verifyToken, verifyTokenSignature } from "@agentjiaotu/agent-guard";
 
 export type DenyReason =
   | "no_ticket"
@@ -191,11 +205,10 @@ export function verifyTicket(
   try {
     const keyRaw = opts.hmacKey ?? process.env.SOC_HMAC_KEY;
     if (!keyRaw) return deny("signature_invalid"); // 与 gateway 铸票缺密钥拒签同一口径
-    const key = Buffer.from(keyRaw, "utf8");
 
     // 用 typeof 判分支而非真值判断：空串票 "" 是「坏票」（→signature_invalid），不是「没带票」
-    if (typeof ctx.approvalToken === "string") return verifyApproval(key, toolCall, ctx, nowSec);
-    if (typeof ctx.ticket === "string") return verifyTaskTicket(key, toolCall, ctx, nowSec);
+    if (typeof ctx.approvalToken === "string") return verifyApproval(keyRaw, toolCall, ctx, nowSec);
+    if (typeof ctx.ticket === "string") return verifyTaskTicket(keyRaw, toolCall, ctx, nowSec);
 
     // 闸控制流：手里什么签名票都没有（no_ticket/require_approval 不是票面状态，
     // 不由票面 fixture 覆盖——README「reason 枚举」节）
@@ -207,35 +220,51 @@ export function verifyTicket(
   }
 }
 
-// 任务票路径（PRD §5.8）：worker 的任务级最小 scope 票
+// 任务票路径（PRD §5.8）：worker 的任务级最小 scope 票。
+// 分工照包闸面自己的用法（guard.ts:216）：soc 出形状闸 + 语境（case/run 绑定），
+// 包 verifyToken 出票面真相——签名→exp→jti→焚毁→allowed_tools（包 token.ts:91-116，
+// 与 soc 原 :218-220 判据全序等价）。
 function verifyTaskTicket(
-  key: Buffer,
+  keyRaw: string,
   toolCall: { name: string; params?: unknown },
   ctx: VerifyCtx,
   nowSec: number,
 ): VerifyResult {
-  const p = asTicketClaims(unseal(key, ctx.ticket as string));
-  if (nowSec >= p.exp) return deny("token_expired"); // JWT 语义：当前时刻须严格早于 exp（py 同式）
-  if (ctx.used?.has(p.jti)) return deny("token_used"); // 重放防线（INV-2：焚毁表是唯一真相）
-  if (!p.allowed_tools.includes(toolCall.name)) return deny("scope_insufficient"); // INV-3：任务票永不含 L2
-  if (ctx.caseId !== undefined && p.case_id !== ctx.caseId) return deny("scope_insufficient"); // case 绑定
+  const key = Buffer.from(keyRaw, "utf8");
+  const p = asTicketClaims(unseal(key, ctx.ticket as string)); // 形状预闸留 soc（8 字段，先于 exp）
+  const v = verifyToken(keyRaw, ctx.ticket as string, {
+    tool: toolCall.name,
+    now: nowSec, // 契约 clock policy：显式注入，禁 wall clock（两边同文）
+    // BurnRegistry.has → 包 isBurned 一行桥接（语义零翻译）；焚毁写侧不在这里——闸内零焚毁（红线③）
+    isBurned: (jti) => ctx.used?.has(jti) ?? false,
+  });
+  if (!v.allow) return deny(v.reason); // signature_invalid | token_expired | token_used | scope_insufficient（⊂ soc 7 值，零映射）
+  if (ctx.caseId !== undefined && p.case_id !== ctx.caseId) return deny("scope_insufficient"); // case 绑定（红线①，soc 语境判据）
   if (ctx.runId !== undefined && p.run_id !== ctx.runId) return deny("scope_insufficient"); // run 绑定
   return { allow: true, reason: "allow", payload: p };
 }
 
-// ApprovalToken 路径（PRD §5.9）：L2 动作经人批准后的一次性令牌
+// ApprovalToken 路径（PRD §5.9）：L2 动作经人批准后的一次性令牌。
+// 分工照包闸面自己的 L2 用法（guard.ts:236-259）：包 verifyTokenSignature 出签名+exp
+// 真相，其余判据闸层自排——【安全注记】包纯函数 verifyToken 的审批分支不查 tool
+// （包 token.ts:103-109），这里必须自查 p.tool，否则「错工具+对参数」会放行。
+// used 先于 tool 的 soc 序保留；params_hash 比对用包 paramsHash（JSON 域与 soc 实现
+// 逐字节一致，双仓各有 py 锚点契约测试）。
 function verifyApproval(
-  key: Buffer,
+  keyRaw: string,
   toolCall: { name: string; params?: unknown },
   ctx: VerifyCtx,
   nowSec: number,
 ): VerifyResult {
-  const p = asApprovalClaims(unseal(key, ctx.approvalToken as string));
-  if (nowSec >= p.exp) return deny("token_expired");
-  if (ctx.used?.has(p.jti)) return deny("token_used"); // 一次性（INV-2：重放必 403）
-  if (p.tool !== toolCall.name) return deny("scope_insufficient"); // 票只对铸造时的那个工具有效
+  const key = Buffer.from(keyRaw, "utf8");
+  const token = ctx.approvalToken as string;
+  const p = asApprovalClaims(unseal(key, token)); // 形状预闸留 soc（9 字段，先于 exp）
+  const v = verifyTokenSignature(keyRaw, token, nowSec);
+  if (!v.ok) return deny(v.reason); // signature_invalid | token_expired
+  if (ctx.used?.has(p.jti)) return deny("token_used"); // 一次性（INV-2：重放必 403；闸只读，焚毁写侧在执行方）
+  if (p.tool !== toolCall.name) return deny("scope_insufficient"); // 安全判据：票只对铸造时的那个工具有效（闸自查，包不代查）
   // 参数指纹比对：改参数即失效（FR-S2.2/INV-2 的全部机制就这一句话）
-  if (paramsHash(toolCall.params) !== p.params_hash) return deny("params_mismatch");
-  if (ctx.caseId !== undefined && p.case_id !== ctx.caseId) return deny("scope_insufficient");
+  if (guardParamsHash(toolCall.params) !== p.params_hash) return deny("params_mismatch");
+  if (ctx.caseId !== undefined && p.case_id !== ctx.caseId) return deny("scope_insufficient"); // case 绑定（红线①）
   return { allow: true, reason: "allow", payload: p };
 }

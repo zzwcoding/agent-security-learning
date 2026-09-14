@@ -26,6 +26,17 @@ jobs:
         working-directory: soc-demo
     steps:
       - uses: actions/checkout@v4
+      # 票 27（agent-guard 狗粮首用）：soc-demo services/agent 以 link: 协议依赖兄弟仓
+      # agentjiaotu 的 packages/agent-guard（link:../../../agentjiaotu/...，lockfile 在案）。
+      # link: 目标是构建期真实文件系统路径——必须先把它 checkout 到与本仓平级的
+      # agentjiaotu/（复刻本地「安全评估agent/soc-demo 与 agentjiaotu 兄弟目录」布局），
+      # 且在 pnpm install 之前：缺了这步 install 照样过（pnpm 对 link: 建的悬空 symlink
+      # 不报错），要等 vitest 加载 @agentjiaotu/agent-guard 才炸，报错误导排障。
+      # 注：agentjiaotu 仓在父仓 .gitignore 里（独立仓），父仓 checkout 拿不到它，必须单独克隆。
+      - uses: actions/checkout@v4
+        with:
+          repository: zzwcoding/agentjiaotu # origin 与父仓同 org；仓尚未在 GitHub 落位前此步会红——落位即愈
+          path: agentjiaotu # 默认即此，写明 = link: 相对路径的可视锚点
       - uses: pnpm/action-setup@v4 # 版本读根 package.json 的 packageManager 字段
       - uses: actions/setup-node@v4
         with:

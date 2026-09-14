@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@agentjiaotu/agent-guard": "link:../../../agentjiaotu/packages/agent-guard",
     "@fastify/under-pressure": "^9.1.0",
     "@langchain/langgraph": "^1.4.14",
     "better-sqlite3": "^13.0.3",

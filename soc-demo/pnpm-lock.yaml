@@ -63,6 +63,9 @@ importers:
 
   services/agent:
     dependencies:
+      '@agentjiaotu/agent-guard':
+        specifier: link:../../../agentjiaotu/packages/agent-guard
+        version: link:../../../agentjiaotu/packages/agent-guard
       '@fastify/under-pressure':
         specifier: ^9.1.0
         version: 9.1.0
