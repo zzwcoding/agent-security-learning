@@ -321,6 +321,7 @@
 - 这是差异化主体，六张卡（S1-S6）共用这一张模块卡，但每个 S 的验收标准独立可测
 - 内部架构图见 `docs/architecture-gateway-internal.html`、`docs/architecture-guards-internal.html`
 - 狗粮外接形态（2026-09-11 票 57/58/59 落地，soc-demo 合流 7b4cd9c；CONTEXT「防线换防」）：env `JIAOTU_GATEWAY_URL`/`JIAOTU_API_KEY` 设定时，四件安全职能（LLM 代理/任务票铸发/审批铸票/焚毁账本）在运行面整体交棒椒图（adapter 见 `services/agent/src/jiaotu/`：token-ports-jiaotu + approval-gateway），soc-demo 永不自铸审批票（INV-2 单口在椒图 g4），保留消费侧验票闸/KB 人审/业务审计；未设 = 内部 gateway 形态逐字节不变（默认形态即教学资产本貌）。六幕经椒图活体冒烟全绿（`scripts/jiaotu-smoke-11.sh`，默认 fake LLM）；compose jiaotu 形态见 `docker-compose.jiaotu.yml` overlay
+- 验票真源（票 27·agent-guard 首用）：verify-ticket.ts 换芯为 @agentjiaotu/agent-guard 纯函数面（verifyToken/verifyTokenSignature/paramsHash，link: 依赖）；soc 保留形状预闸/case-run 绑定/tierOf 分级/闸内零焚毁
 - 外部模式装配面（票 58）：`buildApp` opts `approvalGateway?` 注入 seam（生产 = `JiaoTuApprovalGateway`，测试注入假件）；审批申报/对账/中继/G9 四路共用该端口，接口立在领域模块 approvals.ts
 - per-worker 分账（2026-09-13 狗粮票 18/Q4，可选形态）：四个 worker 的 LLM 出站各持一把椒图分账 key（`scripts/jiaotu-register.ts --workers` 注册 `soc-demo-<worker>`、写 `.env` 的 `JIAOTU_API_KEY_<WORKER>`；出站 env 链 `JIAOTU_API_KEY_<WORKER>` → `JIAOTU_API_KEY`，装配唯一口 `run-kinds.ts workerLlmClient`）——椒图 llm_call 审计 actor 按 worker 分列；分账键全不设 = 单键模式逐字节回归，mint/焚毁/审批四件 seam 仍服务级单键
 

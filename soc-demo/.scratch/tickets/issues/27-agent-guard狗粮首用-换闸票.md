@@ -4,7 +4,7 @@
 
 **What to build:** 让 `packages/agent-guard` 从"零消费方"变成真依赖:soc-demo 的进程内验票闸(自研 `verify-ticket.ts`)换用/接入 agent-guard 包。**三处已裁定的差异不许回归**(设计文档 §1.4,票 15 记账):①case/run 绑定(soc-demo 闸有,包没有——绑定语义留在 soc-demo 侧,包只管票面真相);②工具分级表(soc-demo 是 tools-manifest.json,包是 YAML 形——不换表源,适配层桥接);③burn 顺序(soc-demo 用后焚,包是放行前同步焚——沿用 soc-demo 顺序)。**开工前置硬闸:适配层设计研究落盘 L0 过目**——包接口与闸语义的映射(包出"票面验证真相",soc-demo 出"case/run/manifest 语境"),哪边包哪边,一页纸说清再动工。跨仓票:主战场 soc-demo(闸),jiaotu 侧包按需小扩展(不许为迁就 soc-demo 破坏包自身契约)。
 
-**Touches modules:** `g3`(包本体;被护侧闸的换装改动跨仓随票,见 What to build)
+**Touches modules:** `m9`（跨仓：jiaotu 侧 g3 包为 link: 依赖本体零改动——模块号照票 18 先例移正文，本闸只认本仓声明）
 
 **Belongs to spec:** specs/agent-guard.md(消费口径节);soc-demo specs/modules.md m9 卡
 
