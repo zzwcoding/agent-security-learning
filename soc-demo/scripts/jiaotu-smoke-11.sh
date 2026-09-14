@@ -96,6 +96,11 @@ pnpm -s jiaotu:register --url "$JIAOTU" || fail "jiaotu:register 失败"
 JIAOTU_KEY="$(grep -E '^JIAOTU_API_KEY=' .env | tail -1 | cut -d= -f2-)"
 [ -n "$JIAOTU_KEY" ] || fail ".env 里没有 JIAOTU_API_KEY——注册回了包但 key 没落盘"
 export JIAOTU_API_KEY="$JIAOTU_KEY"
+# 分账键卫生（票 18 env 链）：down -v 清椒图库后，.env 里历史的 worker 分账键
+# （票 96 活体探针 --workers 注册所落）全变废钥——llm-client worker env 链优先吃
+# 它们 → 401 unregistered_agent → verdict 降级 uncertain。冒烟走单键契约：
+# 一律删 .env 里的分账键行（分账活体核验专属票 96 探针流程，不归冒烟）。
+sed -E -i '' '/^JIAOTU_API_KEY_(TRIAGE|INVESTIGATION|KNOWLEDGE|CHAT)=/d' .env
 
 say "布景：带 key 重建 agent（env 变了才换 adapter）+ FGA 世界 + 等 web"
 docker compose "${CPAIR[@]}" up -d agent > /dev/null 2>&1
