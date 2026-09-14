@@ -38,6 +38,11 @@ export const JIAOTU_WORKERS = ["triage", "investigation", "knowledge", "chat"] a
 
 export type JiaotuWorker = (typeof JIAOTU_WORKERS)[number];
 
+/** env 值空串/纯空白视同未设（compose `${VAR:-}` 透传必然"设着空串"，?? 不回落——票 18 活体教训） */
+function nonEmpty(v: string | undefined): string | undefined {
+  return v !== undefined && v.trim() !== "" ? v : undefined;
+}
+
 /** worker → 分账键 env 名（triage → JIAOTU_API_KEY_TRIAGE）。与 scripts/jiaotu-register.ts
  *  --workers 的落盘键名同一口径——脚本保持独立（scripts 不在模块图内，R4），两端由
  *  jiaotu-register.test.ts 的跨面契约锁咬合（改一边不改另一边必红）。 */
@@ -112,9 +117,11 @@ export class GatewayLlmClient {
     // 狗粮分账（票 18）：worker 构造点声明了自己的名字 → 该 worker 的分账键优先；
     // 未设回落单键 JIAOTU_API_KEY（单键模式逐字节回归——env 链走 ??，分账键不存在
     // 时取值与改动前完全同一路径）。opts.apiKey 仍是最高优先（测试/显式装配）。
+    // 空串视同未设（票 18 活体教训）：compose 透传面永远"设着"这些键（${VAR:-} 空缺省），
+    // ?? 对空串不回落——真网/fake 冒烟实锤 401 unregistered_agent。语义=分账键非空才生效。
     this.apiKey = opts.apiKey
-      ?? (opts.worker !== undefined ? process.env[jiaotuWorkerEnvKey(opts.worker)] : undefined)
-      ?? process.env.JIAOTU_API_KEY;
+      ?? (opts.worker !== undefined ? nonEmpty(process.env[jiaotuWorkerEnvKey(opts.worker)]) : undefined)
+      ?? nonEmpty(process.env.JIAOTU_API_KEY);
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 

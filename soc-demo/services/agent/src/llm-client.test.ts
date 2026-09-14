@@ -296,6 +296,20 @@ describe("狗粮分账（票 18：worker 声明 → JIAOTU_API_KEY_<WORKER> 优�
       "x-actor-id": "agent:hunt_flow",
     });
   });
+
+  test("空串分账键视同未设回落单键（票 18 活体教训：compose ${VAR:-} 透传必然设着空串，?? 不回落 → 401 unregistered_agent）", async () => {
+    setEnv("JIAOTU_API_KEY_TRIAGE", "");
+    setEnv("JIAOTU_API_KEY", "ajt_service18");
+    const { impl, seen } = mockFetch(() => openAiReply("ok"));
+    await makeClient(impl, { worker: "triage" }).chat("hi", { node: "verdict_llm" });
+    expect(seen[0].headers["authorization"]).toBe("Bearer ajt_service18");
+
+    // 全空 = 内部网关形态（一个 authorization 键都不落）
+    setEnv("JIAOTU_API_KEY", "");
+    const bare2 = mockFetch(() => openAiReply("ok"));
+    await makeClient(bare2.impl, { worker: "triage" }).chat("hi", { node: "verdict_llm" });
+    expect(bare2.seen[0].headers).toEqual({ "content-type": "application/json" });
+  });
 });
 
 // ---------- 真网冒烟（验收⑤：能力探测——SECRETS_LLM_API_KEY 有真值且 gateway 可达才跑） ----------
