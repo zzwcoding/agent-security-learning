@@ -10,8 +10,6 @@
 
 **Blocked by:** 无
 
-**Status:** ready
-
 **验收：**
 - [ ] latest.json 含紫队加性字段，既有字段形状零变化（双端样例同步）
 - [ ] web 契约测试绿 + Eval 页展示自主发现率
