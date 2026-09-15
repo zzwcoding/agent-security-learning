@@ -74,6 +74,23 @@ Agent 回宿主机直跑，但 shell/fetch 两个危险执行面搬进 **microsa
 | 压测（Apple M4 单机，fake LLM） | 分发循环 4.8 run/s；SSE 每订阅者 ~0.1% CPU；写面 1.4k/s 零错误；防线压下实验 fail-closed 全成立 |
 | 紫队闭环 | 11 例攻击 fixture 自动转假设，自主发现率 **5/11**（ground truth 机器判定，同 seed 可复现），盲区报告指出四个缺失维度 |
 
+### 组件清单（soc-demo，PRD §4.1 v1.2 冻结口径）
+
+| # | 组件 | 技术栈 | 职责 | 部署形态 |
+|---|---|---|---|---|
+| C1 | 告警接入服务 | TypeScript / Node + Fastify | Wazuh 格式告警 webhook 接收、字段映射、`source+sourceRef` 去重、severity 映射、fixture 回放入口 | compose 服务 `ingest` |
+| C2 | mock 案件后端 | TypeScript + SQLite（better-sqlite3） | TheHive 风格 Alert/Case/Task/Observable/Timeline/Audit 的 CRUD 与状态机；审计落库 | compose 服务 `case-backend`，SQLite 挂卷 |
+| C3 | agent 编排服务 | TypeScript + LangChain.js / LangGraph.js | supervisor + worker 图编排、checkpointer、工具注册表、验票中间件、SSE 事件总线 | compose 服务 `agent` |
+| C4 | llm-guard / Presidio 微服务 | Python + FastAPI（复用路线 1-3 管线） | 注入扫描（llm-guard）与 PII 识别/脱敏（Presidio） | compose 服务 `guards` |
+| C5 | 已有 Python 后端（复用） | Python（ContextForge 网关 / OpenFGA / microsandbox / Langfuse） | RBAC 工具可见性、FGA 裁决、铸币（票签签）、trace 收集 | compose 服务 `gateway` |
+| C6 | Chroma 向量库 | Chroma（独立容器） | 知识沉淀条目（KBEntry）的向量存储与检索 | compose 服务 `chroma` |
+| C7 | Web 演示窗 | Vite + React + Ant Design 5 + SSE | 页面薄演示窗（§M10） | compose 服务 `web` |
+| C8 | Eval 体系 | vitest + fixture 目录 + LLM judge | 回归评测（分诊准确率/防线拦截率/成本口径） | 非运行时，CI 与本地 `pnpm test:eval` |
+| C9 | MCP 体检 CLI | TypeScript CLI | 对接入的 MCP server 做体检（工具描述投毒/权限范围/凭证暴露面） | 独立 npm bin，不进 compose |
+| C10 | 告警 fixture 数据集 | JSON 文件 | 真实 Wazuh 告警落盘 + 注入变体 + 狩猎四维度语料 | 仓库内目录 `fixtures/` |
+
+> 实现演进：C7 现为七页（+狩猎页）；C3 内 v2 长出编排循环 m14（hunt_flow/hunt_task）；openfga/chroma/contextforge 已是独立 compose 服务。原貌见 [PRD §4.1](soc-demo/docs/prd%201.2.md)，现状以 [specs/modules.md](soc-demo/specs/modules.md) 14 张卡为准。
+
 工程档案：**近百张票**（`soc-demo/.scratch/tickets/`，每张带验收证据与实现记录）、PRD 两版、14 张模块卡、`docs/research/` 压测报告（四天花板理论 vs 实测）与 ADR。
 
 ---
