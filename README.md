@@ -25,10 +25,36 @@
 | 目录 | 是什么 | 状态 |
 |---|---|---|
 | **[soc-demo/](soc-demo/)** | SOC 数字员工：旗舰项目，需求→模块卡→spec→票→实现→压测→教学全档案 | ✅ v1 + 编排循环战役收官 |
-| **[agent-security-learning/](agent-security-learning/)** | 老战役档案：四条路线学习记录 + 知识卡片 90 件 | ✅ 归档 |
+| **[agent-security-learning/](agent-security-learning/)** | 老战役档案：四条路线学习记录 + 知识卡片 90 件 | ✅ 归档（详见下节） |
 | **[weknora复刻/](weknora复刻/)** | [Tencent/WeKnora](https://github.com/Tencent/WeKnora) 学习复刻（RAG 内核第一幕） | 🚧 步 3→4 |
 | 复刻线（NeMo-Guardrails学习/ 执行工具复刻/ 攻防矩阵复刻/ 日志脱敏复刻/ harness复刻/ codex-sandbox学习/ 自修改agent复刻/） | 各安全件复刻笔记与代码 | ✅ 归档 |
 | 根目录调研文档 | Agent 安全调研总结 / LLM-Agent 学习路线规划 / 记忆开源项目调研 / 语言选型 / 沙箱机制选型 | ✅ 归档 |
+
+---
+
+## 🛡️ 老战役档案：四条路线
+
+soc-demo 之前的完整学习战役（2026-08~09，档案在 [agent-security-learning/](agent-security-learning/)）。设计是**打怪升级**：每条路线先主动攻破自己的系统，再层层设防，上一关的"缺口清单"就是下一关的"开工清单"——四条路线走完，防线的思想才长成了 soc-demo。
+
+### 路线 1 · 守门员（2026-08-27~29，攻击自证）
+
+对象是最简形态的 agent：LangGraph ReAct + 手写 filesystem/shell/fetch 三个 MCP 工具（真 LLM 出站）。先**三类注入全中招**——直接注入、间接注入（工具返回内容带指令）、记忆投毒，拿到中招证据后再逐层设防：llm-guard 三层护栏（输入 deberta 注入分类器 / 工具返回分块扫描 / 输出 Sensitive 扫描）+ 容器六项加固 + Langfuse trace 掩码观测。产出三件：攻击复盘、防御回归、**7 条缺口清单**（egress→路线 2，记忆/执行闸/参数侧→路线 3，格式毒漏判→路线 4）。主文档：[01-攻击复盘.md](agent-security-learning/deliverables/route1/01-攻击复盘.md)
+
+### 路线 2 · 堡垒（2026-08-29~09-01，执行隔离与凭证边界）
+
+Agent 回宿主机直跑，但 shell/fetch 两个危险执行面搬进 **microsandbox microVM**（libkrun，Apple Silicon 原生，一次性虚拟机跑一条命令即焚）；出网设**两层防御**（工具层 egress 白名单 + 凭证策略 fail-closed）；自写 ~100 行**凭证代理**——LLM 和 fetch 的真密钥只活在代理里，agent 进程零密钥；Presidio 接记忆落库前脱敏；OTel 五要素审计（who/when/why/params/data_class）。验收是四次主动攻击（逃逸/egress/密钥不可见/审计复盘）全被按住。缺口 1 核销。
+
+### 路线 3 · 城堡（2026-09-02，阶段 34-46，最大工程关）
+
+从"防一层"进化到"收编成体系"：三个 MCP server 全量挂 **ContextForge 网关**唯一入口（EGRESS/FGA 双插件），Python 运维位 + TS 只读位**双消费者**（授权矩阵不退化）；**OpenFGA 四元组授权**（运维/只读双角色矩阵，六 check 全中）+ 120s 短时任务票；**串联闸**（D4 规则 + LLM 法官）+ 记忆装载三道闸 + 哈希链证据链；供应链体检毒样本 **1000/1000 抓获**。路线 1 的 7 条缺口至此销 5 条半。分工口径一句话：**网关管身份，agent 管会话，server 管出口**。主文档：[02-网关收敛与攻击复盘.md](agent-security-learning/deliverables/route3/02-网关收敛与攻击复盘.md)
+
+### 路线 4 · 红队（武器化验证，部分挂起）
+
+换武器库：**garak**（宽谱扫描）+ **PyRIT**（多轮编排攻击 + CI 回归集）系统性地打自己路线 1-3 建成的收官形态，Crescendo/PAIR 全量、TAP 对照；判分用**五条确定性 scorer**（LLM judge 只评分不进门槛，防自评注水）；招牌方法论是**剥层对照**——每次只关一层防线，判表记录"漏到第几层"，让每道防线的价值有数据。执行票开出后因路线 5 提前挂起，回归集种子十条已落 `starter-agent/redteam-regression/`，soc-demo 收官后待恢复。
+
+### 路线 5 · 收官 demo = soc-demo
+
+四条路线验证过的所有思想（三层护栏/microVM/凭证代理/网关收敛/FGA/串联闸/审计五要素/缺口清单文化）收编成一个正式工程化产品——**八道防线 × 三攻击面矩阵、六幕演示剧本、12 条待定项全决**的 PRD（[product-handbook](agent-security-learning/deliverables/route5/product-handbook.md)），并启用 SDD 三层窗口制实现——就是本仓旗舰 [soc-demo](soc-demo/)。平行衍生物：四条路线的学习过程沉淀为**知识卡片 90 件**（[知识卡片-碎片/](agent-security-learning/知识卡片-碎片/)）。
 
 ---
 
