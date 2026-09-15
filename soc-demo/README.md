@@ -106,6 +106,25 @@ flowchart LR
 
 可交互架构图：`docs/architecture-v4.html`（点节点跳详情）+ M1-M12 内部结构图 `docs/architecture-m*-internal.html`；13 张场景大图 `lessons/scenario/N-big-picture.html`（每场景的代码落点索引）。
 
+## 🧱 组件清单（PRD §4.1，v1.2 冻结口径）
+
+| # | 组件 | 技术栈 | 职责 | 部署形态 |
+|---|---|---|---|---|
+| C1 | 告警接入服务 | TypeScript / Node + **Fastify**（待定项①已决） | Wazuh 格式告警 webhook 接收、字段映射、`source+sourceRef` 去重、severity 映射、fixture 回放入口 | docker-compose 服务 `ingest`，单容器 |
+| C2 | mock 案件后端 | TypeScript + SQLite（better-sqlite3） | TheHive 风格 Alert/Case/Task/Observable/Timeline/Audit 的 CRUD 与状态机；审计条目落库 | docker-compose 服务 `case-backend`，SQLite 文件挂卷 |
+| C3 | agent 编排服务 | TypeScript + LangChain.js / LangGraph.js | supervisor + 4 worker 图编排、checkpointer、工具注册表、验票中间件、SSE 事件总线 | docker-compose 服务 `agent` |
+| C4 | llm-guard / Presidio 微服务 | Python + FastAPI（复用路线 1-3 管线） | 注入扫描（llm-guard）与 PII 识别/脱敏（Presidio），可同服务多端点 | docker-compose 服务 `guards` |
+| C5 | 已有 Python 后端（复用） | Python（ContextForge 网关 / OpenFGA / microsandbox / Langfuse） | RBAC 工具可见性、FGA 裁决、铸币（票签签）、trace 收集 | docker-compose 服务 `gateway`（复用现有镜像/代码） |
+| C6 | Chroma 向量库 | Chroma（独立容器） | 知识沉淀条目（KBEntry）的向量存储与检索 | docker-compose 服务 `chroma` |
+| C7 | Web 演示窗 | Vite + React + Ant Design 5 + SSE，不引状态管理库 | 六个页面的薄演示窗（§M10） | docker-compose 服务 `web`（dev 模式 vite，演示用静态构建 + 静态服务均可） |
+| C8 | Eval 体系 | vitest + fixture 目录 + LLM judge | 回归评测（分诊准确率/防线拦截率/成本口径） | 非运行时组件，CI 与本地 `pnpm test:eval` |
+| C9 | MCP 体检 CLI | TypeScript CLI | 对接入的 MCP server 做体检（工具描述投毒/权限范围/凭证暴露面） | 独立 npm bin，不进 compose |
+| C10 | 告警 fixture 数据集 | JSON 文件 | 7+ 类真实 Wazuh 告警落盘 + 注入变体 | 仓库内目录 `fixtures/alerts/` |
+
+部署拓扑：开发/演示均为单机 docker-compose；Wazuh manager 容器为可选 profile `real-wazuh`，非默认路径（决策记录 #4）。
+
+> 实现演进注记（读表时对齐现状）：C7 页面现为**七个**（+狩猎页，票 82）；C3 内 v2 已长出**编排循环 m14**（hunt_flow/hunt_task，PRD §13）；C5 中的 openfga/chroma/contextforge 在 compose 里已是独立服务（见上架构图）；C10 语料随四维度狩猎告警与四条注入变体扩充。需求期原貌以此表为准，现状以 `specs/modules.md` 14 张卡为准。
+
 ---
 
 ## 🔌 服务与 Profile
