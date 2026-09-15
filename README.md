@@ -1,0 +1,129 @@
+# Agent 安全学习仓（agent-security-learning）
+
+> 一个人的 AI Agent 安全工程学习仓：用一套完整的软件工程流程（SDD），从零造出「会干危险活儿的 LLM 系统」以及「管住它的安全体系」，全过程 400+ 提交、近百张工程票、每一个设计决策都有档案可查。
+
+[![CI](https://github.com/zzwcoding/agent-security-learning/actions/workflows/ci.yml/badge.svg)](https://github.com/zzwcoding/agent-security-learning/actions/workflows/ci.yml) [![weknora CI](https://github.com/zzwcoding/agent-security-learning/actions/workflows/ci-weknora.yml/badge.svg)](https://github.com/zzwcoding/agent-security-learning/actions/workflows/ci-weknora.yml)
+
+**概览 • 仓库地图 • soc-demo 速览 • 13 场景导览 • 快速开始 • 质量门禁 • 里程碑 • 方法论**
+
+---
+
+## 📌 这是仓什么
+
+三条学习主线，共享同一套方法论：
+
+1. **soc-demo（旗舰）**——一个"SOC 数字员工"：自动分诊安全告警、调查取证、沉淀知识，而**危险动作永远等人点头**。它是一个完整可运行的系统（9 容器、~1100 个测试、假 LLM 全栈可复现），更是一份"怎么给 LLM 系统上安全治理"的施工档案：8 道防线、11 条不变量、两票票务、审批/焚毁/审计全链路。
+2. **复刻线群**——把业界安全件亲手复刻一遍再对比原版：NeMo-Guardrails、执行工具（Claude Code 式工具护栏）、攻防矩阵、日志脱敏（Presidio）、harness、codex-sandbox、自修改 agent。
+3. **老战役档案（agent-security-learning/）**——soc-demo 之前的四条路线学习记录：红队回归、网关收敛、知识卡片 90 件。soc-demo 是它的收官之作。
+
+方法不是"看文档学会"，是 **spec 驱动开发（SDD）+ 场景导览教学**：每个需求先逼问成无歧义清单，模块先画卡定边界（边界规则进 CI 闸），实现走 TDD，教学走"13 个场景一步步带你走代码"。
+
+---
+
+## 🗺️ 仓库地图
+
+| 目录 | 是什么 | 状态 |
+|---|---|---|
+| **[soc-demo/](soc-demo/)** | SOC 数字员工：旗舰项目，需求→模块卡→spec→票→实现→压测→教学全档案 | ✅ v1 + 编排循环战役收官 |
+| **[agent-security-learning/](agent-security-learning/)** | 老战役档案：四条路线学习记录 + 知识卡片 90 件 | ✅ 归档 |
+| **[weknora复刻/](weknora复刻/)** | [Tencent/WeKnora](https://github.com/Tencent/WeKnora) 学习复刻（RAG 内核第一幕） | 🚧 步 3→4 |
+| 复刻线（NeMo-Guardrails学习/ 执行工具复刻/ 攻防矩阵复刻/ 日志脱敏复刻/ harness复刻/ codex-sandbox学习/ 自修改agent复刻/） | 各安全件复刻笔记与代码 | ✅ 归档 |
+| 根目录调研文档 | Agent 安全调研总结 / LLM-Agent 学习路线规划 / 记忆开源项目调研 / 语言选型 / 沙箱机制选型 | ✅ 归档 |
+
+---
+
+## 🏗️ soc-demo 速览
+
+**一句话**：为被告警淹没的 SOC 提供一名"数字员工"——能力上对标真实 SOC 工作流（分诊→调查→富化→响应→沉淀），安全上把 8 道防线落到每个 agent 动作上：员工零权限、出站全凭 HMAC 手令、L2 动作必经人审批的一次性密令、知识入库必经人审、注入扫描 fail-closed、全链路五要素审计。
+
+**编排循环（v2 主体）**：分析师提一个假设 → planner 从能力菜单选组合 → 扇出子 run 并行取证 → judge 裁决证据充分性 → gap 缺口驱动换组合再来一轮，直到收敛（命中建案 / 证伪归档）。第二业务（应急取证）以**零机制增量**落地——换业务只换一张数据模板，由 CI 里的零增量闸看守。
+
+| 关键数字 | 值 |
+|---|---|
+| 容器 / 常驻循环 | 9 core + 3 可选 profile / 3 个轮询循环 |
+| 语义不变量 / 防线 | INV-1~11 / D1~D8 |
+| run 工种 / 能力菜单工具 | 7 种（含编排循环的 hunt_flow / hunt_task）/ 13+（四 SIEM 维度 + weknora 三工具） |
+| 教学场景 / 大图 | 13 场景 66 步 / 13 张 per-scenario HTML 大图 |
+| 测试 | ~1100 例（agent 717、web 143、evals 112…）+ evals 33/33 场景回归 |
+| 压测（Apple M4 单机，fake LLM） | 分发循环 4.8 run/s；SSE 每订阅者 ~0.1% CPU；写面 1.4k/s 零错误；防线压下实验 fail-closed 全成立 |
+| 紫队闭环 | 11 例攻击 fixture 自动转假设，自主发现率 **5/11**（ground truth 机器判定，同 seed 可复现），盲区报告指出四个缺失维度 |
+
+工程档案：**近百张票**（`soc-demo/.scratch/tickets/`，每张带验收证据与实现记录）、PRD 两版、14 张模块卡、`docs/research/` 压测报告（四天花板理论 vs 实测）与 ADR。
+
+---
+
+## 🧭 13 场景导览（教学主线）
+
+入门读场景文（为什么这么设计），回查用大图（代码落点索引）：
+
+| # | 场景 | 一句话 | 大图 |
+|---|---|---|---|
+| S1 | 一条告警的一生 | 告警进门→去重→自动拉起→分诊→建案，主干道 | [图](soc-demo/lessons/scenario/1-big-picture.html) |
+| S2 | 调查与富化 | 侦探查案的三条缰绳：隔离/扫描/预算 | [图](soc-demo/lessons/scenario/2-big-picture.html) |
+| S3 | 知识沉淀 | 人审是知识入库唯一通道（INV-5） | [图](soc-demo/lessons/scenario/3-big-picture.html) |
+| S4 | 高危动作审批 | 批准≠执行、一次性密令、用后即焚 | [图](soc-demo/lessons/scenario/4-big-picture.html) |
+| S5 | 攻击者来了 | 注入/投毒/金丝雀，三个攻击面现场打 | [图](soc-demo/lessons/scenario/5-big-picture.html) |
+| S6 | PII 脱敏与反查 | 打码是默认，看真身必留痕 | [图](soc-demo/lessons/scenario/6-big-picture.html) |
+| S7 | 新增一个工具 | 登记先于代码，L0/L1/L2 三级 | [图](soc-demo/lessons/scenario/7-big-picture.html) |
+| S8 | 系统自证 | evals/审计页/CI，系统证明自己没坏 | [图](soc-demo/lessons/scenario/8-big-picture.html) |
+| S9 | 一个假设的一生 | 编排循环主干：假设→选组合→扇出→收敛 | [图](soc-demo/lessons/scenario/9-big-picture.html) |
+| S10 | 动态编排的权限学 | 父票菜单面+子票单工具，越动态闸越紧 | [图](soc-demo/lessons/scenario/10-big-picture.html) |
+| S11 | 第二个业务零增量 | 换业务只换数据模板，CI 闸看守 | [图](soc-demo/lessons/scenario/11-big-picture.html) |
+| S12 | 紫队闭环 | 攻击自动转假设，自主发现率+盲区报告 | [图](soc-demo/lessons/scenario/12-big-picture.html) |
+| S13 | 有记忆的狩猎 | 剧本库/图谱记忆省轮次，毒剧本进不了检索面 | [图](soc-demo/lessons/scenario/13-big-picture.html) |
+
+全景地图与所有场景的索引：[lessons/scenario/0-0.md](soc-demo/lessons/scenario/0-0.md) • [00-导览总纲](soc-demo/lessons/scenario/00-导览总纲.md) • 术语表 [TERMS.md](soc-demo/lessons/scenario/TERMS.md)
+
+---
+
+## 🚀 快速开始（soc-demo）
+
+```bash
+cd soc-demo
+cp .env.example .env          # 教学假值可跑（AGENT_LLM=fake 离线确定性，零出网）
+docker compose up -d --build  # 九服务
+bash scripts/setup-openfga.sh # 幂等重建 FGA 授权世界
+pnpm replay                   # 告警 fixture 走 ingest webhook 正门
+```
+
+打开 http://localhost:5173 选脸登录（四预置身份，无密码）。可选 profile：Langfuse 观测（`--profile observability`）、Wazuh 真规则引擎（`--profile real-wazuh`）、椒图狗粮全外接（`--profile jiaotu`）。完整口径见 [soc-demo/README.md](soc-demo/README.md)。
+
+压测复现：`node scripts/bench/b2-chain.mjs sustained`（链路持续流）、`b3-dispatcher.mjs`（分发水位）、`b5-guards-kill.mjs`（防线压下实验）。紫队闭环：`pnpm test:eval` 出自主发现率与盲区报告。
+
+---
+
+## 🔒 质量与安全门禁
+
+CI 按 monorepo 子目录过滤触发（[ci.yml](.github/workflows/ci.yml) 管 soc-demo，[ci-weknora.yml](.github/workflows/ci-weknora.yml) 管 weknora复刻），门禁包括：
+
+- **spec gate**：specs/ 格式与验收绑定机器校验（`tools/check_specs.py`）
+- **边界闸**：14 张模块卡的边界规则 R1-R12 两向锁（`tools/check_boundary.py`，自测 22/22）
+- **零增量闸**：内容层改动与机制层目录交集必须为空（`tools/check_zero_increment.py`，T20）
+- lint + 类型检查 + 全部测试；不绿不合并
+
+学习纪律：默认 fake LLM 零出网可复现；PII 一律假数据；密钥走环境注入不进仓库；压测数字只同机比。
+
+---
+
+## 📈 里程碑
+
+| 阶段 | 内容 |
+|---|---|
+| 老战役（路线 1-5） | 三个红队/网关/沙箱路线 → 收官产物 soc-demo 立项 → 紫队回归资产 |
+| soc-demo v1 | 全链实现（分诊/调查/知识/审批/对话/PII/Web/evals/MCP 体检）+ 椒图狗粮真网冒烟 + 8 场景教学 |
+| 压测与防线验证 | 四天花板实测 + under-pressure 过载卸载 + 防线压下三实验（fail-closed 全成立） |
+| 编排循环战役 | 假设驱动多 agent 动态编排（机制层/工具内容/紫队/Web）+ 架构验收件（第二业务零增量）+ 教学链 S9-S13 + 全局口径翻新 |
+
+---
+
+## 🤝 方法论
+
+- **SDD 流程**：需求逼问（11 维清单逐维关闭）→ 模块卡+边界规则（进 CI）→ 功能 spec（验收逐条绑测试标识）→ 拆票（框架承诺落票）→ TDD 实现 → CI 守门 → 定期架构体检（四对账）。
+- **场景导览教学**：每个场景七要素——业务比喻（术语表唯一真源）、代码落点（文件:行号实测）、为什么、亲手验证、捣乱实验、大图锚点、场景题。
+- **偏差即资产**：发现的问题转发现票不就地修；压测的阴性结果（"没打崩"）与紫队的盲区报告（"发现不了什么"）同样是产出。
+
+---
+
+## 📄 声明
+
+本仓为个人学习与研究用途。soc-demo 是教学演示系统：**不是生产可用的 SOC 产品**，量级口径为单机演示（详见压测报告的"明确不做"），安全机制用于学习"怎么设计"而非替代真实 SOC 的运营合规要求。引用的第三方项目版权归各自作者所有。
