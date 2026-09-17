@@ -25,7 +25,9 @@ jobs:
         working-directory: soc-demo
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4 # 版本读根 package.json 的 packageManager 字段
+      - uses: pnpm/action-setup@v4 # 版本读 soc-demo/package.json 的 packageManager 字段——父仓根无 package.json，须显式指路
+        with:
+          package_json_file: soc-demo/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22

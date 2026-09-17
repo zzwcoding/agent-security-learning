@@ -42,7 +42,9 @@ jobs:
         with:
           repository: zzwcoding/agentjiaotu # origin 与父仓同 org；仓尚未在 GitHub 落位前此步会红——落位即愈
           path: agentjiaotu # 默认即此，写明 = link: 相对路径的可视锚点
-      - uses: pnpm/action-setup@v4 # 版本读根 package.json 的 packageManager 字段
+      - uses: pnpm/action-setup@v4 # 版本读 soc-demo/package.json 的 packageManager 字段——父仓根无 package.json，须显式指路（否则 "No pnpm version is specified"）
+        with:
+          package_json_file: soc-demo/package.json
       - uses: actions/setup-node@v4
         with:
           node-version: 22
