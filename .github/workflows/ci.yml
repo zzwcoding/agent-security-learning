@@ -5,9 +5,9 @@ name: ci
 on:
   push:
     branches: [main]
-    paths: ["soc-demo/**", ".github/workflows/ci.yml"]
+    paths: ["soc-demo/**", "tools/**", ".github/workflows/ci.yml"]
   pull_request:
-    paths: ["soc-demo/**", ".github/workflows/ci.yml"]
+    paths: ["soc-demo/**", "tools/**", ".github/workflows/ci.yml"]
 
 jobs:
   spec-gate:
@@ -18,6 +18,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: python3 tools/check_specs.py
+      # lockfile integrity 体检闸（2026-09-17 a57ac26 事故闸）：脱敏扫描误伤 lockfile 哈希，
+      # ssri 解不出 digest，被 Docker 层缓存掩盖多日才在安装层炸出误导性 TARBALL_EXTRACT。
+      # 本闸在一切安装之前几十秒点名；--self-test 证明侦测能力活着（好夹具绿/三类坏夹具红）。
+      - run: python3 ../tools/check_lockfiles.py --self-test
+      - run: python3 ../tools/check_lockfiles.py
 
   ts:
     runs-on: ubuntu-latest
